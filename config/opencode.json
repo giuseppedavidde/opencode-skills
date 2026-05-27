@@ -15,5 +15,15 @@
       }
     }
   },
-  "model": "llama-local/local"
+  "model": "opencode/deepseek-v4-flash-free",
+  "agent": {
+    "plan": {
+      "model": "opencode/deepseek-v4-flash-free",
+      "variant": "medium"
+    },
+    "build": {
+      "model": "opencode/deepseek-v4-flash-free",
+      "variant": "medium"
+    }
+  }
 }
