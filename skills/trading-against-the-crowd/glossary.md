@@ -1,0 +1,31 @@
+# Glossary of Sentiment & Contrarian Terms
+
+- **AAII Survey**: American Association of Individual Investors sentiment survey. Measures % bullish/bearish/neutral among members (6-month outlook). Opinion-based, not action-based.
+- **Bear News Intensity Index (BNI)**: Summa's proprietary indicator quantifying bearish news flow frequency. Normalized by total Wall Street news. Processed through EMA4-8 oscillator.
+- **Behavioral Finance**: Economic theory explaining price movements via systematic investor misjudgments, cognitive biases, and herding — challenging EMH.
+- **Black-Scholes Model**: Options pricing formula using volatility, time to expiry, strike vs underlying price, and interest rates. Used inversely to derive implied volatility from market prices.
+- **Bullish Consensus (Market Vane)**: Index (0-100) of advisor bullishness on futures/stock markets. Low = oversold (buy); high = overbought (sell).
+- **Butterfly Pattern**: The inverse chart relationship between sentiment indicators (put/call ratio, VIX) and price. Peaks in sentiment = price bottoms; valleys = price tops.
+- **CBOE Total Put/Call Ratio**: All CBOE options volume (equity + index). Polluted by portfolio hedging. Less reliable than equity-only.
+- **Contrary Opinion Theory**: When nearly all market participants hold the same view, prices are likely to reverse. The majority is usually wrong at extremes.
+- **Detrended Oscillator**: Sentiment series processed by differencing fast/slow EMAs to remove long-term trends, producing stable threshold levels.
+- **Dollar-Weighted Put/Call Ratio**: Weights contracts by premium paid, not contract count. Problematic because hedgers' ITM trades drown out speculators' OTM trades.
+- **EMA10-250 Oscillator**: Percentage deviation of 10-day EMA from 250-day EMA of raw sentiment data. Standard detrending method.
+- **Equity-Only Put/Call Ratio**: CBOE equity options only (excludes index options). Best measure of speculative crowd sentiment.
+- **Fear Gauge**: Common name for VIX/VXO implied volatility indices. High = panic (buy); low = complacency (sell).
+- **Fourth Estate Crowd**: News media. Quantified via bear/bull news flow intensity indices. Fear-based news has stronger predictive power.
+- **Greater Fool Theory**: Prices rise only because someone else will buy at a higher price. Describes momentum-driven, not fundamentals-driven, markets.
+- **Hines Ratio**: Put/call ratio incorporating open interest — daily volume relative to open interest for puts and calls separately.
+- **Implied Volatility (IV)**: Volatility embedded in option market prices. Derived by solving Black-Scholes backwards using actual option price.
+- **Investors Intelligence**: Survey of investment newsletter advisors' bullish/bearish sentiment. Published weekly.
+- **LEAPS**: Long-term Equity AnticiPation Securities — options with expirations up to 3 years. ITM LEAPS serve as stock surrogates with defined risk.
+- **NPSR (Normalized Public Short Sales Ratio)**: Public short sales / total NYSE short sales, detrended via EMA4-8. Among the strongest contrarian indicators.
+- **OEX Put/Call Ratio**: S&P 100 index options. Smart money indicator — trade WITH OEX sentiment, not against it.
+- **Odd-Lot Short Sales Ratio (OLSR)**: Historically tracked small trader shorting. Lost predictive power with listed put options in late 1970s.
+- **Price Trigger**: Entry confirmation requiring close > prior day high (longs) or close < prior day low (shorts). Solves the premature-entry problem of sentiment-only systems.
+- **Sentiment Technician**: Technical analyst who incorporates non-price data (put/call ratios, volatility, surveys) into market timing.
+- **Squeeze Play**: Sentiment + price trigger framework. Squeeze Play I = equity indices (EMA5-21). Squeeze Play II = individual stocks (EMA50-100).
+- **Time Stop**: Exit at fixed interval after entry (T+30, T+60, T+90 days). Alternative to price-based stops, preferred with LEAPS.
+- **Tsunami Sentiment Wave (TSW)**: System trading only extreme EMA21-50 readings (+10%/-10%) with LEAPS and time stops.
+- **VIX**: CBOE S&P 500 implied volatility index. The most widely watched fear gauge.
+- **VXO**: CBOE S&P 100 implied volatility index. Precursor to VIX with longer history.

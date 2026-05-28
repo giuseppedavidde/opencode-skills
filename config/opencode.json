@@ -25,5 +25,8 @@
       "model": "opencode/deepseek-v4-flash-free",
       "variant": "medium"
     }
-  }
+  },
+  "plugin": [
+    ".opencode/plugins/graphify.js"
+  ]
 }

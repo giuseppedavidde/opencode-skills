@@ -23,6 +23,10 @@ Three layers, all under the user's project root:
 
 **SKILL.md** (this file) — Schema layer. Defines structure and workflow rules.
 
+**graphify (optional)** — Knowledge graph layer that extracts structured relationships
+between concepts. Can enrich wiki articles with machine-generated connections (see
+"Hybrid Karpathy + Graphify" section below).
+
 Templates live in `references/` relative to this file. Read them when you need the exact format for raw files, articles, archive pages, or the index.
 
 ### Initialization
@@ -81,6 +85,42 @@ After the primary article, check for ripple effects:
 3. Update every article whose content is materially affected. Each updated file gets its Updated date refreshed.
 
 Archive pages are never cascade-updated (they are point-in-time snapshots).
+
+## Hybrid Karpathy + Graphify
+
+When `graphify` is also installed, wiki articles can be enriched with structured
+connections extracted from the knowledge graph. This enhances the wiki's value as
+context for LLM agents (e.g., `knowledge_loader.py` injecting into trading analysis).
+
+### Enrichment Workflow
+
+1. Build or update the graph via `/graphify .`
+2. Run the enrichment script to append Graph Connections sections to wiki articles:
+   ```bash
+   <project_root>/.venv/bin/python enrich_with_graphify.py
+   ```
+3. Each article gets:
+   - A **🔗 Graph Connections** table with related concepts and relation types
+   - Up to 6 **Related Images** from the graph's image nodes
+4. The enrichment is idempotent — re-running skips already-enriched articles
+
+### How It Helps Prompt Injection
+
+The Karpathy wiki provides **narrative, human-written articles** (rich explanation,
+rules, examples). The Graphify enrichment adds **structured relationships** (concept
+A relates to concept B via relation C). Combined, they give an LLM agent:
+
+- Deep understanding from narrative content
+- Precise relationship mapping from graph connections
+- Visual context from extracted images
+
+### PDF Ingestion
+
+Both the Karpathy and Graphify workflows share the `pdf-ingest` skill for extracting
+text and images from PDF sources. The same `extract_pdf.py` script serves both:
+
+- **Karpathy mode**: images → `wiki/images/<topic>/<slug>/`
+- **Graphify mode**: images → `graphify-out/images/<topic>/<book-slug>/`
 
 ### Post-Ingest
 
