@@ -32,12 +32,13 @@ python ~/.config/opencode/skills/options-analysis/scripts/analyze_position.py TI
 
 ### Output
 
-1. Market snapshot (current price, IV, 52w range, volume)
-2. Greeks per leg (Option Δ, Position Δ, Position Γ, Position Θ/day, Position Vega/%IV)
-3. Position-level Greeks (delta equivalent shares, net gamma/theta/vega)
-4. Payoff scenarios at expiration (15+ price levels)
-5. Probabilities (ITM/OTM per strike, overall P&L positive)
-6. Structured recommendations: Hold / Adjust / Close
+1. **Options Playbook** — Strategy classification (structure name, outlook, risk profile)
+2. **Greeks & P&L** — Per-leg and position-level Greeks with current P&L
+3. **Volume Profile (1yr)** — VPOC, Value Area (VAH/VAL), HVN/LVN zones, strikes vs profile
+4. **Sentiment (Trading Against the Crowd)** — Put/Call OI and volume ratios, IV extremes, contrarian signals
+5. **Payoff scenarios** at expiration (13 price levels + breakevens)
+6. **Probabilities** — ITM/OTM per strike, overall P&L > 0
+7. **Recommendations** — Hold / Adjust / Close with integrated context from all frameworks
 
 ### Greeks conventions
 
@@ -46,9 +47,9 @@ python ~/.config/opencode/skills/options-analysis/scripts/analyze_position.py TI
 | Long Call | +Δ | +Δ |
 | Short Call | -Δ | -Δ |
 | Long Put | -Δ | -Δ |
-| Short Put | -Δ | +Δ ← inverted sign because short |
+| Short Put | -Δ | +Δ |
 
-Position Greeks = Option Greeks × |qty| × sign(qty)
+Position Greeks = Option Greeks × qty (positive = long, negative = short)
 
 ### Dependencies
 
@@ -56,13 +57,14 @@ Position Greeks = Option Greeks × |qty| × sign(qty)
 pip install yfinance scipy numpy
 ```
 
-Always use a Python virtual environment — never pip install on the system Python.
+Always use a Python virtual environment.
 
 ### Usage notes
 
-- All Greek calculations use Black-Scholes with r=4.5% (approximate US 1yr rate).
-- Greeks are computed per-leg using the IV from that specific strike in the options chain.
-- Position Greeks = Option Greeks × qty (positive = long, negative = short).
-- Probabilities use the lognormal model (Black-Scholes d2 / -d2).
-- Breakevens are found numerically by scanning 5000 price points.
-- IV Rank compares current chain-wide IV to its min/max across strikes.
+- Greeks: Black-Scholes with r=4.5% (approximate US 1yr rate). IV per-leg from options chain.
+- Probabilities: lognormal model (Black-Scholes d2 / -d2).
+- Breakevens: numerical scan of 5000 price points.
+- IV Rank: current chain-wide IV vs min/max across strikes.
+- Volume Profile: 60 bins over 1 year of daily OHLCV. VPOC = max volume bin; VAH/VAL = 70% volume envelope around VPOC; HVN = 2x avg vol; LVN = 0.3x avg vol.
+- Sentiment: PC ratios from options chain OI/volume. IV Rank extremes flagged.
+- Strategy classification: detects structure from leg types, quantities, and strikes.
