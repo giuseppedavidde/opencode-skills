@@ -1,0 +1,384 @@
+symbol,name,suffix,market
+AAPL,Apple Inc.,,US
+MSFT,Microsoft Corporation,,US
+GOOGL,Alphabet Inc.,,US
+AMZN,Amazon.com Inc.,,US
+NVDA,NVIDIA Corporation,,US
+META,Meta Platforms Inc.,,US
+TSLA,Tesla Inc.,,US
+BRK-B,Berkshire Hathaway Inc.,,US
+JPM,JPMorgan Chase & Co.,,US
+V,Visa Inc.,,US
+UNH,UnitedHealth Group Inc.,,US
+JNJ,Johnson & Johnson,,US
+MA,Mastercard Inc.,,US
+PG,Procter & Gamble Co.,,US
+XOM,Exxon Mobil Corporation,,US
+HD,Home Depot Inc.,,US
+KO,Coca-Cola Co.,,US
+CVX,Chevron Corporation,,US
+MRK,Merck & Co. Inc.,,US
+ABBV,AbbVie Inc.,,US
+PFE,Pfizer Inc.,,US
+PEP,PepsiCo Inc.,,US
+WMT,Walmart Inc.,,US
+ABT,Abbott Laboratories,,US
+COST,Costco Wholesale Corp.,,US
+CRM,Salesforce Inc.,,US
+TMO,Thermo Fisher Scientific Inc.,,US
+AVGO,Broadcom Inc.,,US
+ACN,Accenture plc,,US
+DHR,Danaher Corporation,,US
+NFLX,Netflix Inc.,,US
+ADBE,Adobe Inc.,,US
+CMCSA,Comcast Corporation,,US
+LIN,Linde plc,,US
+NKE,Nike Inc.,,US
+NVDA,NVIDIA Corporation,,US
+T,AT&T Inc.,,US
+VZ,Verizon Communications Inc.,,US
+WFC,Wells Fargo & Co.,,US
+C,Citigroup Inc.,,US
+BA,Boeing Co.,,US
+DIS,The Walt Disney Co.,,US
+INTC,Intel Corporation,,US
+AMD,Advanced Micro Devices Inc.,,US
+PYPL,PayPal Holdings Inc.,,US
+QCOM,Qualcomm Inc.,,US
+TXN,Texas Instruments Inc.,,US
+CAT,Caterpillar Inc.,,US
+LOW,Lowe's Companies Inc.,,US
+GE,General Electric Co.,,US
+IBM,International Business Machines,,US
+SPY,SPDR S&P 500 ETF Trust,,US
+QQQ,Invesco QQQ Trust,,US
+IWM,iShares Russell 2000 ETF,,US
+XLF,Financial Select Sector SPDR,,US
+XLE,Energy Select Sector SPDR,,US
+XLK,Technology Select Sector SPDR,,US
+LMT,Lockheed Martin Corp.,,US
+MMM,3M Co.,,US
+AXP,American Express Co.,,US
+BK,Bank of New York Mellon Corp.,,US
+BLK,BlackRock Inc.,,US
+SCHW,Charles Schwab Corp,,US
+GS,Goldman Sachs Group Inc.,,US
+MS,Morgan Stanley,,US
+USB,U.S. Bancorp,,US
+PNC,PNC Financial Services Group,,US
+TFC,Truist Financial Corp.,,US
+MU,Micron Technology Inc.,,US
+AMAT,Applied Materials Inc.,,US
+LRCX,Lam Research Corp.,,US
+KLAC,KLA Corp.,,US
+ASML,ASML Holding NV,,US
+NOW,Servicenow Inc.,,US
+ISIS,Illumina Inc.,,US
+BSX,Boston Scientific Corp.,,US
+MDT,Medtronic plc,,US
+SYK,Stryker Corp.,,US
+EW,Edwards Lifesciences Corp.,,US
+ZBH,Zimmer Biomet Holdings Inc,,US
+BDX,Becton Dickinson and Co.,,US
+ANTM,Elevance Health Inc.,,US
+CI,Cigna Corp.,,US
+HUM,Humana Inc.,,US
+AET,Aetna Inc.,,US
+UNP,Union Pacific Corp.,,US
+CSX,CSX Corp.,,US
+NSC,Norfolk Southern Corp.,,US
+UPS,United Parcel Service Inc.,,US
+FDX,FedEx Corp.,,US
+RTX,RTX Corp.,,US
+HON,Honeywell International Inc.,,US
+MMM,3M Co.,,US
+EMR,Emerson Electric Co.,,US
+PH,Parker-Hannifin Corp.,,US
+ROK,Rockwell Automation Inc.,,US
+ETN,Eaton Corp. plc,,US
+ITW,Illinois Tool Works Inc.,,US
+DOV,Dover Corp.,,US
+SWK,Stanley Black & Decker Inc.,,US
+SBUX,Starbucks Corp.,,US
+MCD,McDonald's Corp.,,US
+YUM,Yum! Brands Inc.,,US
+DRI,Darden Restaurants Inc.,,US
+CMG,Chipotle Mexican Grill Inc.,,US
+PLTR,Palantir Technologies Inc.,,US
+SNOW,Snowflake Inc.,,US
+DDOG,Datadog Inc.,,US
+ZS,Zscaler Inc.,,US
+CRWD,CrowdStrike Holdings Inc.,,US
+PANW,Palo Alto Networks Inc.,,US
+FTNT,Fortinet Inc.,,US
+OKTA,Okta Inc.,,US
+NET,Cloudflare Inc.,,US
+SQ,Block Inc.,,US
+ROKU,Roku Inc.,,US
+ZM,Zoom Video Communications Inc.,,US
+DOCU,DocuSign Inc.,,US
+TEAM,Atlassian Corp. plc,,US
+WDAY,Workday Inc.,,US
+ADSK,Autodesk Inc.,,US
+SPLK,Splunk Inc.,,US
+SHOP,Shopify Inc.,,US
+MRNA,Moderna Inc.,,US
+GILD,Gilead Sciences Inc.,,US
+REGN,Regeneron Pharmaceuticals Inc,,US
+BIIB,Biogen Inc.,,US
+VRTX,Vertex Pharmaceuticals Inc.,,US
+ALXN,Alexion Pharmaceuticals Inc.,,US
+CELG, Celgene Corp.,,US
+AMGN,Amgen Inc.,,US
+ILMN,Illumina Inc.,,US
+DXCM,DexCom Inc.,,US
+PODD,Insulet Corp.,,US
+ABMD,ABIOMED Inc.,,US
+ISRG,Intuitive Surgical Inc.,,US
+ALGN,Align Technology Inc.,,US
+MASI,Masimo Corp.,,US
+COO,The Cooper Companies Inc.,,US
+TFX,Teleflex Inc.,,US
+WST,West Pharmaceutical Services,,US
+MTD,Mettler-Toledo International,,US
+KEYS,Keysight Technologies Inc.,,US
+FLIR,FLIR Systems Inc.,,US
+AME,AMETEK Inc.,,US
+GNRC,Generac Holdings Inc.,,US
+CHD,Church & Dwight Co. Inc.,,US
+CL,Colgate-Palmolive Co.,,US
+KMB,Kimberly-Clark Corp.,,US
+EL,Estee Lauder Companies Inc.,,US
+NEM,Newmont Corp.,,US
+FCX,Freeport-McMoRan Inc.,,US
+BHP,BHP Group Ltd.,,US
+RIO,Rio Tinto plc,,US
+SCCO,Southern Copper Corp.,,US
+F, Ford Motor Co.,,US
+GM,General Motors Co.,,US
+TSLA,Tesla Inc.,,US
+RIVN,Rivian Automotive Inc.,,US
+LCID,Lucid Group Inc.,,US
+PLUG,Plug Power Inc.,,US
+ENPH,Enphase Energy Inc.,,US
+SEDG,SolarEdge Technologies Inc,,US
+FSLR,First Solar Inc.,,US
+JKS,JinkoSolar Holding Co Ltd,,US
+DQ,Daqo New Energy Corp.,,US
+NOVA,Sunnova Energy International,,US
+RUN,Sunrun Inc.,,US
+BE,Bloom Energy Corp.,,US
+FCEL,FuelCell Energy Inc.,,US
+SO,Southern Co.,,US
+DUK,Duke Energy Corp.,,US
+NEE,NextEra Energy Inc.,,US
+AEP,American Electric Power Co,,US
+EXC,Exelon Corp.,,US
+ED,Consolidated Edison Inc.,,US
+XEL,Xcel Energy Inc.,,US
+PEG,Public Service Enterprise Grp,,US
+EIX,Edison International,,US
+D,Dominion Energy Inc.,,US
+WMB,Williams Companies Inc.,,US
+OKE,ONEOK Inc.,,US
+KMI,Kinder Morgan Inc.,,US
+ET,Energy Transfer LP,,US
+MPLX,MPLX LP,,US
+DOW,Dow Inc.,,US
+LYB,LyondellBasell Industries NV,,US
+DD,DuPont de Nemours Inc.,,US
+ECL,Ecolab Inc.,,US
+PPG,PPG Industries Inc.,,US
+SHW,Sherwin-Williams Co.,,US
+APD,Air Products and Chemicals Inc,,US
+LIN,Linde plc,,US
+CE,Celanese Corp.,,US
+FMC,FMC Corp.,,US
+ALB,Albemarle Corp.,,US
+SQM,Sociedad Quimica y Minera,,US
+MOS,Mosaic Co.,,US
+CF,CF Industries Holdings Inc.,,US
+COF,Capital One Financial Corp.,,US
+DFS,Discover Financial Services,,US
+SYF,Synchrony Financial,,US
+AXP,American Express Co.,,US
+JPM,JPMorgan Chase & Co.,,US
+WFC,Wells Fargo & Co.,,US
+BAC,Bank of America Corp.,,US
+C,Citigroup Inc.,,US
+MS,Morgan Stanley,,US
+GS,Goldman Sachs Group Inc.,,US
+SCHW,Charles Schwab Corp,,US
+IBKR,Interactive Brokers Group Inc,,US
+HOOD,Robinhood Markets Inc.,,US
+SOFI,SoFi Technologies Inc.,,US
+UPST,Upstart Holdings Inc.,,US
+LC,LendingClub Corp.,,US
+AFRM,Affirm Holdings Inc.,,US
+COIN,Coinbase Global Inc.,,US
+MSTR,MicroStrategy Inc.,,US
+RIOT,Riot Platforms Inc.,,US
+MARA,Mara Holdings Inc.,,US
+CLSK,CleanSpark Inc.,,US
+WULF,TeraWulf Inc.,,US
+ORCL,Oracle Corp.,,US
+SAP,SAP SE,,US
+CRM,Salesforce Inc.,,US
+NOW,Servicenow Inc.,,US
+ADBE,Adobe Inc.,,US
+INTU,Intuit Inc.,,US
+MSFT,Microsoft Corp.,,US
+GOOGL,Alphabet Inc.,,US
+META,Meta Platforms Inc.,,US
+AMZN,Amazon.com Inc.,,US
+AAPL,Apple Inc.,,US
+NVDA,NVIDIA Corp.,,US
+AMD,Advanced Micro Devices Inc.,,US
+INTC,Intel Corp.,,US
+MU,Micron Technology Inc.,,US
+STM,STMicroelectronics NV,,US
+TSM,Taiwan Semiconductor Manufacturing,,US
+AVGO,Broadcom Inc.,,US
+QCOM,Qualcomm Inc.,,US
+TXN,Texas Instruments Inc.,,US
+ADI,Analog Devices Inc.,,US
+NXPI,NXP Semiconductors NV,,US
+MRVL,Marvell Technology Inc.,,US
+WDC,Western Digital Corp.,,US
+STX,Seagate Technology Holdings,,US
+DELL,Dell Technologies Inc.,,US
+HPQ,HP Inc.,,US
+HPE,Hewlett Packard Enterprise,,US
+CSCO,Cisco Systems Inc.,,US
+ANET,Arista Networks Inc.,,US
+JNPR,Juniper Networks Inc.,,US
+MSI,Motorola Solutions Inc.,,US
+VZ,Verizon Communications Inc.,,US
+T,AT&T Inc.,,US
+TMUS,T-Mobile US Inc.,,US
+CMCSA,Comcast Corp.,,US
+CHTR,Charter Communications Inc.,,US
+ROKU,Roku Inc.,,US
+NFLX,Netflix Inc.,,US
+DIS,Walt Disney Co.,,US
+WBD,Warner Bros Discovery Inc.,,US
+PARA,Paramount Global,,US
+NXST,Nexstar Media Group Inc.,,US
+TGT,Target Corp.,,US
+WMT,Walmart Inc.,,US
+COST,Costco Wholesale Corp.,,US
+AMZN,Amazon.com Inc.,,US
+EBAY,eBay Inc.,,US
+ETSY,Etsy Inc.,,US
+HD,Home Depot Inc.,,US
+LOW,Lowe's Companies Inc.,,US
+TJX,TJX Companies Inc.,,US
+ROST,Ross Stores Inc.,,US
+GPS,Gap Inc.,,US
+AEO,American Eagle Outfitters Inc,,US
+ANF,Abercrombie & Fitch Co.,,US
+URBN,Urban Outfitters Inc.,,US
+M, Macy's Inc.,,US
+KSS,Kohl's Corp.,,US
+JWN,Nordstrom Inc.,,US
+DKS,DICK'S Sporting Goods Inc.,,US
+BBY,Best Buy Co. Inc.,,US
+AMZN,Amazon.com Inc.,,US
+RCL,Royal Caribbean Cruises Ltd,,US
+CCL,Carnival Corp.,,US
+NCLH,Norwegian Cruise Line Holdings,,US
+EXPE,Expedia Group Inc.,,US
+BKNG,Booking Holdings Inc.,,US
+ABNB,Airbnb Inc.,,US
+UBER,Uber Technologies Inc.,,US
+LYFT,Lyft Inc.,,US
+DASH,DoorDash Inc.,,US
+GRUB,Just Eat Takeaway.com,,US
+DPZ, Domino's Pizza Inc.,,US
+YUM,Yum! Brands Inc.,,US
+MCD,McDonald's Corp.,,US
+SBUX,Starbucks Corp.,,US
+CMG,Chipotle Mexican Grill Inc.,,US
+QSR,Restaurant Brands International,,US
+DRI,Darden Restaurants Inc.,,US
+WEN, Wendy's Co.,,US
+MRNA,Moderna Inc.,,US
+PFE,Pfizer Inc.,,US
+MRK,Merck & Co. Inc.,,US
+ABBV,AbbVie Inc.,,US
+BMY,Bristol-Myers Squibb Co.,,US
+GILD,Gilead Sciences Inc.,,US
+VRTX,Vertex Pharmaceuticals Inc.,,US
+BIIB,Biogen Inc.,,US
+REGN,Regeneron Pharmaceuticals Inc,,US
+ILMN,Illumina Inc.,,US
+TMO,Thermo Fisher Scientific Inc.,,US
+DHR,Danaher Corp.,,US
+A,Agilent Technologies Inc.,,US
+WAT,Waters Corp.,,US
+BDX,Becton Dickinson and Co.,,US
+BSX,Boston Scientific Corp.,,US
+SYK,Stryker Corp.,,US
+MDT,Medtronic plc,,US
+ZBH,Zimmer Biomet Holdings Inc,,US
+EW,Edwards Lifesciences Corp.,,US
+GE,General Electric Co.,,US
+HON,Honeywell International Inc.,,US
+MMM,3M Co.,,US
+CAT,Caterpillar Inc.,,US
+DE,Deere & Co.,,US
+PCAR,PACCAR Inc.,,US
+CMI,Cummins Inc.,,US
+FTV,Fortive Corp.,,US
+DOV,Dover Corp.,,US
+PH,Parker-Hannifin Corp.,,US
+ROK,Rockwell Automation Inc.,,US
+ETN,Eaton Corp. plc,,US
+ITW,Illinois Tool Works Inc.,,US
+IR,Ingersoll Rand Inc.,,US
+PWR,Quanta Services Inc.,,US
+EMR,Emerson Electric Co.,,US
+AME,AMETEK Inc.,,US
+TT, Trane Technologies plc,,US
+CARR,Carrier Global Corp.,,US
+JCI,Johnson Controls International,,US
+OC,Owens Corning,,US
+BLDR,Builders FirstSource Inc.,,US
+MAS,Masco Corp.,,US
+TOL,Toll Brothers Inc.,,US
+DHI,D.R. Horton Inc.,,US
+LEN,Lennar Corp.,,US
+PHM,PulteGroup Inc.,,US
+NVR,NVR Inc.,,US
+HD,Home Depot Inc.,,US
+LOW,Lowe's Companies Inc.,,US
+LLY,Eli Lilly and Co.,,US
+JNJ,Johnson & Johnson,,US
+ABT,Abbott Laboratories,,US
+UNH,UnitedHealth Group Inc.,,US
+CI,Cigna Group,,US
+HUM,Humana Inc.,,US
+ANTM,Elevance Health Inc.,,US
+CVS,CVS Health Corp.,,US
+WBA,Walgreens Boots Alliance Inc,,US
+MCK,McKesson Corp.,,US
+ABC, AmerisourceBergen Corp.,,US
+CAH,Cardinal Health Inc.,,US
+BAH,Booz Allen Hamilton Holding,,US
+LDOS,Leidos Holdings Inc.,,US
+SAIC,Sciences Applications Intl Corp,,US
+GD,General Dynamics Corp.,,US
+LMT,Lockheed Martin Corp.,,US
+NOC,Northrop Grumman Corp.,,US
+RTX,RTX Corp.,,US
+LHX,L3Harris Technologies Inc.,,US
+HII,Huntington Ingalls Industries,,US
+GE,General Electric Co.,,US
+BA,Boeing Co.,,US
+TXT,Textron Inc.,,US
+COL,Rockwell Collins Inc.,,US
+SPCE,Virgin Galactic Holdings Inc,,US
+ASTS,AST SpaceMobile Inc.,,US
+RKLB,Rocket Lab USA Inc.,,US
+RDW,Redwire Corp.,,US
+MAXR,Maxar Technologies Inc.,,US
