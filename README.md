@@ -6,20 +6,37 @@ Custom skills and configuration for [opencode](https://opencode.ai).
 
 ```
 opencode-skills/
-├── install.py               # Python install script (recommended)
-├── install.sh               # Shell install script (quick alternative)
+├── install.py                  # Python install script (recommended)
+├── install.sh                  # Shell install script (quick alternative)
 ├── config/
-│   ├── AGENTS.md            # Global rules referencing skills
-│   └── opencode.json        # Provider/model configuration
+│   ├── AGENTS.md               # Global rules referencing skills
+│   └── opencode.json           # Provider/model configuration
 └── skills/
-    ├── karpathy-llm-wiki/   # LLM-powered wiki builder skill
+    ├── async-python-patterns/  # Async Python patterns & practices
+    ├── book-to-skill/          # Book-to-skill converter
+    ├── book-to-skill-bridge/   # Zero-prompt book-to-skill generator
+    ├── crypto-crash-course/    # Crypto fundamentals knowledge base
+    ├── crypto-technical-analysis/  # Crypto technical analysis KB
+    ├── graphify/               # Any input → knowledge graph
+    ├── karpathy-llm-wiki/      # Personal LLM-powered wiki
+    ├── market-data-fetch/      # Stock & crypto market data fetcher
+    ├── opencode-skills-installer/  # Skill installer & syncer
+    ├── options-analysis/       # Multi-leg options position analyzer
+    ├── options-course-workbook/  # Options course workbook KB
+    ├── options-crash-course/   # Options trading crash course KB
+    ├── options-playbook/       # 40+ option strategies reference
+    ├── pdf-ingest/             # PDF extractor for wiki/graphify
     │   ├── SKILL.md
-    │   └── references/      # Template files
-    ├── python-pydantic/     # Python/Pydantic coding standards
-    │   └── SKILL.md
-    └── pdf-ingest/          # PDF extractor for karpathy-llm-wiki ingest
-        ├── SKILL.md
-        └── extract_pdf.py
+    │   └── extract_pdf.py
+    ├── price-action-volman/    # Price action frameworks KB
+    ├── python-pydantic/        # Python/Pydantic coding standards
+    ├── python-venv/            # Python venv enforcement
+    ├── system-info/            # OS/hardware/diagnostic reporter
+    ├── trades-about-to-happen/ # Tape reading & order flow KB
+    ├── trading-against-the-crowd/  # Contrarian trading KB
+    ├── volume-price-analysis/  # Volume-price analysis KB
+    ├── volume-profile/         # Volume profile frameworks KB
+    └── wyckoff-2-0/            # Wyckoff Method frameworks KB
 ```
 
 ## Install
@@ -51,7 +68,9 @@ python install.py -v         # verbose output
 | `crypto-technical-analysis` | Knowledge base from 'Crypto Technical Analysis' by Alan John & Jon Law (TA adapted for crypto) |
 | `graphify` | any input (code, docs, papers, images) → knowledge graph → clustered communities → HTML + JSON + audit report |
 | `karpathy-llm-wiki` | Build and maintain a personal LLM-powered knowledge base |
+| `market-data-fetch` | Standardized templates for fetching stock, ETF, and crypto market data using yfinance, CoinGecko, and Bitpanda |
 | `opencode-skills-installer` | Manages the opencode-skills GitHub repository where all skills live and are version-controlled |
+| `options-analysis` | Analyze multi-leg options positions with Greeks, payoff scenarios, and recommendations |
 | `options-course-workbook` | Knowledge base from 'The Options Course Workbook' by George A. Fontanills (exercises and applications) |
 | `options-crash-course` | Knowledge base from 'Options Trading Crash Course' by Mark Elder and Brian Douglas (options trading) |
 | `options-playbook` | Knowledge base from 'The Options Playbook' by Brian Overby (40+ options strategies) |
