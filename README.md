@@ -18,6 +18,7 @@ opencode-skills/
     ├── crypto-crash-course/    # Crypto fundamentals knowledge base
     ├── crypto-technical-analysis/  # Crypto technical analysis KB
     ├── graphify/               # Any input → knowledge graph
+    ├── italy-tax-declaration-instructions/  # Italian tax return instructions
     ├── karpathy-llm-wiki/      # Personal LLM-powered wiki
     ├── market-data-fetch/      # Stock & crypto market data fetcher
     ├── opencode-skills-installer/  # Skill installer & syncer
@@ -65,6 +66,7 @@ python install.py -v         # verbose output
 | `crypto-crash-course`       | Knowledge base from 'The Crypto Crash Course' by Frank Richmond (cryptocurrency, blockchain)                   |
 | `crypto-technical-analysis` | Knowledge base from 'Crypto Technical Analysis' by Alan John & Jon Law (TA adapted for crypto)                 |
 | `graphify`                  | any input (code, docs, papers, images) → knowledge graph → clustered communities → HTML + JSON + audit report  |
+| `italy-tax-declaration-instructions` | Italian tax return instructions for financial income, capital gains, derivatives, foreign investments (Redditi PF 2026) |
 | `karpathy-llm-wiki`         | Build and maintain a personal LLM-powered knowledge base                                                       |
 | `market-data-fetch`         | Standardized templates for fetching stock, ETF, and crypto market data using yfinance, CoinGecko, and Bitpanda |
 | `opencode-skills-installer` | Manages the opencode-skills GitHub repository where all skills live and are version-controlled                 |
