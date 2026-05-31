@@ -81,11 +81,52 @@ Ticker lists are in `data/us_tickers.csv` and `data/europe_tickers.csv`.
 
 ### Phase 2 — Multi-Dimensional Screening
 
-Run the scanner script:
+Use the **subatomic-orchestrator** for parallel dispatch on large universes
+or multi-market scans. The scanner script supports two modes:
+
+- `--list-tickers` — output ticker symbols as JSON array (for chunking)
+- `--json-output` — output scored results as JSON array (for aggregation)
+
+#### A) Large Universe Scan (us_large ~600, us_tech ~100, all ~900)
+
+1. Load `subatomic-orchestrator` skill
+2. Get ticker list:
+   ```bash
+   python3 scripts/scanner.py --universe us_large --list-tickers
+   ```
+3. Apply **Pattern 1 (Batch Analysis)** with `split_by: ticker`, `chunk_size: 15`
+4. Split tickers into chunks of 15
+5. Dispatch each chunk via `task` tool:
+   ```
+   Run market-accumulation-scanner on tickers: AAPL, MSFT, NVDA, ...
+   Execute from the skill directory:
+     source .venv/bin/activate && \
+     python3 scripts/scanner.py --tickers "AAPL,MSFT,NVDA,..." --json-output
+   Return the JSON array of scored results.
+   ```
+6. Merge all chunk results, sort by `final_score` descending
+7. Apply `--min-score` filter and take top N
+8. Generate report (console table + CSV + HTML)
+
+#### B) Multi-Market Scan (italy, germany, france, uk, spain, or all)
+
+Load `subatomic-orchestrator` and apply **Pattern 2 (Market Scan)**:
+- 1 agent per market, each running:
+  ```bash
+  python3 scripts/scanner.py --universe germany --json-output
+  ```
+- Merge global results sorted by `final_score`, take global top N
+
+For "scan all" specifically, also scan `us_large` and `us_tech` as single
+markets each (4 agents total for EU + 2 for US = 6 agents, one batch).
+
+#### C) Small / Custom Ticker List (≤15 tickers)
+
+Direct execution — overhead of parallel dispatch > gain:
 
 ```bash
-python3 scripts/scanner.py --universe us_large --min-score 50 --top 15
 python3 scripts/scanner.py --tickers "MSFT, AAPL, ENI.MI" --top 15
+python3 scripts/scanner.py --universe us_large --min-score 50 --top 15
 ```
 
 **5 Dimensions** (each 0–100, weighted):

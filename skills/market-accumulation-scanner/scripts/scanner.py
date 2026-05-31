@@ -6,6 +6,7 @@ Scans US/EU tickers through 5-dimension stock-crypto-analysis scoring.
 
 import argparse
 import csv
+import json
 import os
 import sys
 import time
@@ -16,6 +17,13 @@ import yfinance as yf
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = SKILL_DIR / "data"
+
+# Import the 6-dimension sentiment engine
+sys.path.insert(0, str(SKILL_DIR / "scripts"))
+from sentiment_engine import compute_sentiment as compute_sentiment_6d
+
+# Cache SPX data for momentum comparison (shared across all tickers)
+_SPX_HIST: pd.DataFrame | None = None
 
 
 def load_universe(name: str) -> list[dict]:
@@ -65,6 +73,18 @@ def _load_csv(path: Path, allowed_symbols: set | None, market: str | None = None
                 continue
             rows.append(row)
     return rows
+
+
+def _get_spx_hist() -> pd.DataFrame:
+    """Fetch SPX history once and cache globally."""
+    global _SPX_HIST
+    if _SPX_HIST is None:
+        try:
+            spx = yf.Ticker("^GSPC")
+            _SPX_HIST = spx.history(period="1y")
+        except Exception:
+            _SPX_HIST = pd.DataFrame()
+    return _SPX_HIST
 
 
 def parse_custom_tickers(ticker_str: str) -> list[dict]:
@@ -365,8 +385,11 @@ def process_ticker(ticker_dict: dict) -> dict | None:
         wyckoff_score, wyckoff_d = compute_wyckoff(hist, info)
         volprof_score, volprof_d = compute_volume_profile(hist)
         pa_score, pa_d = compute_price_action(hist)
-        sentiment_score, sentiment_d = compute_sentiment(info)
         fundamentals_score, fundamentals_d = compute_fundamentals(info)
+
+        # 6-dimension sentiment engine
+        spx_hist = _get_spx_hist()
+        sentiment_score, sentiment_d, sentiment_subs = compute_sentiment_6d(t, info, hist, spx_hist)
 
         final = (
             wyckoff_score * 0.25 + volprof_score * 0.20 +
@@ -396,6 +419,13 @@ def process_ticker(ticker_dict: dict) -> dict | None:
             "pa_detail": pa_d,
             "sentiment_detail": sentiment_d,
             "fundamentals_detail": fundamentals_d,
+            # New: sub-dimension breakdown
+            "sentiment_sub_si": sentiment_subs.get("short_interest"),
+            "sentiment_sub_options": sentiment_subs.get("options"),
+            "sentiment_sub_insider": sentiment_subs.get("insider"),
+            "sentiment_sub_retail": sentiment_subs.get("retail"),
+            "sentiment_sub_institutional": sentiment_subs.get("institutional"),
+            "sentiment_sub_momentum": sentiment_subs.get("momentum"),
         }
     except Exception:
         return None
@@ -420,11 +450,16 @@ def generate_csv(results: list[dict], output_dir: str | Path) -> str:
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["rank", "symbol", "name", "market", "price", "final_score",
-                     "wyckoff", "volprof", "pa", "sentiment", "fundamentals", "pattern"])
+                     "wyckoff", "volprof", "pa", "sentiment", "fundamentals", "pattern",
+                     "sent_si", "sent_options", "sent_insider", "sent_retail",
+                     "sent_institutional", "sent_momentum"])
         for i, r in enumerate(results, 1):
             w.writerow([i, r["symbol"], r["name"], r["market"], r["price"],
                         r["final_score"], r["wyckoff"], r["volprof"], r["pa"],
-                        r["sentiment"], r["fundamentals"], r["pattern"]])
+                        r["sentiment"], r["fundamentals"], r["pattern"],
+                        r.get("sentiment_sub_si", ""), r.get("sentiment_sub_options", ""),
+                        r.get("sentiment_sub_insider", ""), r.get("sentiment_sub_retail", ""),
+                        r.get("sentiment_sub_institutional", ""), r.get("sentiment_sub_momentum", "")])
     return path
 
 
@@ -510,6 +545,10 @@ def main():
     parser.add_argument("--output-dir", default=".", help="Output directory")
     parser.add_argument("--batch-size", type=int, default=20, help="Batch size")
     parser.add_argument("--batch-sleep", type=float, default=1.0, help="Seconds between batches")
+    parser.add_argument("--list-tickers", action="store_true",
+                        help="Output ticker symbols as JSON array and exit")
+    parser.add_argument("--json-output", action="store_true",
+                        help="Output results as JSON array to stdout")
     args = parser.parse_args()
 
     if args.tickers:
@@ -519,14 +558,20 @@ def main():
         universe = load_universe(args.universe)
         universe_name = args.universe
 
+    if args.list_tickers:
+        tickers = [t["symbol"] for t in universe]
+        print(json.dumps(tickers))
+        return
+
     if args.output_dir == ".":
         output_dir = SKILL_DIR / "reports" / universe_name
     else:
         output_dir = Path(args.output_dir)
 
     total = len(universe)
-    print(f"\n📋 Scanning {universe_name} — {total} tickers...")
-    print(f"   Batch: {args.batch_size} | Sleep: {args.batch_sleep}s | Min score: {args.min_score}")
+    if not args.json_output:
+        print(f"\n📋 Scanning {universe_name} — {total} tickers...")
+        print(f"   Batch: {args.batch_size} | Sleep: {args.batch_sleep}s | Min score: {args.min_score}")
 
     results = []
     failures = 0
@@ -541,28 +586,37 @@ def main():
             else:
                 failures += 1
 
-        elapsed = time.time() - t0
-        pct = min(100, (i + len(batch)) / total * 100)
-        rate = (i + len(batch)) / elapsed if elapsed > 0 else 0
-        eta = (total - i - len(batch)) / rate if rate > 0 else 0
-        sys.stdout.write(f"\r   Progress: {min(total, i + len(batch))}/{total} ({pct:.0f}%) | "
-                         f"Found: {len(results)} | "
-                        f"Rate: {rate:.1f} tickers/s | ETA: {eta:.0f}s   ")
-        sys.stdout.flush()
+        if not args.json_output:
+            elapsed = time.time() - t0
+            pct = min(100, (i + len(batch)) / total * 100)
+            rate = (i + len(batch)) / elapsed if elapsed > 0 else 0
+            eta = (total - i - len(batch)) / rate if rate > 0 else 0
+            sys.stdout.write(f"\r   Progress: {min(total, i + len(batch))}/{total} ({pct:.0f}%) | "
+                             f"Found: {len(results)} | "
+                            f"Rate: {rate:.1f} tickers/s | ETA: {eta:.0f}s   ")
+            sys.stdout.flush()
 
         if i + len(batch) < total:
             time.sleep(args.batch_sleep)
 
     elapsed = time.time() - t0
-    print(f"\n\n✅ Scan completed in {elapsed:.0f}s")
-    print(f"   Tickers processed: {total} | Failures: {failures} | Candidates: {len(results)}")
+    if not args.json_output:
+        print(f"\n\n✅ Scan completed in {elapsed:.0f}s")
+        print(f"   Tickers processed: {total} | Failures: {failures} | Candidates: {len(results)}")
 
     results.sort(key=lambda r: r["final_score"], reverse=True)
     filtered = [r for r in results if r["final_score"] >= args.min_score]
 
     if not filtered:
-        print(f"\n⚠ No candidates found with score >= {args.min_score}")
-        print("   Try lowering the threshold with --min-score")
+        if args.json_output:
+            print("[]")
+        else:
+            print(f"\n⚠ No candidates found with score >= {args.min_score}")
+            print("   Try lowering the threshold with --min-score")
+        return
+
+    if args.json_output:
+        print(json.dumps(filtered, indent=2, default=str))
         return
 
     print(f"\n   Candidates with score >= {args.min_score}: {len(filtered)}")
@@ -579,9 +633,15 @@ def main():
     print(f"  TOP {min(3, len(filtered))} CANDIDATES FOR DEEP DIVE")
     print(f"{'─' * 60}")
     for i, r in enumerate(filtered[:3], 1):
+        si = r.get("sentiment_sub_si")
+        op = r.get("sentiment_sub_options")
+        ins = r.get("sentiment_sub_insider")
+        sub_sent = f" SI={si}" if si else ""
+        sub_sent += f" OPT={op}" if op else ""
+        sub_sent += f" INS={ins}" if ins else ""
         print(f"\n  #{i}: {r['symbol']} ({r['name']}) — Score: {r['final_score']}")
         print(f"      Pattern: {r['pattern']}")
-        print(f"      Wyckoff: {r['wyckoff']} | VP: {r['volprof']} | PA: {r['pa']} | Sent: {r['sentiment']} | Fund: {r['fundamentals']}")
+        print(f"      Wyckoff: {r['wyckoff']} | VP: {r['volprof']} | PA: {r['pa']} | Sent: {r['sentiment']}{sub_sent} | Fund: {r['fundamentals']}")
         print(f"      → Load stock-crypto-analysis on ${r['symbol']} for full verdict")
 
 

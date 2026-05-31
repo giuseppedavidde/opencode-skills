@@ -19,6 +19,7 @@ orchestrator:
   chunk_size: 1
   merge: rank
   merge_key: hype_score
+  top_n: 15
 ---
 
 # WallStreetBets Pump Detect

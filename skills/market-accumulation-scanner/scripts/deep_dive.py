@@ -1,463 +1,440 @@
-#!/usr/bin/env python3
-"""Deep dive analysis on top 3 candidates using stock-crypto-analysis framework."""
+"""Unified stock analysis for any ticker — produces Wyckoff + Volume Profile + Price Action + Sentiment + Fundamentals verdict."""
+import argparse, json, sys
+from datetime import datetime
+from pathlib import Path
 
-import sys
-import json
-import yfinance as yf
-import pandas as pd
 import numpy as np
+import pandas as pd
+import yfinance as yf
 
-SKILL_DIR = "/home/giuseppe/.config/opencode/skills/market-accumulation-scanner"
+# Use the 6-dimension sentiment engine
+SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPT_DIR))
+from sentiment_engine import compute_sentiment as compute_sentiment_6d
 
 
-def compute_rsi(series: pd.Series, periods: int = 14) -> float:
-    delta = series.diff()
+def heading(s: str) -> None:
+    print(f"\n{'='*60}")
+    print(f"  {s}")
+    print(f"{'='*60}")
+
+
+def analyze(ticker: str, verbose: bool = True) -> dict:
+    df, info = _fetch(ticker)
+    if df is None or df.empty:
+        return {"ticker": ticker, "error": "No data"}
+
+    df = _compute_ma(df)
+
+    wyckoff_phase, wyckoff_score, wyckoff_d = _wyckoff(df)
+    vp_shape, vp_score, vp_d = _volume_profile(df)
+    pa_verdict, pa_score, pa_d = _price_action(df)
+    fund_score, fund_d = _fundamentals(info, ticker)
+
+    # 6-dimension sentiment
+    try:
+        spx = yf.Ticker("^GSPC")
+        spx_hist = spx.history(period="1y")
+    except Exception:
+        spx_hist = pd.DataFrame()
+    t = yf.Ticker(ticker)
+    sent_score, sent_d, sent_subs = compute_sentiment_6d(t, info, df, spx_hist)
+
+    final, dims = _aggregate(wyckoff_score, vp_score, pa_score, sent_score, fund_score)
+
+    verdict, direction, action = _verdict(final)
+
+    if verbose:
+        _print_report(ticker, df, info, wyckoff_phase, wyckoff_score, wyckoff_d,
+                       vp_shape, vp_score, vp_d, pa_verdict, pa_score, pa_d,
+                       sent_score, sent_d, fund_score, fund_d, final, verdict, direction, action, dims, sent_subs)
+
+    return {
+        "ticker": ticker,
+        "date": datetime.now().isoformat(),
+        "last_price": round(float(df["Close"].iloc[-1]), 2),
+        "wyckoff": wyckoff_d | {"phase": wyckoff_phase, "score": round(wyckoff_score, 1)},
+        "volume_profile": vp_d | {"shape": vp_shape, "score": round(vp_score, 1)},
+        "price_action": pa_d | {"verdict": pa_verdict, "score": round(pa_score, 1)},
+        "sentiment": sent_d | {"score": round(sent_score, 1)},
+        "fundamentals": fund_d | {"score": round(fund_score, 1)},
+        "final_score": round(final, 1),
+        "verdict": verdict,
+        "direction": direction,
+        "action": action,
+    }
+
+
+def _fetch(ticker):
+    try:
+        t = yf.Ticker(ticker)
+        info = t.info
+        df = t.history(period="1y")
+        return df, info
+    except Exception as e:
+        print(f"  Error fetching {ticker}: {e}")
+        return None, {}
+
+
+def _compute_ma(df):
+    df["MA50"] = df["Close"].rolling(50).mean()
+    df["MA200"] = df["Close"].rolling(200).mean()
+    return df
+
+
+def _rsi(s, n=14):
+    delta = s.diff()
     up = delta.clip(lower=0)
     down = -delta.clip(upper=0)
-    ma_up = up.ewm(com=periods - 1, adjust=True, min_periods=periods).mean()
-    ma_down = down.ewm(com=periods - 1, adjust=True, min_periods=periods).mean()
+    ma_up = up.ewm(com=n - 1, adjust=True, min_periods=n).mean()
+    ma_down = down.ewm(com=n - 1, adjust=True, min_periods=n).mean()
     rs = ma_up / ma_down
-    return float(100 - (100 / (1 + rs)).iloc[-1])
+    return 100 - (100 / (1 + rs))
 
 
-def wyckoff_phase(hist: pd.DataFrame) -> tuple[str, int, str]:
-    if hist.empty or len(hist) < 50:
-        return "Insufficient data", 40, "No data"
-    price = float(hist["Close"].iloc[-1])
-    high_1y = hist["High"].max()
-    low_1y = hist["Low"].min()
-    rangep = (price - low_1y) / (high_1y - low_1y) * 100 if (high_1y - low_1y) > 0 else 50
+def _wyckoff(df):
+    c = df["Close"]
+    hi = df["High"]
+    lo = df["Low"]
+    v = df["Volume"]
+    latest = df.iloc[-1]
+    avg = df.tail(60)
+    r_lo, r_hi = avg["Low"].min(), avg["High"].max()
+    r_pct = (latest["Close"] - r_lo) / (r_hi - r_lo) * 100 if r_hi > r_lo else 50
 
-    recent = hist.tail(60)
-    highs = recent["High"].values
-    lows = recent["Low"].values
-    half = len(highs) // 2
-    hh_hl = highs[-1] > highs[half] and lows[-1] > lows[half]
-    lh_ll = highs[-1] < highs[half] and lows[-1] < lows[half]
+    last30 = df.tail(30)
+    hh = last30["High"].diff().gt(0).sum() > 15
+    hl = last30["Low"].diff().gt(0).sum() > 15
+    lh = last30["High"].diff().lt(0).sum() > 15
+    ll = last30["Low"].diff().lt(0).sum() > 15
 
     spring = False
-    recent_30 = hist.tail(30)
-    low_30 = recent_30["Low"].min()
-    low_idx = recent_30["Low"].idxmin()
-    if low_idx and low_idx < hist.index[-5]:
-        if price > low_30 * 1.05:
-            spring = True
+    for i in range(-10, -1):
+        if df.iloc[i]["Low"] < r_lo and df.iloc[i+1]["Close"] > df.iloc[i]["Close"]:
+            spring = True; break
 
-    vol_decreasing = False
-    if len(hist) >= 90:
-        vol_older = hist.tail(90).head(60)["Volume"].mean()
-        vol_recent = hist.tail(30)["Volume"].mean()
-        if vol_recent < vol_older * 0.8:
-            vol_decreasing = True
+    upthrust = False
+    for i in range(-10, -1):
+        if df.iloc[i]["High"] > r_hi and df.iloc[i+1]["Close"] < df.iloc[i]["Close"]:
+            upthrust = True; break
 
-    ma50 = float(hist["Close"].rolling(50).mean().iloc[-1])
-    ma200_val = float(hist["Close"].rolling(200).mean().iloc[-1]) if len(hist) >= 200 else None
-    golden_cross = ma200_val and ma50 > ma200_val
+    vol_60 = v.tail(60).mean()
+    vol_20 = v.tail(20).mean()
+    contracting = vol_20 < vol_60 * 0.8 if vol_60 else False
 
-    if spring and 30 <= rangep <= 60:
-        phase = "Phase B-C (Accumulation with Spring)"
-        score = 90
-        detail = f"Spring confirmed at ${low_30:.2f}, price in accumulation zone ({rangep:.0f}% of range)"
+    sos = sum(1 for i in range(-20, 0) if v.iloc[i] > v.tail(20).mean() * 1.5 and df.iloc[i]["Close"] > df.iloc[i]["Open"])
+    sow = sum(1 for i in range(-20, 0) if v.iloc[i] > v.tail(20).mean() * 1.5 and df.iloc[i]["Close"] < df.iloc[i]["Open"])
+
+    if spring and sos >= sow:
+        phase = "Phase C-D — Spring / Initial Effect"
+        score = 82
     elif spring:
-        phase = "Phase C (Spring / Shakeout)"
-        score = 85
-        detail = f"Spring detected at ${low_30:.2f}"
-    elif hh_hl and golden_cross:
-        phase = "Phase D-E (Markup)"
-        score = 80
-        detail = "HH/HL pattern with golden cross, markup phase"
-    elif hh_hl:
-        phase = "Phase D (Initial Effect / SOS)"
-        score = 70
-        detail = "HH/HL pattern, initial markup signal"
-    elif 40 <= rangep <= 60 and vol_decreasing:
-        phase = "Phase B (Cause Building / Accumulation)"
+        phase = "Phase C — Spring"
+        score = 78
+    elif hh and hl and r_pct > 80 and sos >= sow:
+        phase = "Phase D-E — Markup"
+        score = 75
+    elif upthrust:
+        phase = "Phase C — Upthrust (Bearish)"
+        score = 25
+    elif contracting and sos >= sow:
+        phase = "Phase B — Cause Building (Accumulation)"
+        score = 60
+    elif sos > sow:
+        phase = "Phase D — SOS Bias (Accumulation)"
         score = 65
-        detail = "Tight range {rangep:.0f}%, volume decreasing = absorption"
-    elif 40 <= rangep <= 60:
-        phase = "Phase B (Cause Building)"
+    elif sow > sos:
+        phase = "Phase D — SOW Bias (Distribution)"
+        score = 35
+    elif hh and hl:
+        phase = "Phase D — Early Markup"
+        score = 70
+    else:
+        phase = "Phase A-B — Range / Cause Building"
         score = 50
-        detail = "Neutral range at {rangep:.0f}%, no clear phase"
-    elif lh_ll:
-        phase = "Phase D-E (Markdown)"
-        score = 15
-        detail = "LH/LL pattern, distribution/markdown"
+
+    details = {
+        "range_position_pct": round(r_pct, 1),
+        "hh_hl_markup": hh and hl,
+        "lh_ll_markdown": lh and ll,
+        "spring_detected": spring,
+        "upthrust_detected": upthrust,
+        "volume_ratio_20v60": round(float(vol_20 / vol_60) * 100, 1) if vol_60 else 0,
+        "sos_bars": sos,
+        "sow_bars": sow,
+    }
+    return phase, score, details
+
+
+def _volume_profile(df):
+    vp = df.tail(63)
+    if vp.empty:
+        return "No Data", 50, {}
+
+    pmin, pmax = vp["Low"].min(), vp["High"].max()
+    bins, bw = 20, (pmax - pmin) / 20 if pmax > pmin else 1
+    profile = {}
+    for i in range(bins):
+        lb, hb = pmin + i * bw, pmin + (i + 1) * bw
+        mask = (vp["Close"] >= lb) & (vp["Close"] < hb)
+        key = f"{lb:.2f}-{hb:.2f}"
+        profile[key] = {"volume": float(vp.loc[mask, "Volume"].sum()), "count": int(mask.sum())}
+
+    poc_bin = max(profile, key=lambda k: profile[k]["volume"])
+    poc = sum(float(x) for x in poc_bin.split("-")) / 2
+
+    total_vol = vp["Volume"].sum()
+    sorted_bins = sorted(profile.items(), key=lambda x: x[1]["volume"], reverse=True)
+    cum, va_keys = 0, []
+    for kk, vv in sorted_bins:
+        cum += vv["volume"]; va_keys.append(kk)
+        if cum / total_vol >= 0.7: break
+    va_prices = [float(x) for k in va_keys for x in k.split("-")]
+    val, vah = min(va_prices), max(va_prices)
+
+    close_vp = vp["Close"].iloc[-1]
+    curr_vol = vp["Volume"].iloc[-1]
+    avg_vol = vp["Volume"].tail(20).mean()
+
+    top_count = sorted_bins[0][1]["count"]
+    total_bars = len(vp)
+    if top_count > total_bars * 0.25:
+        shape, s_score = "D-Profile (Balanced)", 30
+    elif close_vp > poc and curr_vol > avg_vol * 1.2:
+        shape, s_score = "P-Profile (Bullish)", 50
+    elif close_vp < poc and curr_vol > avg_vol * 1.2:
+        shape, s_score = "b-Profile (Bearish)", -30
     else:
-        phase = "Transitional"
-        score = 40
-        detail = f"Price at {rangep:.0f}% of range, no clear phase"
+        trend = "up" if close_vp > vp["Close"].iloc[0] else "down"
+        shape, s_score = f"Thin Profile (Trending {trend})", 20 if trend == "up" else -20
 
-    return phase, score, detail
+    vpoc_score = 20 if close_vp > poc else (-20 if close_vp < poc else 0)
+    va_score = -15 if close_vp > vah else (-15 if close_vp < val else 0)
+    total = s_score + vpoc_score + va_score
+    norm = max(0, min(100, 50 + total))
 
-
-def volume_profile(hist: pd.DataFrame) -> tuple[str, int, str]:
-    if hist.empty or len(hist) < 20:
-        return "Insufficient", 30, "No data"
-
-    price = float(hist["Close"].iloc[-1])
-    h, l = hist["High"].max(), hist["Low"].min()
-    span = h - l
-    n_bins = 20
-    bw = span / n_bins if span > 0 else 1
-    df = hist.copy()
-    df["bin"] = ((df["Close"] - l) / bw).astype(int).clip(0, n_bins - 1)
-    vol_by_bin = df.groupby("bin")["Volume"].sum()
-    poc_bin = vol_by_bin.idxmax()
-    poc_price = l + (poc_bin + 0.5) * bw
-
-    total_vol = vol_by_bin.sum()
-    cum, va_bins = 0, []
-    for b, v in vol_by_bin.sort_values(ascending=False).items():
-        cum += v
-        va_bins.append(b)
-        if cum / total_vol >= 0.7:
-            break
-    val = l + min(va_bins) * bw
-    vah = l + (max(va_bins) + 1) * bw
-
-    pos_in_range = ((price - l) / span) * 100 if span > 0 else 50
-    if 40 < pos_in_range < 60:
-        shape = "D-Profile (Balanced)"
-    elif price > vah and len(va_bins) > 5:
-        shape = "P-Profile (Bullish tail)"
-    elif price < val and len(va_bins) > 5:
-        shape = "b-Profile (Bearish tail)"
-    else:
-        shape = "Mixed profile"
-
-    vol_ratio = float(hist["Volume"].iloc[-1]) / float(hist["Volume"].iloc[-21:].mean()) if len(hist) >= 21 else 1.0
-
-    if val <= price <= vah:
-        pos_detail = f"Price inside VA (${val:.2f}-${vah:.2f})"
-        pos_score = 60
-    elif price < val:
-        pos_detail = f"Price below VAL (${val:.2f}) — potential value zone"
-        pos_score = 70
-    else:
-        pos_detail = f"Price above VAH (${vah:.2f}) — extended"
-        pos_score = 40
-
-    if abs(price - poc_price) / (poc_price or 1) < 0.05:
-        pos_detail += f", near VPOC ${poc_price:.2f}"
-        pos_score += 10
-
-    score = pos_score
-    detail = f"{shape} | {pos_detail} | Vol ratio: {vol_ratio:.1f}x"
-
-    if vol_ratio > 2.0:
-        detail += " (high)"
-        score += 10
-    elif vol_ratio > 1.5:
-        detail += " (elevated)"
-        score += 5
-
-    return shape, min(score, 100), detail
+    details = {
+        "shape": shape,
+        "poc_price": round(poc, 2),
+        "val": round(val, 2),
+        "vah": round(vah, 2),
+        "price_vs_poc": "Bullish ▲" if close_vp > poc else "Bearish ▼",
+        "price_vs_va": f"Extended above VAH (${vah:.2f})" if close_vp > vah else (f"Below VAL (${val:.2f})" if close_vp < val else "Inside VA"),
+        "last_close": round(close_vp, 2),
+        "raw_score": norm,
+    }
+    return shape, norm, details
 
 
-def price_action(hist: pd.DataFrame) -> tuple[str, int, str]:
-    if hist.empty or len(hist) < 20:
-        return "Insufficient", 30, "No data"
+def _price_action(df):
+    v20 = df.tail(20)
+    c, v = v20["Close"], v20["Volume"]
+    a20 = v.mean()
+    a_range = (c.max() - c.min()) / 20
 
-    score = 40
-    details = []
+    val_bull = sum(1 for i in range(-10, 0)
+                   if df.iloc[i]["Close"] > df.iloc[i]["Open"] and df.iloc[i]["Volume"] > a20 * 1.3)
+    val_bear = sum(1 for i in range(-10, 0)
+                   if df.iloc[i]["Close"] < df.iloc[i]["Open"] and df.iloc[i]["Volume"] > a20 * 1.3)
+    rev = sum(1 for i in range(-9, 0)
+              if (df.iloc[i]["Close"] > df.iloc[i-1]["Close"] and df.iloc[i-1]["Close"] < df.iloc[i-1]["Open"])
+              or (df.iloc[i]["Close"] < df.iloc[i-1]["Close"] and df.iloc[i-1]["Close"] > df.iloc[i-1]["Open"]))
+    vpa = (val_bull - val_bear) * 5 + (rev * 10 if rev > 2 else 0)
 
-    rsi = compute_rsi(hist["Close"])
-    if rsi < 30:
-        rsi_desc = f"RSI {rsi:.0f} (oversold extreme)"
-        details.append(rsi_desc)
-    elif rsi < 40:
-        rsi_desc = f"RSI {rsi:.0f} (oversold zone)"
-        score += 15
-        details.append(f"{rsi_desc} +15")
-    elif rsi <= 60:
-        rsi_desc = f"RSI {rsi:.0f} (neutral)"
-        score += 5
-        details.append(f"{rsi_desc} +5")
-    else:
-        rsi_desc = f"RSI {rsi:.0f} (overbought)"
-        details.append(rsi_desc)
+    er = 0
+    for i in range(-5, 0):
+        br = df.iloc[i]["High"] - df.iloc[i]["Low"]
+        wr, nr = br > a_range * 1.2, br < a_range * 0.8
+        hv = df.iloc[i]["Volume"] > a20 * 1.3
+        lv = df.iloc[i]["Volume"] < a20 * 0.7
+        er += 5 if (wr and hv) else (-5 if (nr and hv) else (-10 if (wr and lv) else 0))
 
-    hist2 = hist.copy()
-    hist2["ema25"] = hist2["Close"].ewm(span=25).mean()
-    if len(hist2) >= 30:
-        slope = (hist2["ema25"].iloc[-1] - hist2["ema25"].iloc[-5]) / hist2["ema25"].iloc[-5]
-        if abs(slope) < 0.002:
-            details.append("25ema flat")
-        elif slope > 0:
-            score += 15
-            details.append(f"25ema rising +15")
-        else:
-            details.append("25ema falling")
+    ema25 = c.ewm(span=25).mean()
+    ema_up = ema25.iloc[-1] > ema25.iloc[-5]
+    ema_s = 15 if ema_up else -15
 
-    last_20 = hist.tail(20)
-    vpa_net = 0
-    for i in range(1, len(last_20)):
-        bar = last_20.iloc[i]
-        prev = last_20.iloc[i - 1]
-        vol = float(bar["Volume"])
-        avg_v = float(last_20["Volume"].mean())
-        vr = vol / avg_v if avg_v > 0 else 1
-        up = float(bar["Close"]) > float(prev["Close"])
-        wide = (float(bar["High"]) - float(bar["Low"])) > (float(prev["High"]) - float(prev["Low"])) * 1.2
-        high_vol = vr > 1.5
+    recent_r = v20["High"].max() - v20["Low"].min()
+    tight = (v20["High"] - v20["Low"]).tail(5).mean() < recent_r * 0.15 if recent_r > 0 else False
+    bld = 30 if tight else 0
 
-        if up and high_vol:
-            vpa_net += 1
-        elif not up and high_vol:
-            vpa_net -= 1
-        if up and vr < 0.6 and wide:
-            vpa_net -= 1
-        elif not up and vr < 0.6 and wide:
-            vpa_net += 1
+    ws = 0
+    for i in range(-15, -2):
+        bar, nxt = df.iloc[i], df.iloc[i+1]
+        prev = df.iloc[i-1]
+        if bar["Low"] < prev["Low"] and nxt["Close"] > nxt["Open"]:
+            ws += 20; break
 
-    if vpa_net > 2:
-        score += 20
-        details.append(f"VPA bullish (net {vpa_net}) +20")
-    elif vpa_net > 0:
-        score += 5
-        details.append(f"VPA mildly bullish (net {vpa_net}) +5")
-    elif vpa_net < -2:
-        details.append(f"VPA bearish (net {vpa_net})")
-    else:
-        details.append(f"VPA mixed (net {vpa_net})")
+    pa_raw = (vpa + er + ema_s + bld + ws) / 4
+    pa_norm = max(0, min(100, 50 + pa_raw))
+    pa_v = "Bullish" if pa_norm > 60 else ("Neutral" if pa_norm >= 40 else "Bearish")
 
-    last_10 = hist.tail(10)
-    vol_trend = "rising" if last_10["Volume"].iloc[-1] > last_10["Volume"].head(5).mean() else "stable/falling"
-
-    close_series = hist["Close"]
-    high_max = hist["High"].max()
-    low_min = hist["Low"].min()
-    buildup = 0
-    for i in range(5, len(last_20)):
-        window = last_20.iloc[i - 5:i]
-        rng = window["High"].max() - window["Low"].min()
-        wk_range = (high_max - low_min)
-        if wk_range > 0 and rng / wk_range < 0.05:
-            buildup += 1
-    if buildup >= 2:
-        score += 20
-        details.append(f"Buildup detected ({buildup} tight clusters) +20")
-
-    return f"VPA net {vpa_net}" if vpa_net else "Neutral", min(score, 100), " | ".join(details)
+    details = {
+        "vpa_bullish": val_bull, "vpa_bearish": val_bear, "vpa_reversal": rev,
+        "vpa_score": vpa, "er_score": er,
+        "ema25_slope_up": bool(ema_up), "buildup": tight,
+        "weis_score": ws, "score": round(pa_norm, 1),
+    }
+    return pa_v, pa_norm, details
 
 
-def sentiment(info: dict) -> tuple[int, str]:
-    score = 40
-    details = []
+def _sentiment(info, ticker):
+    score = 50
+    sr = info.get("shortRatio") or info.get("shortPercentOfFloat")
+    inst = info.get("heldPercentInstitutions")
+    if sr is not None:
+        if sr > 3: score += 30
+        elif sr < 1: score -= 10
+    if inst is not None:
+        if inst > 0.7: score += 15
+        elif inst < 0.3: score -= 10
+    details = {"short_ratio": sr, "institutional_ownership": round(inst * 100, 1) if inst else None}
+    return max(0, min(100, score)), details
 
-    si = info.get("shortPercentOfFloat")
-    if si is not None:
-        if si > 0.20:
-            score += 30
-            details.append(f"SI {si*100:.1f}% (high squeeze potential) +30")
-        elif si > 0.10:
-            score += 15
-            details.append(f"SI {si*100:.1f}% (moderate) +15")
-        else:
-            details.append(f"SI {si*100:.1f}% (low)")
-    else:
-        details.append("SI N/A")
+
+def _fundamentals(info, ticker):
+    score = 50; reasons = []
+    pe = info.get("trailingPE")
+    if pe is not None:
+        if pe < 10: score += 30; reasons.append(f"P/E {pe:.1f} (deep value)")
+        elif pe < 15: score += 20; reasons.append(f"P/E {pe:.1f} (value)")
+        elif pe < 25: score += 10; reasons.append(f"P/E {pe:.1f} (fair)")
+        elif pe > 40: score -= 20; reasons.append(f"P/E {pe:.1f} (expensive)")
+
+    rev_growth = info.get("revenueGrowth")
+    if rev_growth is not None and rev_growth > 0:
+        score += 15; reasons.append(f"Revenue growth +{rev_growth*100:.0f}%")
+    elif rev_growth is not None:
+        score -= 15
 
     inst = info.get("heldPercentInstitutions")
-    if inst is not None:
-        if inst > 0.70:
-            score += 20
-            details.append(f"Inst {inst*100:.0f}% (strong) +20")
-        elif inst > 0.50:
-            score += 10
-            details.append(f"Inst {inst*100:.0f}% (moderate) +10")
-        else:
-            details.append(f"Inst {inst*100:.0f}% (low)")
-    else:
-        details.append("Inst N/A")
-
-    dtc = info.get("shortRatio")
-    if dtc is not None:
-        if dtc > 7:
-            score += 20
-            details.append(f"DTC {dtc:.1f} (very high) +20")
-        elif dtc > 3:
-            score += 10
-            details.append(f"DTC {dtc:.1f} (elevated) +10")
-        else:
-            details.append(f"DTC {dtc:.1f} (low)")
-
-    return min(score, 100), " | ".join(details)
-
-
-def fundamentals(info: dict) -> tuple[int, str]:
-    score = 40
-    details = []
-
-    pe = info.get("trailingPE")
-    if pe is not None and pe > 0:
-        if pe < 10:
-            score += 30
-            details.append(f"P/E {pe:.1f} (undervalued) +30")
-        elif pe < 20:
-            score += 20
-            details.append(f"P/E {pe:.1f} (fair) +20")
-        elif pe < 30:
-            score += 10
-            details.append(f"P/E {pe:.1f} (slight premium) +10")
-        else:
-            details.append(f"P/E {pe:.1f} (expensive)")
-    else:
-        details.append("P/E N/A")
-
-    rev = info.get("revenueGrowth")
-    if rev is not None:
-        if rev > 0.10:
-            score += 20
-            details.append(f"Rev growth {rev*100:.0f}% (strong) +20")
-        elif rev > 0:
-            score += 10
-            details.append(f"Rev growth {rev*100:.0f}% (positive) +10")
-        else:
-            details.append(f"Rev growth {rev*100:.0f}% (shrinking)")
+    if inst is not None and inst > 0.5:
+        score += 10
 
     margins = info.get("profitMargins")
     if margins is not None:
-        if margins > 0.15:
-            score += 15
-            details.append(f"Margins {margins*100:.0f}% (healthy) +15")
-        elif margins > 0:
-            score += 5
-            details.append(f"Margins {margins*100:.0f}% (positive) +5")
-        else:
-            details.append(f"Margins {margins*100:.0f}% (negative)")
+        if margins > 0.15: score += 15; reasons.append(f"Margins {margins*100:.0f}%")
+        elif margins < 0: score -= 15
 
-    de = info.get("debtToEquity")
-    if de is not None:
-        if de < 0.3:
-            score += 15
-            details.append(f"D/E {de:.2f} (low debt) +15")
-        elif de < 1.0:
-            score += 5
-            details.append(f"D/E {de:.2f} (manageable) +5")
-        elif de < 2.0:
-            details.append(f"D/E {de:.2f} (moderate)")
-        else:
-            score -= 10
-            details.append(f"D/E {de:.2f} (high leverage) -10")
+    dte = info.get("debtToEquity")
+    if dte is not None:
+        if dte > 300: score -= 10
+        elif dte < 50: score += 10
 
-    mcap = info.get("marketCap")
-    if mcap is not None and mcap > 10e9:
-        score += 5
-        details.append(f"MCap ${mcap/1e9:.1f}B (large cap) +5")
+    fcf = info.get("freeCashflow")
+    if fcf is not None and fcf > 0: score += 10
 
-    roe = info.get("returnOnEquity")
-    if roe is not None and roe > 0.10:
-        score += 10
-        details.append(f"ROE {roe*100:.0f}% (strong) +10")
-
-    return min(score, 100), " | ".join(details)
+    details = {
+        "pe_ratio": pe, "revenue_growth_pct": round(rev_growth*100, 1) if rev_growth else None,
+        "institutional_ownership": round(inst*100, 1) if inst else None,
+        "profit_margins_pct": round(margins*100, 1) if margins else None,
+        "debt_to_equity": dte, "free_cashflow": fcf,
+        "reasons": reasons, "score": round(score),
+    }
+    return max(0, min(100, score)), details
 
 
-def analyze_ticker(symbol: str, name: str, scan_scores: dict):
-    print(f"\n{'='*80}")
-    print(f"  DEEP DIVE: {symbol} — {name}")
-    print(f"  Scanner Score: {scan_scores['final_score']} | Pattern: {scan_scores['pattern']}")
-    print(f"{'='*80}")
-
-    t = yf.Ticker(symbol)
-    info = t.info or {}
-    hist = t.history(period="1y")
-
-    if hist.empty:
-        print("  ❌ No historical data available")
-        return
-
-    price = info.get("currentPrice") or float(hist["Close"].iloc[-1])
-    price_prev = float(hist["Close"].iloc[-2]) if len(hist) > 1 else price
-    change_pct = ((price - price_prev) / price_prev) * 100
-
-    print(f"\n  📊 Prezzo: ${price:.2f} ({change_pct:+.2f}%)")
-    print(f"  🏭 Settore: {info.get('sector', 'N/A')} | Industria: {info.get('industry', 'N/A')}")
-    print(f"  💰 MCap: ${info.get('marketCap', 0)/1e9:.1f}B | EPS: {info.get('trailingEps', 'N/A')}")
-
-    w_phase, w_score, w_detail = wyckoff_phase(hist)
-    v_shape, v_score, v_detail = volume_profile(hist)
-    pa_desc, pa_score, pa_detail = price_action(hist)
-    s_score, s_detail = sentiment(info)
-    f_score, f_detail = fundamentals(info)
-
+def _aggregate(w, vp, pa, s, f):
     weights = {"wyckoff": 0.25, "volprof": 0.20, "pa": 0.20, "sentiment": 0.15, "fundamentals": 0.20}
-    final = (
-        w_score * weights["wyckoff"] +
-        v_score * weights["volprof"] +
-        pa_score * weights["pa"] +
-        s_score * weights["sentiment"] +
-        f_score * weights["fundamentals"]
-    )
+    dims = {"Wyckoff": (w, weights["wyckoff"]), "Volume Profile": (vp, weights["volprof"]),
+            "Price Action": (pa, weights["pa"]), "Sentiment": (s, weights["sentiment"]),
+            "Fundamentals": (f, weights["fundamentals"])}
+    final = sum(sc * w for sc, w in dims.values())
+    return final, dims
 
-    if final >= 70:
-        verdict = "LONG-TERM INVESTMENT 🟢"
-    elif final >= 50:
-        verdict = "SHORT-TERM SPECULATION 🟡"
-    else:
-        verdict = "AVOID / WAIT 🔴"
 
-    print(f"\n  {'─'*60}")
-    print(f"  📋 Unified Verdict: {verdict}")
-    print(f"  Score: {final:.0f}% (pesato su 5 dimensioni)")
-    print(f"  {'─'*60}")
+def _verdict(score):
+    if score >= 70: return "LONG-TERM INVESTMENT", "Long", "Entry DCA o singolo, PT 6-12 mesi"
+    if score >= 50: return "SHORT-TERM SPECULATION (Bullish)", "Long", "Entry tattico, PT 1-4 settimane, stop stretto"
+    if score >= 30: return "SHORT-TERM SPECULATION (Neutrale)", "Neutrale", "Solo setup perfetto"
+    return "AVOID / WAIT", "N/A", "Nessuna azione"
 
-    print(f"\n  ### Perché")
-    print(f"  - **Wyckoff Phase** ({w_phase}): {w_detail} → [{w_score}/100]")
-    print(f"  - **Volume Profile** ({v_shape}): {v_detail} → [{v_score}/100]")
-    print(f"  - **Price Action** ({pa_desc}): {pa_detail} → [{pa_score}/100]")
-    print(f"  - **Sentiment**: {s_detail} → [{s_score}/100]")
-    print(f"  - **Fondamentali**: {f_detail} → [{f_score}/100]")
 
-    print(f"\n  ### Raccomandazione Finale")
+def _print_report(ticker, df, info, wp, ws, wd, vs, vsc, vd, pv, ps, pd,
+                  ss, sd, fs, fd, final, verdict, direction, action, dims, sent_subs=None):
+    last = df.iloc[-1]
+    rsi14 = _rsi(df["Close"]).iloc[-1]
+    avg_vol = df["Volume"].tail(20).mean()
+    c_ma50 = last["Close"] > last.get("MA50", 0) if "MA50" in df.columns else True
+    c_ma200 = last["Close"] > last.get("MA200", 0) if "MA200" in df.columns else True
 
-    mgmt = "DCA su weakness" if final >= 70 else "Singolo ingresso tattico"
-    sl = f"${price * 0.92:.2f}" if final >= 50 else f"${price * 0.95:.2f}"
-    t1 = f"${price * 1.10:.2f}"
-    t2 = f"${price * 1.25:.2f}" if final >= 50 else f"${price * 1.10:.2f}"
-    horizon = "6-12 mesi" if final >= 70 else "4-8 settimane"
-    sizing = "5-8%" if final >= 70 else "2-3%" if final >= 50 else "1%"
+    heading(f"{ticker} — DATA")
+    print(f"  Prezzo:    ${last['Close']:.2f}")
+    print(f"  MA50:      ${df['MA50'].iloc[-1]:.2f}  {'▲' if c_ma50 else '▼'}" if 'MA50' in df.columns else "")
+    print(f"  MA200:     ${df['MA200'].iloc[-1]:.2f}  {'▲' if c_ma200 else '▼'}" if 'MA200' in df.columns else "")
+    print(f"  RSI(14):   {rsi14:.1f}")
+    print(f"  Volume:    {avg_vol:,.0f}")
+    print(f"  Name:      {info.get('longName', info.get('shortName', ticker))}")
+    print(f"  Mkt Cap:   ${info.get('marketCap', 0):,}")
+    print(f"  Settore:   {info.get('sector', 'N/A')} | {info.get('industry', '')}")
 
-    print(f"  | Azione | Entry | Stop Loss | Target 1 | Target 2 | Orizzonte | Sizing |")
-    print(f"  |--------|-------|-----------|----------|----------|-----------|--------|")
-    entry_range = f"${price * 0.95:.2f}-{price:.2f}" if final >= 50 else "$—"
-    print(f"  | {'**Entry**' if final >= 50 else '**Wait/Avoid**'} | {entry_range} | {sl} | {t1} | {t2} | {horizon} | {sizing} |")
+    heading("WYCKOFF")
+    print(f"  Phase: {wp}")
+    print(f"  Score: {ws:.0f}/100")
+    print(f"  Range: {wd['range_position_pct']:.0f}% from low")
+    print(f"  Spring: {'✅' if wd['spring_detected'] else '❌'} | Upthrust: {'✅' if wd['upthrust_detected'] else '❌'}")
+    print(f"  SOS/SOW: {wd['sos_bars']}/{wd['sow_bars']} | Vol ratio: {wd['volume_ratio_20v60']}%")
 
-    print(f"\n  ### Rischio")
-    risk = "Basso" if final >= 70 else "Medio" if final >= 50 else "Alto"
-    risks = []
-    if info.get("nextEarningsDate") and final >= 50:
-        risks.append(f"Earnings il {info.get('nextEarningsDate')}")
-    if w_score < 50:
-        risks.append("Wyckoff debole — possibile distribuzione")
-    if v_score < 40:
-        risks.append("Struttura VP debole")
-    if f_score < 40:
-        risks.append("Fondamentali in deterioramento")
-    if not risks:
-        risks.append("Rischio di mercato generale")
-    print(f"  Livello: {risk}")
-    print(f"  Fattori: {', '.join(risks)}")
+    heading("VOLUME PROFILE")
+    print(f"  Shape:  {vs}")
+    print(f"  POC:    ${vd.get('poc_price', 'N/A')}")
+    print(f"  VA:     ${vd.get('val', 'N/A')} — ${vd.get('vah', 'N/A')}")
+    print(f"  Price:  {vd.get('price_vs_va', '')}")
+    print(f"  Score:  {vsc:.0f}/100")
+
+    heading("PRICE ACTION")
+    print(f"  VPA:  Bull={pd['vpa_bullish']} Bear={pd['vpa_bearish']} Rev={pd['vpa_reversal']} → {pd['vpa_score']:+d}")
+    print(f"  E/R:  {pd['er_score']:+d} | EMA25: {'▲' if pd['ema25_slope_up'] else '▼'} | Buildup: {'✅' if pd['buildup'] else '❌'}")
+    print(f"  Weis: {pd['weis_score']:+d}")
+    print(f"  Score: {ps:.0f}/100 ({pv})")
+
+    heading("SENTIMENT (6-dimension)")
+    print(f"  Score: {ss:.0f}/100")
+    if sent_subs:
+        labels = {"short_interest": "SI", "options": "Options", "insider": "Insider",
+                   "retail": "Retail", "institutional": "Institutional", "momentum": "Momentum"}
+        for k, label in labels.items():
+            v = sent_subs.get(k)
+            if v is not None:
+                bar = "█" * (v // 10) + "░" * (10 - v // 10)
+                print(f"  {label:<14} {bar} {v:>3}/100")
+
+    heading("FUNDAMENTALS")
+    print(f"  P/E: {fd.get('pe_ratio', 'N/A')}")
+    print(f"  Revenue Growth: {fd.get('revenue_growth_pct', 'N/A')}%")
+    print(f"  Margins: {fd.get('profit_margins_pct', 'N/A')}%")
+    print(f"  D/E:   {fd.get('debt_to_equity', 'N/A')}")
+    if fd.get("reasons"):
+        for r in fd["reasons"]: print(f"    → {r}")
+    print(f"  Score: {fs:.0f}/100")
+
+    heading("SCORING")
+    print(f"{'Dimensione':<20} {'Score':>6} {'Peso':>6} {'Contributo':>10}")
+    print("-" * 45)
+    for name, (sc, w) in dims.items():
+        print(f"{name:<20} {sc:>6.0f} {w:>5.2f} {sc*w:>10.1f}")
+    print("-" * 45)
+    print(f"{'TOTALE':<20} {'':>6} {'1.00':>6} {final:>10.1f}")
+
+    heading(f"VERDETTO: {verdict}")
+    print(f"  Score:     {final:.1f}%")
+    print(f"  Direzione: {direction}")
+    print(f"  Azione:    {action}")
 
 
 def main():
-    print("\n" + "█" * 80)
-    print("  STOCK-CRYPTO-ANALYSIS — DEEP DIVE TOP 3 EUROPEI")
-    print("█" * 80)
+    parser = argparse.ArgumentParser(description="Deep dive stock analysis")
+    parser.add_argument("ticker", help="Stock ticker symbol")
+    parser.add_argument("--save", "-s", action="store_true", help="Save JSON report")
+    args = parser.parse_args()
 
-    tickers = [
-        {"symbol": "DBK.DE", "name": "Deutsche Bank AG", "scan_scores": {"final_score": 66.0, "pattern": "Accumulation Spring"}},
-        {"symbol": "SGRO.L", "name": "Segro plc", "scan_scores": {"final_score": 65.0, "pattern": "Accumulation Spring"}},
-        {"symbol": "PST.MI", "name": "Poste Italiane S.p.A.", "scan_scores": {"final_score": 63.8, "pattern": "Accumulation Spring"}},
-    ]
-
-    for t in tickers:
-        analyze_ticker(t["symbol"], t["name"], t["scan_scores"])
-
-    print(f"\n{'█'*80}")
-    print("  DEEP DIVE COMPLETATO")
-    print(f"{'█'*80}\n")
+    result = analyze(args.ticker)
+    if args.save and "error" not in result:
+        out_dir = Path("/home/giuseppe/Progetti/Github/opencode-skills/skills/market-accumulation-scanner/reports/us_large")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        path = out_dir / f"deep_dive_{args.ticker.lower()}.json"
+        with open(path, "w") as f:
+            json.dump(result, f, indent=2, default=str)
+        print(f"\n  Report salvato: {path}")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,9 @@
 ---
 name: python-pydantic
 description: Python coding standards with Pydantic data models, type hints, and pylint compliance
+allowed-tools:
+  - read
+  - grep
 orchestrator:
   parallel: false
   type: kb

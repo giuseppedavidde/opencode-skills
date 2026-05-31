@@ -1,6 +1,9 @@
 ---
 name: python-venv
 description: "CRITICAL: Always use Python virtual environments. Never install packages with pip directly on the system Python. Every Python project must use a venv."
+allowed-tools:
+  - read
+  - grep
 orchestrator:
   parallel: false
   type: kb
