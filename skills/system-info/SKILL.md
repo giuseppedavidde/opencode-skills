@@ -5,6 +5,9 @@ description: >
   environments, or diagnose architecture-specific issues. Triggers: 'system info',
   'what hardware', 'compile for this machine', 'build for arch', 'dettagli macchina',
   'hardware report', 'specifica sistema', 'check OS', 'uname'.
+orchestrator:
+  parallel: false
+  type: kb
 ---
 
 # System Info

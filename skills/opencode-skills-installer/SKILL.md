@@ -5,6 +5,8 @@ description: >
   the opencode-skills GitHub repo where all skills live. Triggers: 'add a skill',
   'install skill', 'create skill', 'new skill', 'sync skills', 'update skills',
   'installare una skill', 'nuova skill', 'aggiungi skill', 'crea skill'.
+orchestrator:
+  parallel: false
 ---
 
 # Opencode Skills Installer

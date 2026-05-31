@@ -6,6 +6,17 @@ description: >
   images from PDF using extract_pdf.py. Supports OCR fallback for scanned pages.
   Images stored per-workflow convention. Triggers: ".pdf in raw/", "ingest PDF",
   "PDF found", "extract PDF".
+allowed-tools:
+  - read
+  - write
+  - bash
+  - grep
+  - task
+orchestrator:
+  parallel: true
+  split_by: file
+  chunk_size: 1
+  merge: none
 ---
 
 # PDF Ingest Skill

@@ -15,7 +15,15 @@ allowed-tools:
   - bash
   - glob
   - grep
+  - task
 argument-hint: [universe name (us_large, us_tech, italy, germany, france, uk, spain, all) or custom ticker list like "MSFT, AAPL, ENI.MI"]
+orchestrator:
+  parallel: true
+  split_by: ticker
+  chunk_size: 15
+  merge: rank
+  merge_key: final_score
+  top_n: 15
 ---
 
 # Market Accumulation Scanner

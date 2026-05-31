@@ -10,7 +10,13 @@ allowed-tools:
   - read
   - grep
   - websearch
+  - task
 argument-hint: [ticker, "options on X", "strategia opzioni su X"]
+orchestrator:
+  parallel: true
+  split_by: ticker
+  chunk_size: 1
+  merge: none
 ---
 
 # Options Strategy Suggestions

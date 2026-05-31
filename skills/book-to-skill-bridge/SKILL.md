@@ -11,6 +11,10 @@ allowed-tools:
   - todowrite
   - question
 argument-hint: <path-to-document> [skill-name-slug]  or  --batch <directory>
+orchestrator:
+  parallel: true
+  delegated: true
+  split_by: book
 ---
 
 # Book-to-Skill Bridge v2 — Parallel Batch Edition

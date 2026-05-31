@@ -1,6 +1,17 @@
 ---
 name: options-analysis
 description: "Analyze multi-leg options positions with Greeks, payoff scenarios, and recommendations. Triggers: 'analyze options', 'cosa fare con le opzioni', 'options position', 'opzioni', 'position analysis', 'Greeks', 'payoff', 'cosa fare', 'analizza opzioni'."
+allowed-tools:
+  - read
+  - write
+  - bash
+  - grep
+  - task
+orchestrator:
+  parallel: true
+  split_by: ticker
+  chunk_size: 1
+  merge: concat
 ---
 
 # Skill: options-analysis

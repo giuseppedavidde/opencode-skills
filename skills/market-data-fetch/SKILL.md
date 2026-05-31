@@ -1,6 +1,15 @@
 ---
 name: market-data-fetch
 description: "Standardized templates for fetching stock, ETF, and crypto market data using yfinance, CoinGecko, and Bitpanda. Triggers: 'fetch stock data', 'get crypto prices', 'market data', 'load portfolio', 'yfinance', 'coin gecko', 'yf.Ticker', 'CoinGeckoAPI', 'Data_for_Analysis'."
+allowed-tools:
+  - read
+  - bash
+  - task
+orchestrator:
+  parallel: true
+  split_by: ticker
+  chunk_size: 20
+  merge: concat
 ---
 
 # Market Data Fetch

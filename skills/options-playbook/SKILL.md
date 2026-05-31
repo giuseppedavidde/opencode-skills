@@ -5,6 +5,9 @@ allowed-tools:
   - read
   - grep
 argument-hint: [strategy name, Greek, or outlook]
+orchestrator:
+  parallel: false
+  type: kb
 ---
 
 # The Options Playbook, Expanded 2nd Edition

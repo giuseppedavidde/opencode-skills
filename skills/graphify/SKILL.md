@@ -2,6 +2,10 @@
 name: graphify
 description: "any input (code, docs, papers, images) → knowledge graph → clustered communities → HTML + JSON + audit report. Use when user asks any question about a codebase, project content, architecture, or file relationships — especially if graphify-out/ exists. Provides persistent graph with god nodes, community detection, and BFS/DFS query tools."
 trigger: /graphify
+orchestrator:
+  parallel: true
+  delegated: true
+  split_by: file
 ---
 
 # /graphify

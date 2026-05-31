@@ -5,6 +5,9 @@ allowed-tools:
   - read
   - grep
 argument-hint: [topic, chapter number, or term]
+orchestrator:
+  parallel: false
+  type: kb
 ---
 
 # The Crypto Crash Course

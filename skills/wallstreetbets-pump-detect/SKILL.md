@@ -11,7 +11,14 @@ allowed-tools:
   - bash
   - read
   - grep
+  - task
 argument-hint: [scan, "cosa pompano su WSB", "wsb radar", "meme stock scan", "pump detect"]
+orchestrator:
+  parallel: true
+  split_by: ticker
+  chunk_size: 1
+  merge: rank
+  merge_key: hype_score
 ---
 
 # WallStreetBets Pump Detect

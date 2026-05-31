@@ -5,6 +5,9 @@ allowed-tools:
   - read
   - grep
 argument-hint: [topic, indicator, or chapter number]
+orchestrator:
+  parallel: false
+  type: kb
 ---
 
 # Crypto Technical Analysis

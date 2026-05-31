@@ -8,7 +8,13 @@ allowed-tools:
   - glob
   - grep
   - webfetch
+  - task
 argument-hint: <path-to-document> [skill-name-slug]
+orchestrator:
+  parallel: true
+  split_by: chapter
+  chunk_size: 1
+  merge: none
 ---
 
 # Book-to-Skill Converter

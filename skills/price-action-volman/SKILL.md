@@ -5,6 +5,9 @@ allowed-tools:
   - read
   - grep
 argument-hint: [topic, framework, or chapter number]
+orchestrator:
+  parallel: false
+  type: kb
 ---
 
 # Understanding Price Action: Practical Analysis of the 5-minute time frame

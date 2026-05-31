@@ -5,6 +5,9 @@ allowed-tools:
   - read
   - grep
 argument-hint: [topic, strategy, or chapter number]
+orchestrator:
+  parallel: false
+  type: kb
 ---
 
 # The Options Course Workbook

@@ -5,6 +5,9 @@ allowed-tools:
   - read
   - grep
 argument-hint: [topic, framework, or chapter number]
+orchestrator:
+  parallel: false
+  type: kb
 ---
 
 # Trading Against the Crowd: Profiting from Fear and Greed

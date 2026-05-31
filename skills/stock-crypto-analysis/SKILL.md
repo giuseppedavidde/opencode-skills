@@ -11,7 +11,15 @@ allowed-tools:
   - read
   - grep
   - websearch
+  - task
 argument-hint: [ticker, stock symbol, crypto name, or "what to do with X"]
+orchestrator:
+  parallel: true
+  split_by: ticker
+  chunk_size: 1
+  merge: rank
+  merge_key: final_score
+  top_n: 3
 ---
 
 # Stock & Crypto Unified Analysis

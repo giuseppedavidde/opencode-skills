@@ -5,6 +5,9 @@ allowed-tools:
   - read
   - grep
 argument-hint: [topic, recipe name, or chapter number]
+orchestrator:
+  parallel: false
+  type: kb
 ---
 
 # Le Ricette Smartfood
