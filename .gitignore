@@ -2,3 +2,6 @@
 __pycache__
 *.pyc
 .*version
+
+# Scanner reports (generated locally, not for repo)
+skills/market-accumulation-scanner/reports/

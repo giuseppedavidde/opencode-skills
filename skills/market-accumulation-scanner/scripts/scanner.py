@@ -413,9 +413,10 @@ def print_table(results: list[dict], top_n: int):
         print(f"{i:<4} {r['symbol']:<8} {name:<30} {r['final_score']:<7} {r['wyckoff']:<6} {r['volprof']:<5} {r['pa']:<5} {r['sentiment']:<6} {r['fundamentals']:<5} {r['pattern']:<30}")
 
 
-def generate_csv(results: list[dict], output_dir: str) -> str:
+def generate_csv(results: list[dict], output_dir: str | Path) -> str:
     ts = datetime.now().strftime("%Y-%m-%d_%H%M")
-    path = os.path.join(output_dir, f"scan_report_{ts}.csv")
+    os.makedirs(output_dir, exist_ok=True)
+    path = os.path.join(str(output_dir), f"scan_report_{ts}.csv")
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["rank", "symbol", "name", "market", "price", "final_score",
@@ -427,9 +428,10 @@ def generate_csv(results: list[dict], output_dir: str) -> str:
     return path
 
 
-def generate_html(results: list[dict], output_dir: str, universe_name: str, total_scanned: int) -> str:
+def generate_html(results: list[dict], output_dir: str | Path, universe_name: str, total_scanned: int) -> str:
     ts = datetime.now().strftime("%Y-%m-%d_%H%M")
-    path = os.path.join(output_dir, f"scan_report_{ts}.html")
+    os.makedirs(output_dir, exist_ok=True)
+    path = os.path.join(str(output_dir), f"scan_report_{ts}.html")
 
     def color(val, max_val=100):
         ratio = val / max_val
@@ -517,6 +519,11 @@ def main():
         universe = load_universe(args.universe)
         universe_name = args.universe
 
+    if args.output_dir == ".":
+        output_dir = SKILL_DIR / "reports" / universe_name
+    else:
+        output_dir = Path(args.output_dir)
+
     total = len(universe)
     print(f"\n📋 Scanning {universe_name} — {total} tickers...")
     print(f"   Batch: {args.batch_size} | Sleep: {args.batch_sleep}s | Min score: {args.min_score}")
@@ -562,10 +569,10 @@ def main():
 
     print_table(filtered, args.top)
 
-    csv_path = generate_csv(filtered, args.output_dir)
+    csv_path = generate_csv(filtered, output_dir)
     print(f"\n📄 CSV report: {csv_path}")
 
-    html_path = generate_html(filtered, args.output_dir, universe_name, total)
+    html_path = generate_html(filtered, output_dir, universe_name, total)
     print(f"📄 HTML report: {html_path}")
 
     print(f"\n{'─' * 60}")
