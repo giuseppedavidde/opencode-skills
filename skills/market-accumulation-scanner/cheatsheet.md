@@ -7,8 +7,18 @@
 | 1 | Wyckoff Structure | 25% | yfinance 1y daily |
 | 2 | Volume Profile | 20% | yfinance 3mo daily |
 | 3 | Price Action | 20% | yfinance 1mo daily |
-| 4 | Sentiment | 15% | yfinance info |
+| 4 | **Sentiment** | **15%** | yfinance info + Finviz news + Reddit/X social |
 | 5 | Fundamentals | 20% | yfinance info |
+
+## Sentiment Sub-Dimension Weights
+
+| Sub-Dimension | % of Sentiment | % of Total | Data Collection |
+|:-------------:|:--------------:|:----------:|-----------------|
+| Traditional | 40% | 6.0% | yfinance (SI, DTC, Inst) |
+| Web News | 35% | 5.25% | Finviz RSS / Yahoo Finance |
+| Social Media | 25% | 3.75% | WSB hotlist (wallstreetbets-pump-detect) + X/Twitter |
+
+**Aggregation**: `sentiment = traditional * 0.40 + web_news * 0.35 + social_media * 0.25`
 
 ## Wyckoff — Score Table
 
@@ -55,6 +65,8 @@
 
 ## Sentiment — Score Table
 
+### A) Traditional Sentiment (40% del Sentiment, max 100)
+
 | Condition | Delta | Max |
 |-----------|:-----:|:---:|
 | Short interest 10-20% | +20 | 20 |
@@ -63,7 +75,68 @@
 | Days to cover > 3 | +15 | 15 |
 | Days to cover > 7 | +25 | 25 |
 | Base | +25 | 25 |
-| **Total cap** | | **100** |
+| **Total cap (traditional)** | | **100** |
+
+### B) Web News Sentiment (35% del Sentiment, max 100)
+
+| Condition | Delta | Max |
+|-----------|:-----:|:---:|
+| 4+ headlines positive (upgrade, buy, beat, growth) | +40 | 40 |
+| 2-3 headlines positive | +20 | 20 |
+| Neutral / mixed | 0 | 0 |
+| 2-3 headlines negative (downgrade, miss, cut) | -20 | 0 |
+| 4+ headlines negative | -40 | 0 |
+| Earnings beat / guidance raise | +30 bonus | 30 |
+| Regulatory approval / partnership | +20 bonus | 20 |
+| Lawsuit / investigation / SEC | -30 penalty | 0 |
+| No news found | 0 | 0 |
+| **Base** | **+50** | **50** |
+
+Formula: `web_news = clamp(50 + sum(delta), 0, 100)`
+
+#### News Source URLs (da usare con webfetch)
+
+| Source | URL Pattern |
+|--------|------------|
+| **Finviz** (primario) | `https://finviz.com/quote.ashx?t={TICKER}` |
+| **Yahoo Finance** (fallback) | `https://finance.yahoo.com/quote/{TICKER}/news` |
+| **WSJ** (Phase 5 only) | `websearch("{TICKER} stock news 2026 site:wsj.com")` |
+| **Bloomberg** (Phase 5 only) | `websearch("{TICKER} stock 2026 site:bloomberg.com")` |
+
+**Parse Finviz news table** (da HTML via webfetch):
+```
+La pagina Finviz ha una tabella news sotto "News".
+Cerca elementi <a class="tab-link-news"> con testo + data.
+Polarità: keyword match sui titoli.
+```
+
+### C) Social Media Sentiment (25% del Sentiment, max 100)
+
+| Condition | Delta | Max |
+|-----------|:-----:|:---:|
+| WSB hotlist: Early FOMO + bullish sentiment | +40 | 40 |
+| WSB hotlist: Mid FOMO + mixed sentiment | +20 | 20 |
+| WSB hotlist: Late/Exit FOMO | -20 | 0 |
+| Non su WSB ma X buzz positivo | +10 | 10 |
+| Non su WSB | 0 | 0 |
+| X buzz negativo (sell calls, panic) | -15 | 0 |
+| **Base** | **+50** | **50** |
+
+Formula: `social_media = clamp(50 + sum(delta), 0, 100)`
+
+#### WSB Hotlist Cross-Reference
+
+Prima dello scan, esegui:
+```
+wsb scan → salva lista ticker con hype_score, FOMO phase, sentiment
+```
+Poi durante lo scan, per ogni ticker:
+```
+if ticker in wsb_hotlist:
+    match WSB phase + sentiment → score delta
+else:
+    social_media = 50 (neutro, skip WSB check)
+```
 
 ## Fundamentals — Score Table
 

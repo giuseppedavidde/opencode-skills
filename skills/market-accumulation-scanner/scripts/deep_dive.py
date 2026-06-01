@@ -38,7 +38,7 @@ def analyze(ticker: str, verbose: bool = True) -> dict:
     except Exception:
         spx_hist = pd.DataFrame()
     t = yf.Ticker(ticker)
-    sent_score, sent_d, sent_subs = compute_sentiment_6d(t, info, df, spx_hist)
+    sent_score, sent_d_str, sent_subs = compute_sentiment_6d(t, info, df, spx_hist)
 
     final, dims = _aggregate(wyckoff_score, vp_score, pa_score, sent_score, fund_score)
 
@@ -47,7 +47,7 @@ def analyze(ticker: str, verbose: bool = True) -> dict:
     if verbose:
         _print_report(ticker, df, info, wyckoff_phase, wyckoff_score, wyckoff_d,
                        vp_shape, vp_score, vp_d, pa_verdict, pa_score, pa_d,
-                       sent_score, sent_d, fund_score, fund_d, final, verdict, direction, action, dims, sent_subs)
+                       sent_score, sent_d_str, fund_score, fund_d, final, verdict, direction, action, dims, sent_subs)
 
     return {
         "ticker": ticker,
@@ -56,7 +56,7 @@ def analyze(ticker: str, verbose: bool = True) -> dict:
         "wyckoff": wyckoff_d | {"phase": wyckoff_phase, "score": round(wyckoff_score, 1)},
         "volume_profile": vp_d | {"shape": vp_shape, "score": round(vp_score, 1)},
         "price_action": pa_d | {"verdict": pa_verdict, "score": round(pa_score, 1)},
-        "sentiment": sent_d | {"score": round(sent_score, 1)},
+        "sentiment": {"detail": sent_d_str, "score": round(sent_score, 1), "subs": sent_subs},
         "fundamentals": fund_d | {"score": round(fund_score, 1)},
         "final_score": round(final, 1),
         "verdict": verdict,

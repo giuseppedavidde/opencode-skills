@@ -25,6 +25,10 @@ from sentiment_engine import compute_sentiment as compute_sentiment_6d
 # Cache SPX data for momentum comparison (shared across all tickers)
 _SPX_HIST: pd.DataFrame | None = None
 
+# Global flags for news and social sentiment
+_FETCH_NEWS: bool = False
+_WSB_HOTLIST: dict | None = None
+
 
 def load_universe(name: str) -> list[dict]:
     if name == "us_large":
@@ -387,9 +391,13 @@ def process_ticker(ticker_dict: dict) -> dict | None:
         pa_score, pa_d = compute_price_action(hist)
         fundamentals_score, fundamentals_d = compute_fundamentals(info)
 
-        # 6-dimension sentiment engine
+        # 8-dimension sentiment engine (news + social + traditional)
         spx_hist = _get_spx_hist()
-        sentiment_score, sentiment_d, sentiment_subs = compute_sentiment_6d(t, info, hist, spx_hist)
+        sentiment_score, sentiment_d, sentiment_subs = compute_sentiment_6d(
+            t, info, hist, spx_hist,
+            wsb_hotlist=_WSB_HOTLIST,
+            fetch_news=_FETCH_NEWS,
+        )
 
         final = (
             wyckoff_score * 0.25 + volprof_score * 0.20 +
@@ -549,7 +557,22 @@ def main():
                         help="Output ticker symbols as JSON array and exit")
     parser.add_argument("--json-output", action="store_true",
                         help="Output results as JSON array to stdout")
+    parser.add_argument("--fetch-news", action="store_true",
+                        help="Fetch Finviz news headlines for web news sentiment (slower)")
+    parser.add_argument("--wsb-hotlist",
+                        help="Path to JSON file with WSB hotlist from wallstreetbets-pump-detect")
     args = parser.parse_args()
+
+    # Set global flags for sentiment engine
+    global _FETCH_NEWS, _WSB_HOTLIST
+    _FETCH_NEWS = args.fetch_news
+    if args.wsb_hotlist:
+        try:
+            with open(args.wsb_hotlist, "r") as f:
+                _WSB_HOTLIST = json.load(f)
+            log.info("Loaded WSB hotlist: %d tickers", len(_WSB_HOTLIST))
+        except Exception as e:
+            log.warning("Failed to load WSB hotlist: %s", e)
 
     if args.tickers:
         universe = parse_custom_tickers(args.tickers)

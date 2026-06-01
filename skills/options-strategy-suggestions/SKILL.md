@@ -33,7 +33,7 @@ This skill loads and integrates:
 
 ## Triggers
 
-`suggerisci strategia opzioni`, `options strategy`, `cosa fare con le opzioni`, `suggest option strategy`, `opzioni su [ticker]`, `entrata a sconto`, `synthetic long`
+`suggerisci strategia opzioni`, `options strategy`, `cosa fare con le opzioni`, `suggest option strategy`, `opzioni su [ticker]`, `entrata a sconto`, `synthetic long`, `opzioni [ticker] [scadenza]`, `opzioni [ticker] [mese] [anno]`, `options on [ticker] [expiry]`
 
 ## Core Framework — 4 Phases
 
@@ -157,7 +157,89 @@ For Synthetic Long 2:1, add:
 - **Caso peggiore**: Prezzo a $0 → perdita = 2 × Put Strike A – premio incassato
 ```
 
-## Additional Rules
+## Chained Execution (from stock-crypto-analysis)
+
+When invoked by `stock-crypto-analysis` (via `market-accumulation-scanner` Auto-Chain
+Mode), the unified verdict and all scores are pre-computed. The user may also specify
+a **target expiration** (e.g. "Dec 2026", "June 2026", "47 DTE", "Jan 2028").
+
+### Input Format (Chained Mode)
+
+The agent receives:
+- `ticker`: symbol (e.g., "IGV")
+- `unified_score`: XX (0-100, from stock-crypto-analysis)
+- `verdict`: "Long-Term Investment" / "Short-Term Speculation" / "Avoid"
+- `direction`: "Bullish" / "Bearish" / "Neutral"
+- `per_dimension_scores`: dict of {dimension: score}
+- `expiry`: [optional] "Dec 2026", "Jun 18", "45 DTE", etc.
+
+### Phase 1 — Input (Chained)
+
+No need to run `stock-crypto-analysis`. Accept pre-computed values.
+
+**Parse expiry** from user input:
+
+| Input utente | Interpretazione |
+|-------------|----------------|
+| "Dec 2026" | Terzo venerdì di Dicembre 2026 → 2026-12-18 |
+| "Jun 18" | 2026-06-18 |
+| "June 2026" | Terzo venerdì di Giugno 2026 → 2026-06-19 |
+| "47 DTE" | Oggi + 47 giorni |
+| "Jan 2028" | Terzo venerdì di Gennaio 2028 → 2028-01-21 |
+| Nessuna scadenza | Usa DTE minima di default (45 per Syn Long 2:1) |
+
+### Phase 2 — IV Regime Assessment
+
+Standard (fetch current IV dal ticker). Se il ticker non ha opzioni liquide,
+usa HV(20) come proxy.
+
+### Phase 3 — Strategy Selection (Chained)
+
+Usa la Strategy Selection Matrix standard, ma con queste regole aggiuntive:
+
+| Input | Regola |
+|-------|--------|
+| `expiry` fornito | Se DTE < 45 → avvisa che DTE < min raccomandata. Strategia secondaria se necessario. |
+| `expiry` fornito e score ≥ 70 | Synthetic Long 2:1 con expiry = data specificata. Calcola strike come sempre. |
+| `expiry` non fornito | Usa DTE ideale per la strategia selezionata (60-90 per Syn Long 2:1) |
+| `verdict` = Avoid | Salta — nessuna strategia |
+| `verdict` = Short-Term Spec | Bull Put Spread o Bear Call Spread, DTE 30-45 |
+
+### Phase 4 — Output (Chained)
+
+Output ridotto, senza ripetere i dati già mostrati dalle skill precedenti:
+
+```
+## 🎯 Strategia Opzioni: [Nome]
+**Scadenza**: [data] (XXX DTE) | **IV Regime**: [HIGH/NORMAL/LOW]
+
+### Struttura del Trade
+- **Strike**: Buy [Qty]x [Call/Put] @ $XX | Sell [Qty]x [Call/Put] @ $YY
+- **Netto**: [Credito/Debito] $XX | **Breakeven**: $XX
+
+### Greeks Snapshot
+| Greek | Valore | Impatto |
+|-------|--------|---------|
+| Delta | X.XX | [direzionalità] |
+| Gamma | X.XX | [accelerazione] |
+| Theta | $X.XX/g | [time decay] |
+| Vega | $X.XX | [IV sensitivity] |
+
+### Risk / Reward
+- **Max Loss**: $XX (%) | **Max Profit**: $XX (%) | **Probabilità**: ~XX%
+- **Rischio**: [Basso / Medio / Alto]
+
+### Exit Plan
+- **TP**: XX% del max profit o [condizione specifica]
+- **SL**: XX% della max loss o prezzo $XX
+- **Time Stop**: [DTE]gg senza movimento → chiudi
+- **Adjustment**: [Roll / spread adjustment / early assignment]
+
+--- 
+
+*Strategia generata da options-strategy-suggestions in Chained Mode*
+*Basata su unified verdict score XX dalla catena scanner → stock-crypto-analysis*
+```
 
 ### DTE Guidelines
 | Strategy | Min DTE | Ideal DTE | Reason |

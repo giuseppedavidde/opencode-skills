@@ -1,55 +1,72 @@
 """
-Sentiment Engine — 6-Dimension Scoring Module
+Sentiment Engine — 8-Dimension Scoring Module
 ===============================================
-Computes a 0-100 sentiment score from 6 independent sub-dimensions.
+Computes a 0-100 sentiment score from 8 independent sub-dimensions.
 Designed to be called in parallel (each ticker independent).
 
 Sub-dimensions:
   1. Short Interest (SI% + DTC, dynamic thresholds by market cap)
   2. Options Sentiment (Put/Call volume, IV skew)
   3. Insider Trading (recent buy/sell transactions)
-  4. Retail / Social Sentiment (WSB mentions heuristic)
+  4. Retail Sentiment (WSB heuristic: volume, beta, analyst gap)
   5. Institutional (holdings + buyback)
   6. Relative Momentum (vs SPY on 1mo/3mo/6mo)
+  7. Web News Sentiment (Finviz headlines polarity)
+  8. Social Media Sentiment (WSB hotlist cross-reference)
 
 Output: (score: int, detail_str: str, sub_dimensions: dict)
 """
 
 import logging
+import re
+import time
 from datetime import datetime, timedelta
 
 import pandas as pd
+import requests
 import yfinance as yf
+from bs4 import BeautifulSoup
 
 log = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────
-# Weights for the 6 sub-dimensions
+# Weights for the 8 sub-dimensions
 # ─────────────────────────────────────────────
 WEIGHTS = {
-    "short_interest": 0.20,
-    "options": 0.20,
-    "insider": 0.20,
-    "retail": 0.15,
+    "short_interest": 0.15,
+    "options": 0.15,
+    "insider": 0.15,
+    "retail": 0.10,
     "institutional": 0.15,
     "momentum": 0.10,
+    "web_news": 0.10,
+    "social_media": 0.10,
 }
 
 
-def compute_sentiment(ticker: yf.Ticker, info: dict, hist: pd.DataFrame, spx_hist: pd.DataFrame | None = None) -> tuple[int, str, dict]:
+def compute_sentiment(
+    ticker: yf.Ticker,
+    info: dict,
+    hist: pd.DataFrame,
+    spx_hist: pd.DataFrame | None = None,
+    wsb_hotlist: dict | None = None,
+    fetch_news: bool = False,
+) -> tuple[int, str, dict]:
     """
-    Main entry point — runs all 6 sub-dimensions and aggregates with confidence weighting.
+    Main entry point — runs all 8 sub-dimensions and aggregates with confidence weighting.
 
     Args:
         ticker: yfinance Ticker object (used for options chain, insider txns)
         info: yfinance Ticker.info dict
         hist: 1-year daily OHLCV DataFrame
         spx_hist: Optional SPY/SPX daily OHLCV for momentum comparison
+        wsb_hotlist: Optional dict of {ticker: {hype_score, fomo_phase, sentiment}}
+                      from wallstreetbets-pump-detect
+        fetch_news: Whether to fetch Finviz news (slower, skip for large scans)
 
     Returns:
         (score: int 0-100, detail_str: str, sub_dimensions: dict)
     """
-    # Collect all 6 sub-scores (None = dimension unavailable)
     scores: dict[str, int | None] = {}
     sub_details: dict[str, str] = {}
 
@@ -59,6 +76,11 @@ def compute_sentiment(ticker: yf.Ticker, info: dict, hist: pd.DataFrame, spx_his
     scores["retail"], sub_details["retail"] = _retail_sentiment(info)
     scores["institutional"], sub_details["institutional"] = _institutional(info)
     scores["momentum"], sub_details["momentum"] = _momentum(hist, spx_hist)
+
+    # New sub-dimensions: Web News + Social Media
+    symbol = info.get("symbol", ticker.ticker if hasattr(ticker, "ticker") else "?")
+    scores["web_news"], sub_details["web_news"] = _web_news_sentiment(symbol, fetch=fetch_news)
+    scores["social_media"], sub_details["social_media"] = _social_media_sentiment(symbol, wsb_hotlist=wsb_hotlist)
 
     # Aggregate with confidence weighting
     available = {k: v for k, v in scores.items() if v is not None}
@@ -532,21 +554,263 @@ def _momentum(hist: pd.DataFrame, spx_hist: pd.DataFrame | None = None) -> tuple
 
 
 # ─────────────────────────────────────────────
+# 7. Web News Sentiment (Finviz headlines)
+# ─────────────────────────────────────────────
+def _web_news_sentiment(symbol: str, fetch: bool = False) -> tuple[int | None, str]:
+    """
+    Fetch headlines from Finviz and score polarity.
+
+    Args:
+        symbol: Ticker symbol (e.g. "AAPL")
+        fetch: If False, skip API call and return None/neutral
+
+    Returns:
+        (score 0-100, detail string)
+    """
+    if not fetch:
+        return None, "Web news skipped (fetch_news=False)"
+
+    url = f"https://finviz.com/quote.ashx?t={symbol}"
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/125.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+    }
+
+    try:
+        resp = requests.get(url, headers=headers, timeout=15)
+        if resp.status_code != 200:
+            return None, f"Finviz HTTP {resp.status_code}"
+    except requests.RequestException as e:
+        return None, f"Finviz error: {e}"
+
+    # Parse news table from Finviz HTML
+    soup = BeautifulSoup(resp.text, "html.parser")
+    headlines = []
+
+    # Finviz news links: look for <a class="tab-link-news"> inside the news table
+    for a_tag in soup.find_all("a", class_=re.compile(r"tab-link-news", re.I)):
+        text = a_tag.get_text(strip=True)
+        if text and len(text) > 10:
+            headlines.append(text)
+        if len(headlines) >= 10:
+            break
+
+    # Fallback: find any links with "news" in the href inside the fullview-news div
+    if not headlines:
+        news_div = soup.find("div", id=re.compile(r"news", re.I))
+        if not news_div:
+            news_div = soup.find("div", class_=re.compile(r"fullview-news", re.I))
+        if news_div:
+            for a_tag in news_div.find_all("a", href=True):
+                text = a_tag.get_text(strip=True)
+                if text and len(text) > 10:
+                    headlines.append(text)
+                if len(headlines) >= 10:
+                    break
+
+    if not headlines:
+        return 50, "No Finviz headlines found"
+
+    # Score headlines by keyword polarity
+    bullish_keywords = {
+        "upgrade", "buy", "bullish", "outperform", "beat", "raised", "positive",
+        "growth", "strong", "record", "surge", "rally", "gain", "soar", "jump",
+        "launch", "approve", "partner", "contract", "expansion", "dividend",
+        "buyback", "profit", "revenue", "guidance", "momentum", "breakout",
+        "accumulate", "overweight", "target", "up", "green", "optimistic",
+        "leap", "boost", "accelerate", "innovation", "leadership",
+    }
+    bearish_keywords = {
+    "downgrade", "sell", "bearish", "underperform", "miss", "cut", "negative",
+        "decline", "weak", "loss", "drop", "fall", "plunge", "crash", "slump",
+        "lawsuit", "investigation", "SEC", "fine", "penalty", "regulation",
+        "warning", "caution", "risk", "uncertainty", "volatile", "downturn",
+        "recession", "layoff", "restructuring", "debt", "default", "bankruptcy",
+        "investigation", "probe", "charge", "write-down", "impairment",
+        "suspension", "delay", "setback", "disappoint", "below estimate",
+    }
+
+    bullish_count = 0
+    bearish_count = 0
+    matched: list[str] = []
+
+    for h in headlines:
+        h_lower = h.lower()
+        h_bullish = sum(1 for kw in bullish_keywords if kw in h_lower)
+        h_bearish = sum(1 for kw in bearish_keywords if kw in h_lower)
+
+        if h_bullish > h_bearish:
+            bullish_count += 1
+            matched.append(f"BULL: {h[:80]}")
+        elif h_bearish > h_bullish:
+            bearish_count += 1
+            matched.append(f"BEAR: {h[:80]}")
+        else:
+            matched.append(f"NEU:  {h[:80]}")
+
+    net = bullish_count - bearish_count
+    total = len(headlines)
+
+    score = 50  # base neutral
+
+    if total >= 4 and net >= 3:
+        score = 90
+        detail = f"4+ bullish headlines ({bullish_count}B/{bearish_count}S/{total}T) (+40)"
+    elif net >= 2:
+        score = 70
+        detail = f"Mostly bullish ({bullish_count}B/{bearish_count}S/{total}T) (+20)"
+    elif net >= 1:
+        score = 60
+        detail = f"Slightly bullish ({bullish_count}B/{bearish_count}S/{total}T) (+10)"
+    elif net == 0 and total > 0:
+        score = 50
+        detail = f"Neutral/mixed ({bullish_count}B/{bearish_count}S/{total}T) (+0)"
+    elif net <= -2:
+        score = 30
+        detail = f"Mostly bearish ({bullish_count}B/{bearish_count}S/{total}T) (-20)"
+    elif net <= -1:
+        score = 40
+        detail = f"Slightly bearish ({bullish_count}B/{bearish_count}S/{total}T) (-10)"
+    else:
+        score = 50
+        detail = f"No clear polarity ({bullish_count}B/{bearish_count}S/{total}T) (+0)"
+
+    score = min(100, max(0, score))
+    return score, detail
+
+
+# ─────────────────────────────────────────────
+# 8. Social Media Sentiment (WSB hotlist)
+# ─────────────────────────────────────────────
+def _social_media_sentiment(symbol: str, wsb_hotlist: dict | None = None) -> tuple[int | None, str]:
+    """
+    Cross-reference the ticker against the WSB hotlist from wallstreetbets-pump-detect.
+
+    Args:
+        symbol: Ticker symbol
+        wsb_hotlist: dict of {ticker: {hype_score, fomo_phase, sentiment, mention_count}}
+                      or {"ticker": hype_score} for simplified format
+
+    Returns:
+        (score 0-100, detail string)
+    """
+    if not wsb_hotlist:
+        return None, "No WSB hotlist provided"
+
+    # Normalise symbol
+    sym_upper = symbol.upper().replace(".MI", "").replace(".DE", "").replace(".PA", "").replace(".L", "").replace(".MC", "")
+
+    entry = wsb_hotlist.get(sym_upper) or wsb_hotlist.get(symbol.upper())
+    if entry is None:
+        return 50, "Not on WSB radar (neutral)"
+
+    # Support both simplified (int) and detailed (dict) formats
+    if isinstance(entry, dict):
+        hype_score = entry.get("hype_score", 50)
+        fomo_phase = entry.get("fomo_phase", "mid")
+        wsb_sentiment = entry.get("sentiment", 50)
+        mention_count = entry.get("mention_count", 0)
+    else:
+        # Assume entry is a hype score directly
+        hype_score = int(entry) if entry else 50
+        fomo_phase = "mid"
+        wsb_sentiment = 50
+        mention_count = 0
+
+    score = 50
+
+    # WSB phase scoring
+    phase = str(fomo_phase).lower()
+    if phase in ("early", "pre-pump"):
+        score += 20
+        phase_tag = "Early FOMO"
+    elif phase == "mid":
+        score += 10
+        phase_tag = "Mid FOMO"
+    elif phase in ("late", "exit"):
+        score -= 20
+        phase_tag = "Late FOMO (caution)"
+    else:
+        phase_tag = f"FOMO {fomo_phase}"
+
+    # Hype magnitude
+    if hype_score >= 70:
+        score += 15
+        hype_tag = "high hype"
+    elif hype_score >= 40:
+        score += 5
+        hype_tag = "moderate hype"
+    else:
+        hype_tag = "low hype"
+        score -= 5
+
+    # WSB sentiment direction
+    if wsb_sentiment >= 65:
+        score += 10
+        sent_tag = "bullish"
+    elif wsb_sentiment <= 45:
+        score -= 5
+        sent_tag = "bearish"
+    else:
+        sent_tag = "neutral"
+
+    # Mention volume adjustment
+    if mention_count > 20:
+        score -= 5  # saturated
+    elif mention_count > 5:
+        score += 5  # growing interest
+    elif mention_count > 0:
+        score += 10  # undiscovered
+
+    score = min(100, max(0, score))
+    detail = (
+        f"WSB {phase_tag} hype={hype_score} ({hype_tag}), "
+        f"sentiment={sent_tag}, mentions={mention_count} → score {score}"
+    )
+
+    return score, detail
+
+
+# ─────────────────────────────────────────────
 # Standalone usage
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
     import sys
+    import json
+
     if len(sys.argv) < 2:
-        print("Usage: python sentiment_engine.py <TICKER>")
+        print("Usage: python sentiment_engine.py <TICKER> [--news] [--wsb hotlist.json]")
         sys.exit(1)
 
     symbol = sys.argv[1].upper()
-    print(f"\nComputing 6-dimension sentiment for {symbol}...\n")
+    fetch_news_flag = "--news" in sys.argv
+
+    # Optional WSB hotlist file
+    wsb_path = None
+    for i, arg in enumerate(sys.argv):
+        if arg == "--wsb" and i + 1 < len(sys.argv):
+            wsb_path = sys.argv[i + 1]
+            break
+
+    wsb_hotlist = None
+    if wsb_path:
+        try:
+            with open(wsb_path, "r") as f:
+                wsb_hotlist = json.load(f)
+            print(f"Loaded WSB hotlist from {wsb_path} ({len(wsb_hotlist)} tickers)")
+        except Exception as e:
+            print(f"Error loading WSB hotlist: {e}")
+
+    print(f"\nComputing 8-dimension sentiment for {symbol}...\n")
 
     t = yf.Ticker(symbol)
     info = t.info or {}
 
-    # Need to fetch optional SPX data for momentum
     try:
         spx = yf.Ticker("^GSPC")
         spx_hist = spx.history(period="1y")
@@ -555,7 +819,11 @@ if __name__ == "__main__":
 
     hist = t.history(period="1y")
 
-    score, detail, subs = compute_sentiment(t, info, hist, spx_hist)
+    score, detail, subs = compute_sentiment(
+        t, info, hist, spx_hist,
+        wsb_hotlist=wsb_hotlist,
+        fetch_news=fetch_news_flag,
+    )
 
     print(f"Final Score: {score}/100")
     print(f"Detail:      {detail}")

@@ -304,6 +304,55 @@ Score: XX% (pesato su 6 dimensioni)
 6. Output formatted verdict with rationale per dimension
 7. Always include risk factors specific to the asset
 
+## Chained Execution (from market-accumulation-scanner)
+
+When invoked by `market-accumulation-scanner` (Auto-Chain Mode), the scanner
+has already computed the 5-dimension score. In this mode:
+
+| Dimensione | Source | Come usarlo |
+|-----------|--------|------------|
+| Wyckoff | Scanner score + detail | Converti in punteggio (0-100) per questa fase. Il dettaglio contiene range position, MA, volume trend. Usalo direttamente. |
+| Volume Profile | Scanner score + detail | Già calcolato nello scanner. Usa lo score direttamente. |
+| Price Action | Scanner score + detail | Già calcolato. Usalo. |
+| Sentiment | Scanner score + **8 sub-scores** | Lo scanner fornisce short_interest, options, insider, retail, institutional, momentum, web_news, social_media. Usa questi 8 sub-scores per arricchire l'analisi sentiment. |
+| Fondamentali | Scanner score + detail | Già calcolato. Usalo. |
+
+**Procedura in Chained Mode**:
+
+1. Verifica che lo scanner score sia ≥ 50 (altrimenti → Avoid, stop)
+2. Usa i dati dello scanner come base
+3. Load delle 9 skill framework come da procedura normale
+4. **Non ripetere** la raccolta dati (Phase 1) — usa i dati dello scanner
+5. Esegui Phases 2-5, ma arricchisci ogni dimensione con i dettagli già disponibili dallo scanner
+6. Per la dimensione Sentiment, usa gli 8 sub-scores dello scanner invece di ricalcolare da zero
+7. Verifica con dati freschi via `websearch` o `webfetch` solo se qualche dimensione è poco chiara
+8. Produci output con formato ridotto (senza ripetere le tabelle di scoring già mostrate dallo scanner)
+9. Se score ≥ 70 **e** la richiesta include una scadenza opzioni → passa a `options-strategy-suggestions`
+
+**Output Chained Mode** (ridotto, senza ridondanza):
+
+```
+## 📊 Unified Verdict: [LONG-TERM INVEST / SHORT-TERM SPEC / AVOID]
+Score: XX% (da stock-crypto-analysis)
+
+### Perché
+Basato sui dati scanner + arricchimento:
+- **Wyckoff** ([fase]): scanner score XX → [arricchimento con framework] → [+/-X punti]
+- **Volume Profile** ([shape]): scanner score XX → [conferma via volume-profile skill] → [+/-X punti]
+- **Price Action** ([setup]): scanner score XX → [verifica RSI, VPA, pattern] → [+/-X punti]
+- **Sentiment**: scanner 8-dim → [override se divergenza] → [+/-X punti]
+- **Fondamentali**: scanner score XX → [conferma] → [+/-X punti]
+
+### Raccomandazione
+- **Direzione**: ...
+- **Entry**: $XX.XX – $XX.XX | **Stop**: $XX.XX
+- **Target**: $XX.XX | **Orizzonte**: X mesi
+- **Sizing**: X% del portafoglio
+```
+
+Non includere il dettaglio grezzo dello scanner (già mostrato prima). Produci solo
+il valore aggiunto delle 9 skill framework.
+
 ## Anti-Patterns
 
 - **Don't** produce a verdict if data is insufficient (score = 0 or N/A in 3+ dimensions). Instead say "Dati insufficienti — impossibile produrre verdetto."
