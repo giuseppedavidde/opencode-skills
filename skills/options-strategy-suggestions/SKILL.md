@@ -62,9 +62,29 @@ If IV percentile not available, use proxy:
 - Compare current IV to HV(20). If IV/HV > 1.3 = HIGH, < 0.7 = LOW
 - VIX > 30 = HIGH for SPX; VIX < 12 = LOW
 
+### Phase 2b — Momentum Stage Filter & Entry Timing Gate (NUOVO)
+
+**Prima di selezionare la strategia**, determinare in quale fase di momentum si trova il titolo.
+Un titolo può avere un verdetto bullish ma essere in una fase di estensione che rende rischiosa
+l'entrata in opzioni.
+
+| Momentum Stage | Condizione | Cosa fare |
+|---|---|---|
+| **Early Stage** | Breakout recente (+5-15% in 30gg), volume in crescita, RSI < 65 | ✅ Entrata consentita — Tutte le strategie applicabili |
+| **Mid Stage** | Rally +15-30% in 30-60gg, RSI 65-75, trend sano | ⚠️ Entrata consentita — Size ridotta del 30%, stop più stretti |
+| **Late Stage / Exhaustion** | Rally verticale > 20% in < 15gg oppure > 30% in < 30gg | ❌ Bloccare nuove entrate con opzioni. Output: "⚠️ ESTENSIONE — Il titolo è in fase di estensione verticale. Non entrare in opzioni in estensione. Raccomandazione: attendere pullback o consolidamento di almeno 10-15gg." |
+| **Distribution** | Prezzo in range stretto dopo rally, volume decrescente, RSI divergente | ⚠️ Solo strategie short premium (credit spread, IC) entro il range. Nessuna long. |
+| **No Trend / Chop** | Prezzo tra EMA50-200, RSI 40-60, volume basso | ❌ Nessuna strategia opzioni direzionale. Solo Iron Condor o Calendar. |
+
+**Regola speciale per Synthetic Long 2:1**: Se momentum stage = Mid Stage o Late Stage,
+bloccare la raccomandazione. La struttura 2:1 amplifica il downside in estensione.
+
+**Override**: Se il titolo opera in settore benedetto dal Geopolitical Sector Vector, la
+soglia Late Stage si allarga: bloccare solo se rally > 30% in < 15gg (invece di 20%).
+
 ### Phase 3 — Strategy Selection Matrix
 
-Combine verdict/outlook + IV regime to select primary and secondary strategies.
+Combine verdict/outlook + IV regime + Momentum Stage to select primary and secondary strategies.
 
 | Outlook (da Verdetto) | IV Regime | Strategia Primaria | Secondaria | DTE Range |
 |---|---|---|---|---|
@@ -81,6 +101,10 @@ Combine verdict/outlook + IV regime to select primary and secondary strategies.
 | **Volatile (direction?)** | Alta | **WAIT** | — | — |
 | **Avoid (< 30)** | Qualsiasi | **NO TRADE** | Attesa | — |
 
+**Nota**: Se Momentum Stage = Late Stage / Exhaustion, tutte le strategie con delta positivo (o direzionali bullish) sono bloccate, indipendentemente dal verdetto. Eccezione: settore benedetto dal Geopolitical Sector Vector (soglia estensione più alta).
+
+**Override Geopolitico**: Se l'asset opera in settore benedetto da macro evento geopolitico (es. difesa durante guerra), la finestra per strategie long si allarga: consentite anche in finestra SELECTIVE se score ≥ 75 e Momentum Stage ≤ Mid Stage.
+
 #### Synthetic Long 2:1 — Regole di Attivazione
 
 Si attiva quando TUTTE queste condizioni sono vere:
@@ -89,6 +113,7 @@ Si attiva quando TUTTE queste condizioni sono vere:
 3. IV non è nel 1° decile (non estremamente bassa)
 4. L'asset è qualcosa che l'utente è **disposto a detenere** (assegnazione non è un problema)
 5. Orizzonte minimo **≥ 45 DTE** (consigliato 60–90 per bilanciare premio e rischio gamma)
+6. **Momentum Stage ≠ Mid Stage, Late Stage o No Trend** (vedi Phase 2b)
 
 Struttura:
 ```
@@ -193,6 +218,10 @@ No need to run `stock-crypto-analysis`. Accept pre-computed values.
 Standard (fetch current IV dal ticker). Se il ticker non ha opzioni liquide,
 usa HV(20) come proxy.
 
+### Phase 2b — Momentum Stage Filter (Chained)
+
+Stesso check della modalità standalone: calcola momentum stage dal prezzo recente (via websearch o dati scanner). Se il titolo arriva dallo scanner, usa i dati price action già raccolti per valutare rally velocity.
+
 ### Phase 3 — Strategy Selection (Chained)
 
 Usa la Strategy Selection Matrix standard, ma con queste regole aggiuntive:
@@ -271,8 +300,10 @@ Output ridotto, senza ripetere i dati già mostrati dalle skill precedenti:
 
 ## Anti-Patterns
 - **Non** suggerire strategie senza verificare la direzione dal verdetto
-- **Non** suggerire Synthetic Long 2:1 se score < 70 o IV è al minimo storico
+- **Non** suggerire Synthetic Long 2:1 se score < 70 o IV è al minimo storico o momentum stage ≠ Early Stage
 - **Non** omettere exit plan — ogni trade ha un piano di uscita
 - **Non** suggerire Long Straddle/Strangle con IV alta (volatility crush garantito)
 - **Non** usare DTE < 45 per nessuna strategia short premium (gamma risk)
 - **Non** raddoppiare su una posizione in perdita — chiudi e rivaluta
+- **Non** ignorare il Momentum Stage prima di consigliare qualsiasi strategia opzioni
+- **Non** suggerire entrate con opzioni in titoli con rally verticale >20% in 15gg, indipendentemente dal punteggio fondamentali

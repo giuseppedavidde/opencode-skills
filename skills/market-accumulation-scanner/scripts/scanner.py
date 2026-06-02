@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
 Market Accumulation Scanner
-Scans US/EU tickers through 5-dimension stock-crypto-analysis scoring.
+Scans US/EU tickers through 6-dimension scoring (Wyckoff, VP, PA,
+Competitive Positioning, Sentiment, Fundamentals) with Earnings Quality
+Modifier, Value Trap Check, Rally Velocity, and Price vs Consensus.
 """
 
 import argparse
@@ -273,6 +275,40 @@ def compute_price_action(hist) -> tuple[int, str]:
     elif vpa_net > 0:
         details.append(f"VPA mildly bullish ({vpa_net}) (+0)")
 
+    # Rally Velocity & Exhaustion Check (nuovo — Jegadeesh 1990)
+    if len(hist) >= 30:
+        close_15d_ago = float(hist["Close"].iloc[-16])
+        close_now = float(hist["Close"].iloc[-1])
+        change_15d = (close_now / close_15d_ago - 1) * 100
+
+        if change_15d > 50:
+            score = max(score - 50, 0)
+            details.append(f"⚠ Rally +{change_15d:.0f}% in 15d (vertical, -50)")
+        elif change_15d > 30:
+            score = max(score - 35, 0)
+            details.append(f"⚠ Rally +{change_15d:.0f}% in 15d (exhaustion risk -35)")
+        elif change_15d > 20:
+            score = max(score - 20, 0)
+            details.append(f"⚠ Rally +{change_15d:.0f}% in 15d (extension -20)")
+        elif change_15d < 10 and change_15d > -3:
+            vol_lately = float(hist.tail(5)["Volume"].mean())
+            vol_20d = float(hist.tail(20)["Volume"].mean())
+            if vol_lately > vol_20d * 1.2 and change_15d > 0:
+                score += 15
+                details.append(f"Gradual +{change_15d:.0f}% on rising vol (+15)")
+
+        if len(hist) >= 10:
+            closes = hist.tail(10)["Close"].values
+            green_streak = 0
+            for i in range(1, len(closes)):
+                if closes[i] > closes[i-1]:
+                    green_streak += 1
+                else:
+                    green_streak = 0
+            if green_streak >= 5:
+                score = max(score - 10, 0)
+                details.append(f"{green_streak} consecutive green candles (-10)")
+
     return min(score, 100), " | ".join(details)
 
 
@@ -311,47 +347,172 @@ def compute_sentiment(info) -> tuple[int, str]:
 
 
 def compute_fundamentals(info) -> tuple[int, str]:
+    """
+    5-dimension fundamentals with Earnings Quality Modifier (Sloan 1996),
+    Value Trap Check, and Price vs Consensus divergence.
+    """
     score = 10
     details = []
 
+    # Step A — P/E base + Earnings Quality Modifier
     pe = info.get("trailingPE")
-    if pe is not None and pe > 0:
-        if pe < 15:
-            score += 30
-            details.append(f"P/E {pe:.1f} < 15 (+30)")
-        elif pe < 25:
-            score += 15
-            details.append(f"P/E {pe:.1f} < 25 (+15)")
-        else:
-            details.append(f"P/E {pe:.1f} (+0)")
-    else:
-        details.append("P/E N/A (+0)")
+    earnings_growth = info.get("earningsGrowth")
+    rev_growth = info.get("revenueGrowth")
 
-    rev = info.get("revenueGrowth")
-    if rev is not None and rev > 0:
-        score += 20
-        details.append(f"Rev growth {rev*100:.1f}% (+20)")
-    elif rev is not None:
-        details.append(f"Rev growth {rev*100:.1f}% (+0)")
+    pe_base = 0
+    if pe is not None and pe > 0:
+        if pe < 12:
+            pe_base = 30
+        elif pe < 20:
+            pe_base = 20
+        elif pe < 30:
+            pe_base = 10
+        else:
+            pe_base = 0
+
+    eq_mod = 0
+    if earnings_growth is not None:
+        if earnings_growth > 0.15:
+            eq_mod = 20
+        elif earnings_growth > 0.05:
+            eq_mod = 10
+        elif earnings_growth > 0:
+            eq_mod = 5
+        elif earnings_growth < -0.10:
+            eq_mod = -20
+        elif earnings_growth < 0:
+            eq_mod = -10
+
+    score += pe_base + eq_mod
+    if pe is not None and pe > 0:
+        details.append(f"P/E {pe:.1f} base={pe_base} EQ mod={eq_mod:+d}")
+
+    # Step B — Value Trap Check
+    pe_low = pe is not None and 0 < pe < 15
+    vt_count = 0
+    if pe_low:
+        if earnings_growth is not None and earnings_growth <= 0:
+            score -= 20
+            vt_count += 1
+            details.append(f"⚠ Value Trap: P/E low + EPS falling (-20)")
+        if rev_growth is not None and rev_growth < 0.02:
+            score -= 15
+            vt_count += 1
+            details.append(f"⚠ Value Trap: P/E low + revenue < 2% (-15)")
+        margins = info.get("profitMargins")
+        if margins is not None and margins > 0:
+            pass  # margins positive = less trap-like
+        de = info.get("debtToEquity")
+        if de is not None and de > 2.0:
+            score -= 15
+            vt_count += 1
+            details.append(f"⚠ Value Trap: D/E {de:.2f} > 2.0 (-15)")
+    if vt_count >= 2:
+        score = min(score, 40)
+        details.append(f"⚠ VALUE TRAP ALERT ({vt_count} signals) — score capped at 40")
+
+    # Step C — Standard Fundamentals
+    if rev_growth is not None and rev_growth > 0:
+        score += 15
+        details.append(f"Rev growth {rev_growth*100:.1f}% (+15)")
 
     margins = info.get("profitMargins")
     if margins is not None and margins > 0:
-        score += 20
-        details.append(f"Margins {margins*100:.1f}% (+20)")
+        score += 15
+        details.append(f"Margins {margins*100:.1f}% (+15)")
 
     de = info.get("debtToEquity")
     if de is not None:
         if de < 0.5:
-            score += 25
-            details.append(f"D/E {de:.2f} < 0.5 (+25)")
+            score += 20
+            details.append(f"D/E {de:.2f} < 0.5 (+20)")
         elif de < 1.0:
-            score += 15
-            details.append(f"D/E {de:.2f} < 1.0 (+15)")
+            score += 10
+            details.append(f"D/E {de:.2f} < 1.0 (+10)")
 
     mcap = info.get("marketCap")
     if mcap is not None and mcap > 10e9:
         score += 10
         details.append(f"MCap ${mcap/1e9:.1f}B > $10B (+10)")
+
+    # Step D — Price vs Consensus
+    target_mean = info.get("targetMeanPrice")
+    target_high = info.get("targetHighPrice")
+    current = info.get("currentPrice")
+    if target_mean and current and target_mean > 0 and current > 0:
+        ratio = current / target_mean
+        if ratio > 1.10:
+            score -= 25
+            details.append(f"Price ${current:.2f} > 110% of mean target ${target_mean:.2f} (-25)")
+        elif ratio > 0.80 and target_high:
+            ratio_high = current / target_high
+            if ratio_high > 0.90:
+                score -= 10
+                details.append(f"Price near high target (priced for perfection -10)")
+        elif ratio < 0.80:
+            score += 15
+            details.append(f"Price ${current:.2f} < 80% of mean target (+15)")
+        elif ratio < 1.0:
+            score += 5
+            details.append(f"Price ${current:.2f} < mean target (+5)")
+
+    return min(max(score, 0), 100), " | ".join(details)
+
+
+def compute_competitive_positioning(info) -> tuple[int, str]:
+    """
+    Competitive Positioning (nuova dimensione, peso 10%).
+    Proxy a livello scanner usando dati yfinance disponibili.
+    """
+    score = 30
+    details = []
+
+    roe = info.get("returnOnEquity")
+    if roe is not None:
+        if roe > 0.20:
+            score += 20
+            details.append(f"ROE {roe*100:.1f}% > 20% (moat proxy +20)")
+        elif roe > 0.15:
+            score += 10
+            details.append(f"ROE {roe*100:.1f}% > 15% (+10)")
+        else:
+            details.append(f"ROE {roe*100:.1f}% (+0)")
+
+    margins = info.get("profitMargins")
+    if margins is not None:
+        if margins > 0.20:
+            score += 20
+            details.append(f"Margins {margins*100:.1f}% > 20% (pricing power +20)")
+        elif margins > 0.10:
+            score += 10
+            details.append(f"Margins {margins*100:.1f}% > 10% (+10)")
+
+    roa = info.get("returnOnAssets")
+    if roa is not None:
+        if roa > 0.10:
+            score += 15
+            details.append(f"ROA {roa*100:.1f}% > 10% (+15)")
+        elif roa > 0.05:
+            score += 10
+            details.append(f"ROA {roa*100:.1f}% > 5% (+10)")
+
+    mcap = info.get("marketCap")
+    if mcap is not None:
+        if mcap > 200e9:
+            score += 15
+            details.append(f"MCap ${mcap/1e9:.0f}B > $200B (scale moat +15)")
+        elif mcap > 50e9:
+            score += 10
+            details.append(f"MCap ${mcap/1e9:.0f}B $50-200B (+10)")
+        elif mcap > 10e9:
+            score += 5
+            details.append(f"MCap ${mcap/1e9:.0f}B > $10B (+5)")
+
+    op_margins = info.get("operatingMargins")
+    if op_margins is not None:
+        if op_margins > 0.20:
+            score += 10
+            details.append(f"Op margins {op_margins*100:.1f}% (efficient +10)")
 
     return min(score, 100), " | ".join(details)
 
@@ -390,6 +551,7 @@ def process_ticker(ticker_dict: dict) -> dict | None:
         volprof_score, volprof_d = compute_volume_profile(hist)
         pa_score, pa_d = compute_price_action(hist)
         fundamentals_score, fundamentals_d = compute_fundamentals(info)
+        competitive_score, competitive_d = compute_competitive_positioning(info)
 
         # 8-dimension sentiment engine (news + social + traditional)
         spx_hist = _get_spx_hist()
@@ -399,10 +561,11 @@ def process_ticker(ticker_dict: dict) -> dict | None:
             fetch_news=_FETCH_NEWS,
         )
 
+        # 6-dimension weighted scoring (nuovo: Wyckoff 15%, Competitive 10%)
         final = (
-            wyckoff_score * 0.25 + volprof_score * 0.20 +
+            wyckoff_score * 0.15 + volprof_score * 0.20 +
             pa_score * 0.20 + sentiment_score * 0.15 +
-            fundamentals_score * 0.20
+            fundamentals_score * 0.20 + competitive_score * 0.10
         )
 
         pattern = identify_pattern(
@@ -421,13 +584,15 @@ def process_ticker(ticker_dict: dict) -> dict | None:
             "pa": pa_score,
             "sentiment": sentiment_score,
             "fundamentals": fundamentals_score,
+            "competitive": competitive_score,
             "pattern": pattern,
             "wyckoff_detail": wyckoff_d,
             "volprof_detail": volprof_d,
             "pa_detail": pa_d,
             "sentiment_detail": sentiment_d,
             "fundamentals_detail": fundamentals_d,
-            # New: sub-dimension breakdown
+            "competitive_detail": competitive_d,
+            # Sub-dimension breakdown
             "sentiment_sub_si": sentiment_subs.get("short_interest"),
             "sentiment_sub_options": sentiment_subs.get("options"),
             "sentiment_sub_insider": sentiment_subs.get("insider"),
@@ -440,15 +605,15 @@ def process_ticker(ticker_dict: dict) -> dict | None:
 
 
 def print_table(results: list[dict], top_n: int):
-    print(f"\n{'#' * 100}")
+    print(f"\n{'#' * 110}")
     print(f"  Top {top_n} Candidates")
-    print(f"{'#' * 100}")
-    print(f"{'#':<4} {'Ticker':<8} {'Name':<30} {'Score':<7} {'WYCK':<6} {'VP':<5} {'PA':<5} {'SENT':<6} {'FUND':<5} {'Pattern':<30}")
-    print(f"{'─' * 4} {'─' * 8} {'─' * 30} {'─' * 7} {'─' * 6} {'─' * 5} {'─' * 5} {'─' * 6} {'─' * 5} {'─' * 30}")
+    print(f"{'#' * 110}")
+    print(f"{'#':<4} {'Ticker':<8} {'Name':<28} {'Score':<7} {'WYCK':<6} {'VP':<5} {'PA':<5} {'COMP':<6} {'SENT':<6} {'FUND':<5} {'Pattern':<30}")
+    print(f"{'─' * 4} {'─' * 8} {'─' * 28} {'─' * 7} {'─' * 6} {'─' * 5} {'─' * 5} {'─' * 6} {'─' * 6} {'─' * 5} {'─' * 30}")
 
     for i, r in enumerate(results[:top_n], 1):
-        name = r["name"][:28]
-        print(f"{i:<4} {r['symbol']:<8} {name:<30} {r['final_score']:<7} {r['wyckoff']:<6} {r['volprof']:<5} {r['pa']:<5} {r['sentiment']:<6} {r['fundamentals']:<5} {r['pattern']:<30}")
+        name = r["name"][:26]
+        print(f"{i:<4} {r['symbol']:<8} {name:<28} {r['final_score']:<7} {r['wyckoff']:<6} {r['volprof']:<5} {r['pa']:<5} {r.get('competitive', '-'):<6} {r['sentiment']:<6} {r['fundamentals']:<5} {r['pattern']:<30}")
 
 
 def generate_csv(results: list[dict], output_dir: str | Path) -> str:
@@ -458,13 +623,13 @@ def generate_csv(results: list[dict], output_dir: str | Path) -> str:
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["rank", "symbol", "name", "market", "price", "final_score",
-                     "wyckoff", "volprof", "pa", "sentiment", "fundamentals", "pattern",
+                     "wyckoff", "volprof", "pa", "competitive", "sentiment", "fundamentals", "pattern",
                      "sent_si", "sent_options", "sent_insider", "sent_retail",
                      "sent_institutional", "sent_momentum"])
         for i, r in enumerate(results, 1):
             w.writerow([i, r["symbol"], r["name"], r["market"], r["price"],
                         r["final_score"], r["wyckoff"], r["volprof"], r["pa"],
-                        r["sentiment"], r["fundamentals"], r["pattern"],
+                        r.get("competitive", ""), r["sentiment"], r["fundamentals"], r["pattern"],
                         r.get("sentiment_sub_si", ""), r.get("sentiment_sub_options", ""),
                         r.get("sentiment_sub_insider", ""), r.get("sentiment_sub_retail", ""),
                         r.get("sentiment_sub_institutional", ""), r.get("sentiment_sub_momentum", "")])
@@ -495,6 +660,7 @@ def generate_html(results: list[dict], output_dir: str | Path, universe_name: st
             <td style="background:{color(r['wyckoff'])}">{r['wyckoff']}</td>
             <td style="background:{color(r['volprof'])}">{r['volprof']}</td>
             <td style="background:{color(r['pa'])}">{r['pa']}</td>
+            <td style="background:{color(r.get('competitive', 50))}">{r.get('competitive', '-')}</td>
             <td style="background:{color(r['sentiment'])}">{r['sentiment']}</td>
             <td style="background:{color(r['fundamentals'])}">{r['fundamentals']}</td>
             <td>{r['pattern']}</td>
@@ -532,7 +698,7 @@ tr:hover {{ opacity: 0.9; }}
 </div>
 <table>
 <tr>
-    <th>#</th><th>Ticker</th><th>Name</th><th>Score</th><th>WYCK</th><th>VP</th><th>PA</th><th>SENT</th><th>FUND</th><th>Pattern</th>
+    <th>#</th><th>Ticker</th><th>Name</th><th>Score</th><th>WYCK</th><th>VP</th><th>PA</th><th>COMP</th><th>SENT</th><th>FUND</th><th>Pattern</th>
 </tr>
 {rows_html}
 </table>
@@ -652,19 +818,20 @@ def main():
     html_path = generate_html(filtered, output_dir, universe_name, total)
     print(f"📄 HTML report: {html_path}")
 
-    print(f"\n{'─' * 60}")
+    print(f"\n{'─' * 70}")
     print(f"  TOP {min(3, len(filtered))} CANDIDATES FOR DEEP DIVE")
-    print(f"{'─' * 60}")
+    print(f"{'─' * 70}")
     for i, r in enumerate(filtered[:3], 1):
         si = r.get("sentiment_sub_si")
         op = r.get("sentiment_sub_options")
         ins = r.get("sentiment_sub_insider")
+        comp = r.get("competitive", "-")
         sub_sent = f" SI={si}" if si else ""
         sub_sent += f" OPT={op}" if op else ""
         sub_sent += f" INS={ins}" if ins else ""
         print(f"\n  #{i}: {r['symbol']} ({r['name']}) — Score: {r['final_score']}")
         print(f"      Pattern: {r['pattern']}")
-        print(f"      Wyckoff: {r['wyckoff']} | VP: {r['volprof']} | PA: {r['pa']} | Sent: {r['sentiment']}{sub_sent} | Fund: {r['fundamentals']}")
+        print(f"      Wyckoff: {r['wyckoff']} | VP: {r['volprof']} | PA: {r['pa']} | COMP: {comp} | Sent: {r['sentiment']}{sub_sent} | Fund: {r['fundamentals']}")
         print(f"      → Load stock-crypto-analysis on ${r['symbol']} for full verdict")
 
 

@@ -33,14 +33,15 @@ log = logging.getLogger(__name__)
 # Weights for the 8 sub-dimensions
 # ─────────────────────────────────────────────
 WEIGHTS = {
-    "short_interest": 0.15,
-    "options": 0.15,
-    "insider": 0.15,
-    "retail": 0.10,
-    "institutional": 0.15,
-    "momentum": 0.10,
-    "web_news": 0.10,
-    "social_media": 0.10,
+    "short_interest": 0.12,
+    "options": 0.12,
+    "insider": 0.12,
+    "retail": 0.08,
+    "institutional": 0.12,
+    "momentum": 0.08,
+    "web_news": 0.08,
+    "social_media": 0.08,
+    "earnings_quality": 0.20,  # nuova: earnings surprise trend (Sloan 1996)
 }
 
 
@@ -81,6 +82,7 @@ def compute_sentiment(
     symbol = info.get("symbol", ticker.ticker if hasattr(ticker, "ticker") else "?")
     scores["web_news"], sub_details["web_news"] = _web_news_sentiment(symbol, fetch=fetch_news)
     scores["social_media"], sub_details["social_media"] = _social_media_sentiment(symbol, wsb_hotlist=wsb_hotlist)
+    scores["earnings_quality"], sub_details["earnings_quality"] = _earnings_quality(info, hist)
 
     # Aggregate with confidence weighting
     available = {k: v for k, v in scores.items() if v is not None}
@@ -774,6 +776,78 @@ def _social_media_sentiment(symbol: str, wsb_hotlist: dict | None = None) -> tup
     )
 
     return score, detail
+
+
+# ─────────────────────────────────────────────
+# 9. Earnings Quality Trend (Sloan 1996)
+# ─────────────────────────────────────────────
+def _earnings_quality(info: dict, hist: pd.DataFrame) -> tuple[int | None, str]:
+    """
+    Earnings Quality Modifier at sentiment level.
+    Proxy: earningsGrowth (YoY), revenueGrowth, margin trend from hist P&L.
+
+    Backtest: Sloan (1996) — earnings quality predicts returns with p<0.01.
+    High accruals (low quality) → underperformance next 12mo.
+    """
+    earnings_growth = info.get("earningsGrowth")
+    rev_growth = info.get("revenueGrowth")
+    margins = info.get("profitMargins")
+    fcf = info.get("freeCashflow")
+    op_cf = info.get("operatingCashFlow")
+    net_income = info.get("netIncomeToCommon")
+
+    if earnings_growth is None and rev_growth is None:
+        return None, "No earnings quality data"
+
+    score = 50
+    parts = []
+
+    # Earnings trend (strongest signal)
+    if earnings_growth is not None:
+        if earnings_growth > 0.20:
+            score += 25
+            parts.append(f"EPS growth {earnings_growth*100:.0f}% > 20% (+25)")
+        elif earnings_growth > 0.10:
+            score += 15
+            parts.append(f"EPS growth {earnings_growth*100:.0f}% > 10% (+15)")
+        elif earnings_growth > 0:
+            score += 5
+            parts.append(f"EPS growth {earnings_growth*100:.0f}% (+) (+5)")
+        elif earnings_growth < -0.10:
+            score -= 20
+            parts.append(f"EPS growth {earnings_growth*100:.0f}% (declining -20)")
+        elif earnings_growth < 0:
+            score -= 10
+            parts.append(f"EPS growth {earnings_growth*100:.0f}% (slight decline -10)")
+
+    # Revenue quality: growth with profit = real quality
+    if rev_growth is not None and margins is not None:
+        if rev_growth > 0.05 and margins > 0.10:
+            score += 15
+            parts.append(f"Revenue +{rev_growth*100:.0f}% + margins {margins*100:.0f}% (quality +15)")
+        elif rev_growth > 0 and margins > 0:
+            score += 5
+            parts.append(f"Revenue +{rev_growth*100:.0f}% + positive margins (+5)")
+        elif rev_growth > 0.10 and (margins < 0 or margins is None):
+            score -= 10
+            parts.append(f"Revenue growing but no margins (low quality -10)")
+
+    # Cash flow vs earnings (accrual proxy)
+    if op_cf is not None and net_income is not None and net_income > 0:
+        accrual_ratio = 1 - (op_cf / net_income)
+        if accrual_ratio < 0.3:
+            score += 10
+            parts.append(f"Low accruals (opCF/netIncome = {1-accrual_ratio:.2f}) (+10)")
+        elif accrual_ratio > 0.7:
+            score -= 15
+            parts.append(f"High accruals (opCF/netIncome = {1-accrual_ratio:.2f}) (-15)")
+
+    # Free cash flow positive = earnings quality
+    if fcf is not None and fcf > 0:
+        score += 10
+        parts.append(f"FCF positive (+10)")
+
+    return min(100, max(0, score)), " | ".join(parts)
 
 
 # ─────────────────────────────────────────────

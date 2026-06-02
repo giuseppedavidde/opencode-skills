@@ -135,19 +135,20 @@ python3 scripts/scanner.py --tickers "MSFT, AAPL, ENI.MI" --top 15
 python3 scripts/scanner.py --universe us_large --min-score 50 --top 15
 ```
 
-**5 Dimensions** (each 0–100, weighted):
+**6 Dimensions** (each 0–100, weighted):
 
-| # | Dimension | Weight | Key Metrics |
-|---|-----------|:------:|-------------|
-| 1 | **Wyckoff** | 25% | Range position, HH/HL, Spring, MA50/200, volume trend |
-| 2 | **Volume Profile** | 20% | Price vs VPOC/VA, vol ratio, profile shape |
-| 3 | **Price Action** | 20% | RSI, 25ema slope, VPA validations, Effort/Result |
-| 4 | **Sentiment** | 15% | **Traditional** (SI, DTC, Inst) + **Web News** (Finviz, WSJ, Yahoo) + **Social Media** (Reddit/WSB, X/Twitter) |
-| 5 | **Fundamentals** | 20% | P/E, revenue growth, margins, D/E, mkt cap |
+| # | Dimensione | Peso | Metriche Chiave | Nuovi Modificatori |
+|---|-----------|:----:|-----------------|-------------------|
+| 1 | **Wyckoff** | 15% | Range position, HH/HL, Spring, MA50/200, volume trend | — |
+| 2 | **Volume Profile** | 20% | Price vs VPOC/VA, vol ratio, profile shape | — |
+| 3 | **Price Action** | 20% | RSI, 25ema slope, VPA validations, Effort/Result | **Rally Velocity Check**: >20% in 15gg → penalità, rallentamento sano su volume crescente → bonus |
+| 4 | **Competitive Positioning** | 10% | ROE, profit margins, ROA, market cap (proxy per moat/pricing power) | **Nuova dimensione**: qualità del business indipendentemente dal prezzo |
+| 5 | **Sentiment** | 15% | 9 sub-dimensioni: SI, Options, Insider, Retail, Institutional, Momentum, Web News, Social Media, **Earnings Quality** | **Earnings Quality Trend** (Sloan 1996): EPS growth trend + accrual proxy + FCF quality |
+| 6 | **Fundamentals** | 20% | P/E + Earnings Quality Modifier, Value Trap Check, Price vs Consensus, revenue growth, margins, D/E | **Earnings Quality Modifier** (rimpiazza P/E semplice), **Value Trap Alert**, **Price vs Consensus Divergence** |
 
-**Aggregation**:
+**Aggregazione** (6 dimensioni):
 ```
-final = wyckoff * 0.25 + volprof * 0.20 + pa * 0.20 + sentiment * 0.15 + fundamentals * 0.20
+final = wyckoff * 0.15 + volprof * 0.20 + pa * 0.20 + competitive * 0.10 + sentiment * 0.15 + fundamentals * 0.20
 ```
 
 ### Sentiment — Sub-Dimension Breakdown
@@ -303,13 +304,13 @@ User: "Scansiona IGV e aiutami con le opzioni Dec 2026"
                          ↓
 [market-accumulation-scanner]
   1. Identifica: input = 1 ticker → Auto-Chain Mode
-  2. Esegue scanner.sh --tickers "IGV" --fetch-news (5-dimension score)
+   2. Esegue scanner.sh --tickers "IGV" --fetch-news (6-dimension score con Competitive Positioning)
   3. Mostra score scanner completo (con tutte e 8 le sub-dimensioni sentiment)
   4. Chiama:
      ↓
   [stock-crypto-analysis]
     5. Carica stock-crypto-analysis skill
-    6. Esegue unified verdict (6-dimension weighted scoring)
+    6. Esegue unified verdict (6-dimension + Adaptive Macro Matrix + modificatori)
     7. Se score ≥ 70, chiama:
        ↓
     [options-strategy-suggestions]
@@ -336,24 +337,28 @@ User: "Scansiona IGV e aiutami con le opzioni Dec 2026"
 
 ### Scanner Score: XX/100
 
-| Dimensione | Score | Dettaglio |
-|-----------|:-----:|-----------|
-| Wyckoff (25%) | XX/100 | [range position, MA50/200, volume trend] |
-| Volume Profile (20%) | XX/100 | [VPOC, VA, vol ratio] |
-| Price Action (20%) | XX/100 | [RSI, 25ema, VPA] |
-| Sentiment (15%) | XX/100 | (see breakdown below) |
-| Fundamentals (20%) | XX/100 | [P/E, growth, margins] |
+| Dimensione | Peso | Score | Dettaglio |
+|-----------|:----:|:-----:|-----------|
+| Wyckoff | 15% | XX/100 | [range position, MA50/200, volume trend] |
+| Volume Profile | 20% | XX/100 | [VPOC, VA, vol ratio] |
+| Price Action | 20% | XX/100 | [RSI, 25ema, VPA, Rally Velocity] |
+| Competitive Positioning | 10% | XX/100 | [ROE, margins, ROA, mcap — moat proxy] |
+| Sentiment | 15% | XX/100 | (see breakdown below, includes Earnings Quality) |
+| Fundamentals | 20% | XX/100 | [P/E + EQM, Value Trap, Price vs Consensus] |
 
-### Sentiment Breakdown (8 sub-dimensions)
+### Sentiment Breakdown (9 sub-dimensions)
 
-| Sub-dimensione | Score | Dettaglio |
-|:--------------:|:-----:|-----------|
-| Short Interest | XX/100 | SI XX% | DTC X.X → [dettaglio] |
-| Options Sentiment | XX/100 | P/C vol X.XX | OI X.XX | IV skew X.XX → [dettaglio] |
-| Insider Trading | XX/100 | Buys=X Sells=X → [dettaglio] |
-| Retail Sentiment | XX/100 | Vol ratio X.Xx | Beta X.X → [dettaglio] |
-| Institutional | XX/100 | Inst XX% | Buyback X.X% → [dettaglio] |
-| Relative Momentum | XX/100 | 1mo X.X% | 3mo X.X% | 6mo X.X% → [dettaglio] |
+| Sub-dimensione | Peso | Score | Dettaglio |
+|:--------------:|:----:|:-----:|-----------|
+| Short Interest | 12% | XX/100 | SI XX% | DTC X.X → [dettaglio] |
+| Options Sentiment | 12% | XX/100 | P/C vol X.XX | OI X.XX | IV skew X.XX → [dettaglio] |
+| Insider Trading | 12% | XX/100 | Buys=X Sells=X → [dettaglio] |
+| Institutional | 12% | XX/100 | Inst XX% | Buyback X.X% → [dettaglio] |
+| **Earnings Quality** | **20%** | **XX/100** | **EPS growth, accrual proxy, FCF — Sloan 1996** |
+| Web News | 8% | XX/100 | [N bullish / N bearish / N total headlines] |
+| Social Media | 8% | XX/100 | WSB hype XX | FOMO [phase] | [sentiment] |
+| Retail Sentiment | 8% | XX/100 | Vol ratio X.Xx | Beta X.X → [dettaglio] |
+| Relative Momentum | 8% | XX/100 | 1mo X.X% | 3mo X.X% | 6mo X.X% → [dettaglio] |
 | Web News | XX/100 | [N bullish / N bearish / N total headlines] |
 | Social Media | XX/100 | WSB hype XX | FOMO [phase] | [sentiment] |
 
@@ -424,21 +429,23 @@ Score: XX%
 
 ### Top 15 Ranked
 
-| # | Ticker | Name      | Score | WYCK | VP  | PA  | SENT | FUND | Pattern               |
-|---|--------|-----------|:-----:|:----:|:---:|:---:|:----:|:----:|-----------------------|
-| 1 | $AAPL  | Apple Inc | 82    | 85   | 75  | 78  | 60   | 90   | Accumulation Spring   |
+| # | Ticker | Name      | Score | WYCK | VP  | PA  | COMP | SENT | FUND | Pattern               |
+|---|---|---|---|---|---|---|---|---|---|-----------------------|
+| 1 | $AAPL  | Apple Inc | 82    | 85   | 75  | 78  | 100  | 60   | 90   | Accumulation Spring   |
 | 2 | ...    | ...       | ...   | ...  | ... | ... | ...  | ...  | ...                   |
 
 ### #1: $TICKER — Pattern Match
 - Wyckoff: [score] → [dettaglio]
 - Volume Profile: [score] → [dettaglio]
-- Price Action: [score] → [dettaglio]
-- Sentiment: [score] → (T:XX N:XX S:XX)
+- Price Action: [score] → [dettaglio] (incl. Rally Velocity)
+- Competitive Positioning: [score] → [ROE, margins, mcap — moat proxy]
+- Sentiment: [score] → (T:XX N:XX S:XX EQ:XX)
   - Traditional: SI XX% | DTC X.X | Inst XX% → [+/-X pts]
   - Web News: [positivo/neutro/negativo] → [+/-X pts]
     - [Headline 1], [Headline 2], ...
   - Social Media: [WSB: hype XX / X buzz] → [+/-X pts]
-- Fundamentals: [score] → [dettaglio]
+  - Earnings Quality: [EPS growth, accrual proxy] → [+/-X pts]
+- Fundamentals: [score] → [P/E + EQM, Value Trap check, Price vs Consensus]
 
 → Loading stock-crypto-analysis for full verdict...
 
@@ -448,9 +455,10 @@ Score: XX%
 **Rationale**:
 - Wyckoff: ... → +/-X pts
 - Volume Profile: ... → +/-X pts
-- Price Action: ... → +/-X pts
-- Sentiment: ... → +/-X pts
-- Fundamentals: ... → +/-X pts
+- Price Action: ... → +/-X pts (Rally Velocity: ...)
+- Competitive Positioning: ... → +/-X pts
+- Sentiment: ... → +/-X pts (Earnings Quality: ...)
+- Fundamentals: ... → +/-X pts (Earnings Quality Modifier, Value Trap, Price vs Consensus)
 
 ### Raccomandazione Finale
 | Azione | Entry | Stop Loss | Target | Orizzonte | Sizing |
