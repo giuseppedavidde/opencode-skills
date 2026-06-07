@@ -24,10 +24,11 @@ import argparse
 import math
 import sys
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Optional
 
 import numpy as np
+import pandas as pd
 import yfinance as yf
 from scipy.stats import norm
 
@@ -139,24 +140,74 @@ def safe_float(val) -> float:
         return 0.0
 
 
-def compute_iv_rank(chain_calls, chain_puts) -> Optional[float]:
-    ivs = []
-    for _, row in chain_calls.iterrows():
-        iv = safe_float(row.get("impliedVolatility"))
-        if iv > 0:
-            ivs.append(iv)
-    for _, row in chain_puts.iterrows():
-        iv = safe_float(row.get("impliedVolatility"))
-        if iv > 0:
-            ivs.append(iv)
-    if len(ivs) < 5:
+def compute_iv_rank(ticker: yf.Ticker, current_price: float) -> Optional[float]:
+    """Compute true IV Rank using 52-week historical volatility estimation.
+
+    True IV Rank = (current IV - HV_52w_min) / (HV_52w_max - HV_52w_min) * 100
+    where HV is estimated from 20-day rolling windows of daily log returns.
+
+    Falls back to 1-year of data if 52 weeks unavailable.
+    Returns None if insufficient data.
+    """
+    try:
+        hist_1y = ticker.history(period="1y")
+    except Exception:
         return None
-    current_iv = np.mean(ivs)
-    iv_low = np.min(ivs)
-    iv_high = np.max(ivs)
-    if iv_high - iv_low < 0.001:
+
+    if hist_1y.empty or len(hist_1y) < 30:
+        return None
+
+    closes = hist_1y["Close"].dropna().values
+    if len(closes) < 30:
+        return None
+
+    # Estimate current IV from ATM options on nearest expiry
+    try:
+        exps = ticker.options
+        if not exps:
+            return None
+        today = datetime.now(timezone.utc).date()
+        exp_str = None
+        for e in exps:
+            ed = datetime.strptime(e, "%Y-%m-%d").date()
+            dte = (ed - today).days
+            if 7 <= dte <= 60:
+                exp_str = e
+                break
+        if exp_str is None:
+            exp_str = exps[0]
+        chain = ticker.option_chain(exp_str)
+        calls, puts = chain.calls, chain.puts
+        combined = pd.concat([calls, puts])
+        ivs = combined["impliedVolatility"].dropna()
+        ivs = ivs[(ivs > 0) & (ivs < 5.0)]
+        if ivs.empty:
+            return None
+        current_iv = float(ivs.median())
+    except Exception:
+        return None
+
+    # Compute rolling 20-day historical volatility
+    log_returns = [math.log(closes[i] / closes[i - 1]) for i in range(1, len(closes))]
+    window = 20
+    hv_values = []
+    for i in range(window, len(log_returns) + 1):
+        window_rets = log_returns[i - window:i]
+        mean_ret = sum(window_rets) / window
+        variance = sum((r - mean_ret) ** 2 for r in window_rets) / (window - 1)
+        daily_vol = math.sqrt(variance)
+        annual_vol = daily_vol * math.sqrt(252)
+        hv_values.append(annual_vol)
+
+    if len(hv_values) < 5:
+        return None
+
+    hv_min = min(hv_values)
+    hv_max = max(hv_values)
+    if hv_max - hv_min < 0.001:
         return 50.0
-    return (current_iv - iv_low) / (iv_high - iv_low) * 100
+
+    return (current_iv - hv_min) / (hv_max - hv_min) * 100
 
 
 # ───── Strategy Classification (Options Playbook) ─────
@@ -444,7 +495,7 @@ def run_analysis(
         sys.exit(1)
     T = dte / 365.0
 
-    iv_rank = compute_iv_rank(all_calls, all_puts)
+    iv_rank = compute_iv_rank(yf_ticker, S)
 
     # ---- Greeks per leg ----
     leg_results = []

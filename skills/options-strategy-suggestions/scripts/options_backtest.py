@@ -119,6 +119,19 @@ def _estimate_historical_sigma(prices, window: int = DEFAULT_SIGMA_WINDOW) -> fl
     return min(max(annual_vol, 0.05), 1.5)
 
 
+def _round_strike(price: float) -> float:
+    """Round to nearest valid option strike interval.
+
+    Standard intervals: $0.50 for stocks <$25, $1.00 for $25-$200,
+    $5.00 for stocks >$200.
+    """
+    if price < 25:
+        return round(price * 2) / 2
+    if price <= 200:
+        return round(price)
+    return round(price / 5) * 5
+
+
 # ---- Strategy: Covered Call ----
 
 
@@ -175,7 +188,7 @@ def backtest_covered_call(hist, dte: int, lookback_days: int) -> BacktestResult:
         else:
             exit_date_str = str(exit_date)[:10]
 
-        strike = round(entry_price)
+        strike = _round_strike(entry_price)
         if strike <= 0:
             strike = entry_price
 
@@ -215,9 +228,16 @@ def backtest_covered_call(hist, dte: int, lookback_days: int) -> BacktestResult:
         total_returns.append(pnl_pct)
         premiums.append(premium)
 
-    # Buy & hold comparison
+    # Rolling buy & hold comparison (apples-to-apples: same DTE windows)
     if closes:
-        buy_hold_pnl = (closes[-1] - closes[0]) / closes[0] * 100
+        rolling_bnh = []
+        for entry_idx in range(0, len(closes) - dte, step):
+            exit_idx = entry_idx + dte
+            if exit_idx >= len(closes):
+                break
+            bnh_pnl = (closes[exit_idx] - closes[entry_idx]) / closes[entry_idx] * 100
+            rolling_bnh.append(bnh_pnl)
+        buy_hold_pnl = sum(rolling_bnh) / len(rolling_bnh) if rolling_bnh else 0.0
     else:
         buy_hold_pnl = 0.0
 
@@ -232,14 +252,133 @@ def backtest_covered_call(hist, dte: int, lookback_days: int) -> BacktestResult:
     )
 
 
-# ---- Strategy: Synthetic Long 2:1 ----
+# ---- Strategy: Call Ratio 2:1 (was synthetic_long, deprecated) ----
+
+
+def backtest_call_ratio_2to1(hist, dte: int, lookback_days: int) -> BacktestResult:
+    """Backtest 2:1 call ratio spread (buy 2 ITM calls, sell 1 ATM call).
+
+    This was previously named backtest_synthetic_long but was wrong:
+    a true synthetic long is long ATM call + short ATM put at the same strike.
+    This function is retained for backwards compatibility.
+    """
+    trades = []
+    if hist.empty or len(hist) < dte + 20:
+        return BacktestResult(
+            ticker="",
+            strategy="call_ratio_2to1",
+            dte=dte,
+            lookback_days=lookback_days,
+            total_trades=0,
+            win_rate=0.0,
+            avg_pnl_pct=0.0,
+            best_pnl_pct=0.0,
+            worst_pnl_pct=0.0,
+            total_pnl_pct=0.0,
+            buy_hold_pnl_pct=0.0,
+            outperformed=False,
+            avg_premium=0.0,
+            error="Insufficient data",
+        )
+
+    closes = hist["Close"].tolist()
+    dates_list = hist.index.tolist()
+
+    total_returns = []
+    premiums = []
+
+    step = dte
+    for entry_idx in range(0, len(closes) - dte, step):
+        exit_idx = entry_idx + dte
+        if exit_idx >= len(closes):
+            break
+
+        entry_price = closes[entry_idx]
+        exit_price = closes[exit_idx]
+        entry_date = dates_list[entry_idx]
+        exit_date = dates_list[exit_idx]
+
+        if isinstance(entry_date, (datetime, date)):
+            entry_date_str = entry_date.strftime("%Y-%m-%d")
+        else:
+            entry_date_str = str(entry_date)[:10]
+
+        if isinstance(exit_date, (datetime, date)):
+            exit_date_str = exit_date.strftime("%Y-%m-%d")
+        else:
+            exit_date_str = str(exit_date)[:10]
+
+        itm_strike = _round_strike(entry_price * 0.95)
+        atm_strike = _round_strike(entry_price)
+
+        lookback_prices = closes[max(0, entry_idx - DEFAULT_SIGMA_WINDOW):entry_idx]
+        sigma = _estimate_historical_sigma(lookback_prices, DEFAULT_SIGMA_WINDOW)
+        tte = dte / 365.0
+
+        premium_itm = _bs_call_price(entry_price, itm_strike, tte, RISK_FREE_RATE, sigma)
+        premium_atm = _bs_call_price(entry_price, atm_strike, tte, RISK_FREE_RATE, sigma)
+
+        # Buy 2 ITM calls, sell 1 ATM call
+        initial_cost = (2 * premium_itm - premium_atm) * MULTIPLIER
+
+        # At expiration value
+        itm_value = max(0.0, exit_price - itm_strike) * 2 * MULTIPLIER
+        atm_value = -max(0.0, exit_price - atm_strike) * MULTIPLIER
+        final_value = itm_value + atm_value
+
+        pnl = final_value - initial_cost
+        pnl_pct = (pnl / abs(initial_cost)) * 100 if initial_cost != 0 else 0.0
+
+        entry_cost = abs(initial_cost)
+        avg_premium = (2 * premium_itm + -premium_atm) / 3
+
+        trade = BacktestTrade(
+            entry_date=entry_date_str,
+            entry_price=round(entry_price, 2),
+            exit_date=exit_date_str,
+            exit_price=round(exit_price, 2),
+            strike=atm_strike,
+            premium=round(avg_premium, 3),
+            cost=round(entry_cost, 2),
+            exit_value=round(final_value, 2),
+            pnl=round(pnl, 2),
+            pnl_pct=round(pnl_pct, 2),
+        )
+        trades.append(trade)
+        total_returns.append(pnl_pct)
+        premiums.append(abs(avg_premium))
+
+    # Rolling buy & hold comparison (apples-to-apples: same DTE windows)
+    if closes:
+        rolling_bnh = []
+        for entry_idx in range(0, len(closes) - dte, step):
+            exit_idx = entry_idx + dte
+            if exit_idx >= len(closes):
+                break
+            bnh_pnl = (closes[exit_idx] - closes[entry_idx]) / closes[entry_idx] * 100
+            rolling_bnh.append(bnh_pnl)
+        buy_hold_pnl = sum(rolling_bnh) / len(rolling_bnh) if rolling_bnh else 0.0
+    else:
+        buy_hold_pnl = 0.0
+
+    return _build_result(
+        trades=trades,
+        total_returns=total_returns,
+        premiums=premiums,
+        buy_hold_pnl=buy_hold_pnl,
+        strategy="call_ratio_2to1",
+        dte=dte,
+        lookback_days=lookback_days,
+    )
 
 
 def backtest_synthetic_long(hist, dte: int, lookback_days: int) -> BacktestResult:
-    """
-    Backtest synthetic long 2:1 strategy.
+    """Backtest true synthetic long strategy (long ATM call + short ATM put).
 
-    Every dte days: buy 2 slightly ITM calls, sell 1 ATM call.
+    A synthetic long replicates a long stock position: profit/loss mirrors
+    holding 100 shares. Used for leveraged bullish exposure with defined cost.
+
+    Every dte days: buy 1 ATM call, sell 1 ATM put at the same strike.
     Hold to expiration and compute PnL.
     """
     trades = []
@@ -288,29 +427,28 @@ def backtest_synthetic_long(hist, dte: int, lookback_days: int) -> BacktestResul
         else:
             exit_date_str = str(exit_date)[:10]
 
-        itm_strike = round(entry_price * 0.95, 2)
-        atm_strike = round(entry_price)
+        atm_strike = _round_strike(entry_price)
 
         lookback_prices = closes[max(0, entry_idx - DEFAULT_SIGMA_WINDOW):entry_idx]
         sigma = _estimate_historical_sigma(lookback_prices, DEFAULT_SIGMA_WINDOW)
         tte = dte / 365.0
 
-        premium_itm = _bs_call_price(entry_price, itm_strike, tte, RISK_FREE_RATE, sigma)
-        premium_atm = _bs_call_price(entry_price, atm_strike, tte, RISK_FREE_RATE, sigma)
+        premium_call = _bs_call_price(entry_price, atm_strike, tte, RISK_FREE_RATE, sigma)
+        premium_put = _bs_put_price(entry_price, atm_strike, tte, RISK_FREE_RATE, sigma)
 
-        # Buy 2 ITM calls, sell 1 ATM call
-        initial_cost = (2 * premium_itm - premium_atm) * MULTIPLIER
+        # Buy 1 ATM call, sell 1 ATM put
+        initial_cost = (premium_call - premium_put) * MULTIPLIER
 
         # At expiration value
-        itm_value = max(0.0, exit_price - itm_strike) * 2 * MULTIPLIER
-        atm_value = -max(0.0, exit_price - atm_strike) * MULTIPLIER
-        final_value = itm_value + atm_value
+        call_value = max(0.0, exit_price - atm_strike) * MULTIPLIER
+        put_value = -max(0.0, atm_strike - exit_price) * MULTIPLIER
+        final_value = call_value + put_value
 
         pnl = final_value - initial_cost
         pnl_pct = (pnl / abs(initial_cost)) * 100 if initial_cost != 0 else 0.0
 
         entry_cost = abs(initial_cost)
-        avg_premium = (2 * premium_itm + -premium_atm) / 3
+        avg_premium = premium_call
 
         trade = BacktestTrade(
             entry_date=entry_date_str,
@@ -326,11 +464,18 @@ def backtest_synthetic_long(hist, dte: int, lookback_days: int) -> BacktestResul
         )
         trades.append(trade)
         total_returns.append(pnl_pct)
-        premiums.append(abs(avg_premium))
+        premiums.append(avg_premium)
 
-    # Buy & hold comparison
+    # Rolling buy & hold comparison (apples-to-apples: same DTE windows)
     if closes:
-        buy_hold_pnl = (closes[-1] - closes[0]) / closes[0] * 100
+        rolling_bnh = []
+        for entry_idx in range(0, len(closes) - dte, step):
+            exit_idx = entry_idx + dte
+            if exit_idx >= len(closes):
+                break
+            bnh_pnl = (closes[exit_idx] - closes[entry_idx]) / closes[entry_idx] * 100
+            rolling_bnh.append(bnh_pnl)
+        buy_hold_pnl = sum(rolling_bnh) / len(rolling_bnh) if rolling_bnh else 0.0
     else:
         buy_hold_pnl = 0.0
 
@@ -502,7 +647,7 @@ def run_backtest(
 
     Args:
         ticker_symbol: Stock ticker symbol.
-        strategy: 'covered_call' or 'synthetic_long'.
+        strategy: 'covered_call', 'synthetic_long' (true synthetic long), or 'call_ratio_2to1'.
         dte: Days to expiration for each trade.
         lookback_days: Number of days of historical data.
 
@@ -563,7 +708,13 @@ def run_backtest(
     if strategy == "covered_call":
         result = backtest_covered_call(hist, dte, lookback_days)
     elif strategy == "synthetic_long":
+        import sys
+        print("Note: `synthetic_long` now uses the true synthetic long (long ATM call + short ATM put). "
+              "For the old 2:1 call ratio spread, use `call_ratio_2to1` instead.",
+              file=sys.stderr)
         result = backtest_synthetic_long(hist, dte, lookback_days)
+    elif strategy == "call_ratio_2to1":
+        result = backtest_call_ratio_2to1(hist, dte, lookback_days)
     else:
         return BacktestResult(
             ticker=ticker_symbol,
@@ -605,8 +756,8 @@ Examples:
         "--strategy",
         type=str,
         required=True,
-        choices=["covered_call", "synthetic_long"],
-        help="Strategy to backtest",
+        choices=["covered_call", "synthetic_long", "call_ratio_2to1"],
+        help="Strategy to backtest: covered_call, synthetic_long (true), or call_ratio_2to1",
     )
     parser.add_argument(
         "--dte",

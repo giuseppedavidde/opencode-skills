@@ -248,13 +248,13 @@ def _options_sentiment(ticker: yf.Ticker, info: dict) -> tuple[int | None, str]:
                 skew = put_iv / call_iv
                 if skew > 1.3:
                     score += 20
-                    parts.append(f"IV skew {skew:.2f} (put premium=contrarian bullish) (+20)")
+                    parts.append(f"IV skew {skew:.2f} (put premium elevated = contrarian bullish) (+20)")
                 elif skew > 1.1:
                     score += 10
-                    parts.append(f"IV skew {skew:.2f} (mild put premium) (+10)")
+                    parts.append(f"IV skew {skew:.2f} (mild put premium = contrarian signal) (+10)")
                 elif skew < 0.8:
                     score -= 10
-                    parts.append(f"IV skew {skew:.2f} (call premium=complacency) (-10)")
+                    parts.append(f"IV skew {skew:.2f} (call premium elevated = excessive optimism) (-10)")
                 else:
                     parts.append(f"IV skew {skew:.2f} (neutral) (+0)")
 

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from typing import Optional
 
@@ -54,8 +55,12 @@ def fetch_correlation_matrix(tickers: list[str], days: int = 252) -> pd.DataFram
     return returns.corr()
 
 
-def compute_hierarchical_clusters(corr: pd.DataFrame, threshold: float = 0.70) -> list[list[str]]:
-    """Find groups of highly correlated tickers using a simple graph-based approach."""
+def compute_correlation_clusters(corr: pd.DataFrame, threshold: float = 0.70) -> list[list[str]]:
+    """Find groups of highly correlated tickers using graph-based connected components.
+
+    This gives similar results to single-linkage hierarchical clustering
+    but is simpler and faster.
+    """
     tickers = list(corr.columns)
     n_ = len(tickers)
 
@@ -63,7 +68,8 @@ def compute_hierarchical_clusters(corr: pd.DataFrame, threshold: float = 0.70) -
     adj: list[set[int]] = [set() for _ in range(n_)]
     for i in range(n_):
         for j in range(i + 1, n_):
-            if abs(corr.iloc[i, j]) > threshold:
+            val = corr.iloc[i, j]
+            if not (pd.isna(val) or abs(val) <= threshold):
                 adj[i].add(j)
                 adj[j].add(i)
 
@@ -89,9 +95,24 @@ def compute_hierarchical_clusters(corr: pd.DataFrame, threshold: float = 0.70) -
     return clusters
 
 
+# Deprecated alias
+def compute_hierarchical_clusters(corr: pd.DataFrame, threshold: float = 0.70) -> list[list[str]]:
+    """Deprecated: use compute_correlation_clusters instead."""
+    import warnings
+    warnings.warn("compute_hierarchical_clusters is deprecated, use compute_correlation_clusters",
+                  DeprecationWarning, stacklevel=2)
+    return compute_correlation_clusters(corr, threshold)
+
+
 def compute_diversification_score(corr: pd.DataFrame,
                                   positions: Optional[dict[str, float]] = None) -> float:
-    """Compute a simple diversification score (0-100)."""
+    """Compute a diversification score (0-100) from the correlation matrix.
+
+    When positions are provided, uses the position-weighted portfolio variance:
+    score = 100 * (1 - sqrt(w' Σ w))
+    where w are position weights and Σ is the correlation matrix.
+    Without positions, uses the average absolute pairwise correlation.
+    """
     tickers = list(corr.columns)
     n_ = len(tickers)
 
@@ -99,23 +120,37 @@ def compute_diversification_score(corr: pd.DataFrame,
         return 100.0
 
     if positions is None:
-        positions = {t: 1.0 / n_ for t in tickers}
+        # Unweighted: avg absolute pairwise correlation
+        pairwise_corrs = []
+        for i in range(n_):
+            for j in range(i + 1, n_):
+                val = corr.iloc[i, j]
+                if not pd.isna(val):
+                    pairwise_corrs.append(abs(val))
+        avg_corr = sum(pairwise_corrs) / len(pairwise_corrs) if pairwise_corrs else 0
+        return round(100 * (1.0 - avg_corr), 1)
 
-    # Weighted portfolio variance
+    # Position-weighted: w' Σ w
     weights = [positions.get(t, 1.0 / n_) for t in tickers]
     total = sum(weights)
     if total == 0:
         return 0.0
-    weights = [w / total for w in weights]
+    weights_norm = [w / total for w in weights]
 
-    # Simple metric: 100 - (avg absolute pairwise correlation * 100)
-    pairwise_corrs = []
+    # Portfolio variance = w' Σ w
+    port_var = 0.0
     for i in range(n_):
-        for j in range(i + 1, n_):
-            pairwise_corrs.append(abs(corr.iloc[i, j]))
-    avg_corr = sum(pairwise_corrs) / len(pairwise_corrs) if pairwise_corrs else 0
+        for j in range(n_):
+            val = corr.iloc[i, j]
+            if pd.isna(val):
+                val = 0.0
+            port_var += weights_norm[i] * weights_norm[j] * val
 
-    return round(100 * (1.0 - avg_corr), 1)
+    port_var = max(port_var, 0.0)
+    port_risk = math.sqrt(port_var)
+    # Score: 100 when risk is 0 (perfectly uncorrelated), 0 when risk is 1 (perfectly correlated)
+    score = 100 * (1.0 - min(port_risk, 1.0))
+    return round(score, 1)
 
 
 def main() -> None:
@@ -142,7 +177,7 @@ def main() -> None:
         with open(args.positions, encoding="utf-8") as f:
             positions = json.load(f)
 
-    clusters = compute_hierarchical_clusters(corr, args.threshold)
+    clusters = compute_correlation_clusters(corr, args.threshold)
     div_score = compute_diversification_score(corr, positions)
 
     if args.json:

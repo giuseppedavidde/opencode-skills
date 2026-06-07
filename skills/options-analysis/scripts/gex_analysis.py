@@ -142,11 +142,17 @@ def _extract_iv_from_row(row) -> float:
 
 def compute_max_pain(calls, puts) -> Optional[MaxPainResult]:
     """
-    Compute Max Pain: strike where total option value at expiry is minimized.
+    Compute Max Pain: strike where aggregate option buyer loss is minimized.
+
+    For each candidate strike k:
+      cost(k) = sum over all strikes s of OI_call(s) * max(0, k - s)
+              + sum over all strikes s of OI_put(s) * max(0, s - k)
+
+    The strike with minimum total cost is Max Pain.
 
     Args:
-        calls: DataFrame of call options.
-        puts: DataFrame of put options.
+        calls: DataFrame of call options (must have 'strike', may have 'openInterest').
+        puts: DataFrame of put options (must have 'strike', may have 'openInterest').
 
     Returns:
         MaxPainResult or None.
@@ -216,16 +222,16 @@ def fetch_gex_analysis(ticker_symbol: str) -> GexResult:
         return result
 
     price = _safe_float(info.get("regularMarketPrice"))
-    if price == 0:
+    if price == 0 or math.isnan(price):
         price = _safe_float(info.get("currentPrice"))
-    if price == 0:
+    if price == 0 or math.isnan(price):
         try:
             hist_quick = yf_ticker.history(period="5d")
             if not hist_quick.empty:
                 price = float(hist_quick["Close"].iloc[-1])
         except Exception:
             pass
-    if price == 0:
+    if price == 0 or math.isnan(price):
         result.error = f"Could not fetch current price for {ticker_symbol}"
         return result
 
@@ -291,6 +297,8 @@ def fetch_gex_analysis(ticker_symbol: str) -> GexResult:
                 sigma = iv
 
             gamma_per_share = bs_gamma(price, strike, tte, RISK_FREE_RATE, sigma)
+            if math.isnan(gamma_per_share):
+                gamma_per_share = 0.0
             gex_contrib = gamma_per_share * oi * price * ONE_HUNDRED
 
             if strike not in gex_by_strike:
@@ -311,6 +319,8 @@ def fetch_gex_analysis(ticker_symbol: str) -> GexResult:
                 sigma = iv
 
             gamma_per_share = bs_gamma(price, strike, tte, RISK_FREE_RATE, sigma)
+            if math.isnan(gamma_per_share):
+                gamma_per_share = 0.0
             gex_contrib = gamma_per_share * oi * price * ONE_HUNDRED
 
             if strike not in gex_by_strike:
@@ -363,13 +373,11 @@ def fetch_gex_analysis(ticker_symbol: str) -> GexResult:
     for info in sorted_infos:
         prev_cum = cum_gex
         cum_gex += info.net_gex
-        # pylint: disable=chained-comparison
-        if prev_cum > 0 and cum_gex < 0 and flip_point is None:
-            flip_point = info.strike
-        elif prev_cum < 0 and cum_gex > 0 and flip_point is None:
-            flip_point = info.strike
-        # pylint: enable=chained-comparison
-            flip_point = info.strike
+        if flip_point is None:
+            if prev_cum > 0 and cum_gex < 0:
+                flip_point = info.strike
+            elif prev_cum < 0 and cum_gex > 0:
+                flip_point = info.strike
 
     result.gamma_flip_point = flip_point
 

@@ -29,17 +29,20 @@ import pandas as pd
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _SKILL_DIR = _SCRIPT_DIR.parent
 sys.path.insert(0, str(_SKILL_DIR))
+sys.path.insert(0, str(_SCRIPT_DIR))
 
 # pylint: disable=import-error,wrong-import-position
 from schemas import Direction, Verdict  # noqa: E402
 
+# Import shared weight configuration
+from weights_config import get_dynamic_weights, Regime
+
 # Import backtest utilities
 from backtest_utils import (  # noqa: E402
-    Benchmark,
     BacktestMetrics,
     BacktestResult,
+    Benchmark,
     TradeSimulation,
-    fetch_benchmark_data,
     fetch_historical_data,
     load_universe_tickers,
 )
@@ -71,7 +74,7 @@ def score_wyckoff(df: pd.DataFrame, idx: int) -> float:
     # Range position: where is price in the 200-bar range?
     rng_high = high.iloc[-200:].max()
     rng_low = low.iloc[-200:].min()
-    if rng_high > rng_low:
+    if pd.notna(rng_high) and pd.notna(rng_low) and rng_high > rng_low:
         range_pos = (close.iloc[-1] - rng_low) / (rng_high - rng_low)
         # Accumulation zone (bottom 30%) + bonus
         if range_pos < 0.30:
@@ -103,9 +106,9 @@ def score_wyckoff(df: pd.DataFrame, idx: int) -> float:
     if len(volume) >= 50:
         vol_20_recent = volume.iloc[-20:].mean()
         vol_20_prior = volume.iloc[-40:-20].mean()
-        if vol_20_prior > 0 and vol_20_recent < vol_20_prior * 0.85:
+        if pd.notna(vol_20_prior) and pd.notna(vol_20_recent) and vol_20_prior > 0 and vol_20_recent < vol_20_prior * 0.85:
             score += 10  # Declining volume = accumulation
-        elif vol_20_prior > 0 and vol_20_recent > vol_20_prior * 1.15:
+        elif pd.notna(vol_20_prior) and pd.notna(vol_20_recent) and vol_20_prior > 0 and vol_20_recent > vol_20_prior * 1.15:
             score -= 10  # Rising volume in distribution
 
     # Spring detection (simple): break below 20-low then recover
@@ -135,7 +138,7 @@ def score_volume_profile(df: pd.DataFrame, idx: int) -> float:
     window = min(90, len(hist))
     recent = hist.iloc[-window:]
     # Group by price rounded to 2 decimals to find VPOC
-    price_bins = (recent["Close"] * 100).astype(int)
+    price_bins = (recent["Close"] * 100).dropna().astype(int)
     vol_by_price = recent.groupby(price_bins)["Volume"].sum()
     if not vol_by_price.empty:
         vpoc_bin = vol_by_price.idxmax()
@@ -153,7 +156,7 @@ def score_volume_profile(df: pd.DataFrame, idx: int) -> float:
         if vol_ratio < 0.7:
             score -= 10  # Low volume = low conviction
         elif vol_ratio > 1.5:
-            if close.iloc[-1] > close.iloc[-2] if len(close) >= 2 else False:
+            if len(close) >= 2 and close.iloc[-1] > close.iloc[-2]:
                 score += 10  # High vol up = bullish
             else:
                 score -= 10  # High vol down = bearish
@@ -309,31 +312,17 @@ def score_competitive(info: dict) -> float:
 
 
 def compute_composite(ticker: str, df: pd.DataFrame, idx: int,
-                      info: dict, is_crypto: bool = False) -> dict:
+                      info: dict, is_crypto: bool = False,
+                      regime: Regime = Regime.UNKNOWN) -> dict:
     """Compute composite score for a single backtest date."""
-    weights = {
-        "wyckoff": 0.15,
-        "volume_profile": 0.20,
-        "price_action": 0.20,
-        "sentiment": 0.15,   # Placeholder
-        "fundamentals": 0.20 if not is_crypto else 0.10,
-        "competitive": 0.10 if not is_crypto else 0.05,
-    }
-
-    if is_crypto:
-        # Shift weights: crypto layer replaces fundamentals weight
-        weights["crypto"] = 0.35
-        weights["fundamentals"] = 0.10
-        weights["competitive"] = 0.05
-        # Normalize
-        total = sum(weights.values())
-        weights = {k: v / total for k, v in weights.items()}
+    weights = get_dynamic_weights(regime, is_crypto)
 
     wyckoff = score_wyckoff(df, idx)
     volprof = score_volume_profile(df, idx)
     pa = score_price_action(df, idx)
     fundamentals = score_fundamentals(info) if not is_crypto else 50.0
     competitive = score_competitive(info) if not is_crypto else 50.0
+    crypto_layer = 50.0 if is_crypto else 0.0  # Placeholder
 
     # Sentiment: placeholder 50 (no historical sentiment data available)
     sentiment = 50.0
@@ -343,8 +332,9 @@ def compute_composite(ticker: str, df: pd.DataFrame, idx: int,
         + volprof * weights["volume_profile"]
         + pa * weights["price_action"]
         + sentiment * weights["sentiment"]
-        + fundamentals * weights["fundamentals"]
-        + competitive * weights["competitive"]
+        + fundamentals * weights.get("fundamentals", 0)
+        + competitive * weights.get("competitive", 0)
+        + crypto_layer * weights.get("crypto_layer", 0)
     )
 
     # Map to verdict
@@ -509,16 +499,34 @@ def compare_to_benchmark(
     results: list[BacktestResult],
     tickers: list[str],
     lookback_days: int,
+    horizon_days: int = 30,
 ) -> dict:
-    """Compare strategy returns against buy & hold benchmark for each ticker."""
+    """Compare strategy returns against rolling buy & hold benchmark.
+
+    Uses rolling horizon-day windows for an apples-to-apples comparison
+    instead of comparing short-term trades against a full-period buy & hold.
+    """
     bnh_returns = []
     for ticker in tickers:
         try:
-            benchmark = fetch_benchmark_data(ticker, lookback_days)
-            if benchmark == Benchmark.ZERO:
+            df, _ = fetch_historical_data(ticker, lookback_days)
+            if df.empty or len(df) < horizon_days + 5:
+                bnh_returns.append(Benchmark.ZERO)
                 continue
-            bnh_returns.append(benchmark)
+            closes = df["Close"].values
+            rolling_returns = []
+            for i in range(0, len(closes) - horizon_days, 7):  # step = 7 like backtest
+                entry_p = float(closes[i])
+                exit_p = float(closes[i + horizon_days])
+                if entry_p > 0:
+                    rolling_returns.append((exit_p / entry_p - 1) * 100)
+            if rolling_returns:
+                avg_bnh = sum(rolling_returns) / len(rolling_returns)
+                bnh_returns.append(Benchmark(round(avg_bnh, 2)))
+            else:
+                bnh_returns.append(Benchmark.ZERO)
         except Exception:  # pylint: disable=broad-exception-caught
+            bnh_returns.append(Benchmark.ZERO)
             continue
 
     # Aggregate all strategy trades
@@ -537,6 +545,7 @@ def compare_to_benchmark(
         "benchmark_avg_return": round(bnh_avg, 2),
         "alpha": round(strat_avg - bnh_avg, 2),
         "benchmark_samples": len(bnh_returns),
+        "benchmark_method": f"rolling {horizon_days}-day windows (step=7)",
     }
 
 
@@ -602,13 +611,18 @@ def main() -> None:
     parser.add_argument("--tickers", type=str, help="Comma-separated tickers")
     parser.add_argument("--crypto", action="store_true", help="Treat as crypto")
     parser.add_argument("--universe-file", type=str, help="CSV file with tickers")
-    parser.add_argument("--lookback", type=int, default=252, help="Lookback days")
-    parser.add_argument("--step", type=int, default=7, help="Step interval in days")
-    parser.add_argument("--horizon", type=int, default=30, help="Hold horizon in days")
-    parser.add_argument("--min-score", type=float, default=50.0, help="Minimum score to trade")
+    parser.add_argument("--lookback", type=int, default=252, help="Lookback days (min 20)")
+    parser.add_argument("--step", type=int, default=7, help="Trading step days")
+    parser.add_argument("--horizon", type=int, default=30, help="Holding period days")
+    parser.add_argument("--min-score", type=int, default=60, help="Minimum score to trade")
+    parser.add_argument("--top", type=int, default=0, help="Only top N tickers")
     parser.add_argument("--json", action="store_true", help="Output JSON")
-    parser.add_argument("--verbose", action="store_true", default=True)
+    parser.add_argument("--crypto", action="store_true", help="Crypto mode")
     args = parser.parse_args()
+
+    if args.lookback < 20:
+        print("Error: --lookback must be at least 20", file=sys.stderr)
+        sys.exit(1)
 
     # Resolve tickers
     tickers: list[str] = []
@@ -628,7 +642,7 @@ def main() -> None:
         args.min_score, args.crypto,
     )
 
-    benchmark = compare_to_benchmark(results, tickers, args.lookback)
+    benchmark = compare_to_benchmark(results, tickers, args.lookback, args.horizon)
 
     if args.json:
         output = {

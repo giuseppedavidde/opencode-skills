@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -125,8 +126,15 @@ def compute_hit_rate(trades: list[dict]) -> dict[str, Any]:
     }
 
 
-def compute_sharpe_like(trades: list[dict]) -> Optional[float]:
-    """Compute a Sharpe-like ratio from trade PnLs (no risk-free rate)."""
+def compute_sharpe_like(trades: list[dict], annualize: bool = True) -> Optional[dict]:
+    """Compute a Sharpe-like ratio from trade PnLs.
+
+    The core ratio is mean / std of trade PnLs.
+    If annualize=True (default) and trades span > 0 days, multiplies by
+    sqrt(trades_per_year) for a Sharpe-like annualized metric.
+
+    Returns dict with 'ratio' and metadata, or None if insufficient data.
+    """
     closed = [t for t in trades if not t.get("is_open", True) and t.get("pnl_pct") is not None]
     pnls = [t["pnl_pct"] for t in closed]
 
@@ -139,7 +147,36 @@ def compute_sharpe_like(trades: list[dict]) -> Optional[float]:
     if variance <= 0:
         return None
 
-    return round(mean_ / (variance ** 0.5), 3)
+    raw_sharpe = mean_ / (variance ** 0.5)
+    result = {
+        "raw_ratio": round(raw_sharpe, 3),
+        "annualized": False,
+    }
+
+    if annualize:
+        # Estimate trades per year from date range
+        dates = sorted(
+            t.get("exit_date", t.get("entry_date", ""))
+            for t in closed if t.get("exit_date") or t.get("entry_date")
+        )
+        if len(dates) >= 2:
+            try:
+                d0 = datetime.fromisoformat(dates[0].replace("Z", "+00:00"))
+                d1 = datetime.fromisoformat(dates[-1].replace("Z", "+00:00"))
+                span_days = (d1 - d0).days
+                if span_days > 0:
+                    trades_per_year = len(pnls) / span_days * 365
+                    result["ratio"] = round(raw_sharpe * math.sqrt(trades_per_year), 3)
+                    result["annualized"] = True
+                    result["trades_per_year"] = round(trades_per_year, 1)
+                else:
+                    result["ratio"] = result["raw_ratio"]
+            except (ValueError, TypeError):
+                result["ratio"] = result["raw_ratio"]
+        else:
+            result["ratio"] = result["raw_ratio"]
+
+    return result
 
 
 def compute_drawdown(trades: list[dict]) -> dict:
@@ -304,8 +341,13 @@ def format_report(report: dict) -> str:
         lines.append(f"- Avg PnL: {overall['avg_pnl']:+.2f}%")
         lines.append(f"- Best: {overall['best']:+.2f}% | Worst: {overall['worst']:+.2f}%")
 
-        if report.get("sharpe_like_ratio") is not None:
-            lines.append(f"- Sharpe-like ratio: {report['sharpe_like_ratio']}")
+        sharpe = report.get("sharpe_like_ratio")
+        if sharpe is not None:
+            ratio = sharpe.get("ratio", sharpe.get("raw_ratio"))
+            if sharpe.get("annualized"):
+                lines.append(f"- Sharpe-like ratio: {ratio:.3f} (annualized, {sharpe.get('trades_per_year', 0):.0f} trades/yr)")
+            else:
+                lines.append(f"- Sharpe-like ratio: {ratio:.3f} (raw)")
 
         dd = report.get("drawdown", {})
         if dd.get("max_drawdown_pct", 0) > 0:
