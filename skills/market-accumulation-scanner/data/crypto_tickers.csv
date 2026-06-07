@@ -1,0 +1,51 @@
+coin_id,symbol,name
+bitcoin,BTC,Bitcoin
+ethereum,ETH,Ethereum
+tether,USDT,Tether
+binancecoin,BNB,BNB
+solana,SOL,Solana
+ripple,XRP,XRP
+usd-coin,USDC,USDC
+staked-ether,STETH,stETH
+cardano,ADA,Cardano
+avalanche-2,AVAX,Avalanche
+dogecoin,DOGE,Dogecoin
+tron,TRX,TRON
+chainlink,LINK,Chainlink
+polkadot,DOT,Polkadot
+wrapped-bitcoin,WBTC,WBTC
+matic-network,MATIC,Polygon
+shiba-inu,SHIB,Shiba Inu
+uniswap,UNI,Uniswap
+litecoin,LTC,Litecoin
+near-protocol,NEAR,NEAR Protocol
+ethereum-classic,ETC,Ethereum Classic
+stellar,XLM,Stellar
+cosmos,ATOM,Cosmos
+monero,XMR,Monero
+bitcoin-cash,BCH,Bitcoin Cash
+aptos,APT,Aptos
+arbitrum,ARB,Arbitrum
+optimism,OP,Optimism
+sui,SUI,Sui
+maker,MKR,Maker
+aave,AAVE,Aave
+the-graph,GRT,The Graph
+tezos,XTZ,Tezos
+algorand,ALGO,Algorand
+flow,FLOW,Flow
+vechain,VET,VeChain
+helium,HNT,Helium
+theta,THETA,Theta
+axie-infinity,AXS,Axie Infinity
+decentraland,MANA,Decentraland
+the-sandbox,SAND,The Sandbox
+apecoin,APE,ApeCoin
+filecoin,FIL,Filecoin
+quant,QNT,Quant
+eos,EOS,EOS
+neo,NEO,NEO
+iota,IOTA,IOTA
+zcash,ZEC,Zcash
+dash,DASH,Dash
+fantom,FTM,Fantom

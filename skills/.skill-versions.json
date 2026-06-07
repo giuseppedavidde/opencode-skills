@@ -1,0 +1,251 @@
+{
+  "async-python-patterns": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "unknown",
+    "depends_on": {},
+    "description": "Comprehensive guidance for implementing asynchronous Python applications using asyncio, concurrent programming patterns, and async/await for building high-performance, non-blocking systems."
+  },
+  "book-to-skill-bridge": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "Book-to-Skill Bridge v2 — Parallel Batch Edition by {AUTHOR}",
+    "depends_on": {
+      "book-to-skill": "1.0"
+    },
+    "description": "Auto-generates OpenCode skills from books/documents. Wraps book-to-skill with zero interactive prompts: auto-detects book type (technical/text), auto-extracts title/author, generates skill files in ~/"
+  },
+  "book-to-skill": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "Book-to-Skill Converter by <Author(s)>",
+    "depends_on": {},
+    "description": "Converts books and documents (PDF, EPUB, DOCX, HTML, Markdown, plain text, RTF, MOBI/AZW with Calibre) into structured agent skills, extracting frameworks, mental models, principles, techniques, and a"
+  },
+  "crypto-crash-course": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "The Crypto Crash Course by Frank Richmond",
+    "depends_on": {},
+    "description": "Knowledge base from 'The Crypto Crash Course' by Frank Richmond. Beginner-friendly cryptocurrency fundamentals, blockchain, Bitcoin, wallets, exchanges, and secure investing frameworks."
+  },
+  "crypto-technical-analysis": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "unknown",
+    "depends_on": {},
+    "description": "Knowledge base from 'Crypto Technical Analysis' by Alan John & Jon Law. Technical analysis frameworks adapted for cryptocurrency markets with on-chain and 24/7 volatility considerations."
+  },
+  "graphify": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "unknown",
+    "depends_on": {},
+    "description": "any input (code, docs, papers, images) → knowledge graph → clustered communities → HTML + JSON + audit report. Use when user asks any question about a codebase, project content, architecture, or file "
+  },
+  "italy-tax-declaration-instructions": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "Italy Tax Declaration Instructions 2026 by Agenzia delle Entrate",
+    "depends_on": {},
+    "description": "Knowledge base from 'Redditi Derivati - Istruzioni 2026' by Agenzia delle Entrate. Italian tax rules for financial income, capital gains, derivatives, foreign investments, and tax return instructions "
+  },
+  "karpathy-llm-wiki": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "unknown",
+    "depends_on": {},
+    "description": "Use when building or maintaining a personal LLM-powered knowledge base. Triggers: ingesting sources into a wiki, querying wiki knowledge, linting wiki quality, 'add to wiki', 'what do I know about', o"
+  },
+  "liotta-smartfood": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "Le Ricette Smartfood by Eliana Liotta con Lucilla Titta",
+    "depends_on": {},
+    "description": "Knowledge base from \\\"Le Ricette Smartfood\\\" by Eliana Liotta & Lucilla Titta. Use when applying nutrigenomics-based nutrition, Smartfood recipes, or fasting-mimicking protocols."
+  },
+  "market-accumulation-scanner": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "unknown",
+    "depends_on": {
+      "stock-crypto-analysis": "1.0",
+      "market-data-fetch": "1.0",
+      "wyckoff-2-0": "1.0",
+      "volume-profile": "1.0",
+      "volume-price-analysis": "1.0",
+      "price-action-volman": "1.0",
+      "trades-about-to-happen": "1.0",
+      "trading-against-the-crowd": "1.0",
+      "wallstreetbets-pump-detect": "1.0"
+    },
+    "description": ">"
+  },
+  "market-data-fetch": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "unknown",
+    "depends_on": {},
+    "description": "Standardized templates for fetching stock, ETF, and crypto market data using yfinance, CoinGecko, and Bitpanda. Triggers: 'fetch stock data', 'get crypto prices', 'market data', 'load portfolio', 'yfi"
+  },
+  "opencode-skills-installer": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "unknown",
+    "depends_on": {},
+    "description": ">"
+  },
+  "options-analysis": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "unknown",
+    "depends_on": {
+      "market-data-fetch": "1.0"
+    },
+    "description": "Analyze multi-leg options positions with Greeks, payoff scenarios, and recommendations. Triggers: 'analyze options', 'cosa fare con le opzioni', 'options position', 'opzioni', 'position analysis', 'Gr"
+  },
+  "options-course-workbook": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "The Options Course Workbook by George A. Fontanills",
+    "depends_on": {},
+    "description": "Knowledge base from 'The Options Course Workbook' by George A. Fontanills. Options education frameworks with exercises and practical applications."
+  },
+  "options-crash-course": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "unknown",
+    "depends_on": {},
+    "description": "Knowledge base from 'Options Trading Crash Course' by Mark Elder and Brian Douglas. Beginner-friendly options trading frameworks and strategies."
+  },
+  "options-playbook": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "The Options Playbook, Expanded 2nd Edition by Brian Overby",
+    "depends_on": {},
+    "description": "Knowledge base from 'The Options Playbook' by Brian Overby. 40+ option strategies reference for all market outlooks."
+  },
+  "options-strategy-suggestions": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "unknown",
+    "depends_on": {
+      "stock-crypto-analysis": "1.0",
+      "options-playbook": "1.0",
+      "options-course-workbook": "1.0",
+      "options-crash-course": "1.0"
+    },
+    "description": ">"
+  },
+  "pdf-ingest": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "unknown",
+    "depends_on": {},
+    "description": ">"
+  },
+  "price-action-volman": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "Understanding Price Action: Practical Analysis of the 5-minute time frame by Bob Volman",
+    "depends_on": {},
+    "description": "Knowledge base from 'Understanding Price Action' by Bob Volman. 5-minute timeframe price action frameworks for scalping and day trading."
+  },
+  "python-pydantic": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "unknown",
+    "depends_on": {},
+    "description": "Python coding standards with Pydantic data models, type hints, and pylint compliance"
+  },
+  "python-venv": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "unknown",
+    "depends_on": {},
+    "description": "CRITICAL: Always use Python virtual environments. Never install packages with pip directly on the system Python. Every Python project must use a venv."
+  },
+  "smart-dispatcher": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "unknown",
+    "depends_on": {},
+    "description": ">"
+  },
+  "stock-crypto-analysis": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "unknown",
+    "depends_on": {
+      "wyckoff-2-0": "1.0",
+      "volume-profile": "1.0",
+      "volume-price-analysis": "1.0",
+      "price-action-volman": "1.0",
+      "trades-about-to-happen": "1.0",
+      "trading-against-the-crowd": "1.0",
+      "market-data-fetch": "1.0",
+      "crypto-technical-analysis": "1.0",
+      "crypto-crash-course": "1.0"
+    },
+    "description": ">"
+  },
+  "subatomic-orchestrator": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "unknown",
+    "depends_on": {},
+    "description": ">"
+  },
+  "system-info": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "unknown",
+    "depends_on": {},
+    "description": ">"
+  },
+  "trades-about-to-happen": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "Trades About to Happen by David Weis",
+    "depends_on": {},
+    "description": "Knowledge base from 'Trades About to Happen' by David Weis. Tape reading, clusters, displacement, and order flow frameworks for anticipating institutional moves."
+  },
+  "trading-against-the-crowd": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "Trading Against the Crowd: Profiting from Fear and Greed by John F. Summa",
+    "depends_on": {},
+    "description": "Knowledge base from 'Trading Against the Crowd' by John F. Summa. Contrarian trading frameworks for options, futures, and stock markets using sentiment analysis."
+  },
+  "volume-price-analysis": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "A Complete Guide To Volume Price Analysis by Anna Coulling",
+    "depends_on": {},
+    "description": "Knowledge base from 'A Complete Guide To Volume Price Analysis' by Anna Coulling. Volume-price relationship frameworks for market analysis."
+  },
+  "volume-profile": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "VOLUME PROFILE: The insiders guide to trading by Trader Dale",
+    "depends_on": {},
+    "description": "Knowledge base from 'VOLUME PROFILE' by Trader Dale. Volume Profile frameworks for institutional trading, value area analysis, and market structure."
+  },
+  "wallstreetbets-pump-detect": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "unknown",
+    "depends_on": {
+      "stock-crypto-analysis": "1.0",
+      "options-strategy-suggestions": "1.0"
+    },
+    "description": ">"
+  },
+  "wyckoff-2-0": {
+    "version": "1.0",
+    "generated": "unknown",
+    "source": "Wyckoff 2.0: Structures, Volume Profile and Order Flow by Rubén Villahermosa Chaves",
+    "depends_on": {},
+    "description": "Knowledge base from 'Wyckoff 2.0' by Rubén Villahermosa Chaves. Wyckoff Method frameworks for volume profile, order flow, and market structure analysis."
+  }
+}

@@ -46,6 +46,8 @@ Triggers only on the first Ingest. Check whether `raw/` and `wiki/` exist. Creat
 - `wiki/` directory (with `.gitkeep`)
 - `wiki/index.md` — heading `# Knowledge Base Index`, empty body
 - `wiki/log.md` — heading `# Wiki Log`, empty body
+- Initialize a git repository in `wiki/` if it doesn't exist: `cd wiki/ && git init && git add -A && git commit -m "Initial wiki state"`
+- If `wiki/` already exists but has no `.git/` directory, initialize it non-destructively: `cd wiki/ && git init && git add -A && git commit -m "Initial wiki state"`
 
 If Query or Lint cannot find the wiki structure, tell the user: "Run an ingest first to initialize the wiki." Do not auto-create.
 
@@ -94,6 +96,8 @@ After the primary article, check for ripple effects:
 3. Update every article whose content is materially affected. Each updated file gets its Updated date refreshed.
 
 Archive pages are never cascade-updated (they are point-in-time snapshots).
+
+After cascade updates complete, auto-commit: `cd wiki/ && git add -A && git commit -m "ingest: <article title>"`
 
 ## Hybrid Karpathy + Graphify
 
@@ -145,6 +149,8 @@ Append to `wiki/log.md`:
 
 Omit `- Updated:` lines when no cascade updates occur.
 
+After updating `wiki/log.md`, commit: `cd wiki/ && git add -A && git commit -m "ingest: <primary article title>"`
+
 ---
 
 ## Query
@@ -176,6 +182,16 @@ When the user explicitly asks to archive or save the answer to the wiki:
    ```
    ## [YYYY-MM-DD] query | Archived: <page title>
    ```
+5. Commit the archive: `cd wiki/ && git add -A && git commit -m "archive: <page title>"`
+
+### Wiki History
+Triggers: "what changed in the wiki this week?", "wiki history", "recent changes"
+
+Show recent git log for the wiki:
+```bash
+cd wiki/ && git log --oneline --since="1 week ago"
+```
+Or for a specific timeframe: `git log --oneline --since="YYYY-MM-DD"`
 
 ---
 
@@ -224,6 +240,20 @@ Append to `wiki/log.md`:
 ```
 ## [YYYY-MM-DD] lint | <N> issues found, <M> auto-fixed
 ```
+
+After appending to `wiki/log.md`, commit: `cd wiki/ && git add -A && git commit -m "lint: auto-fixed M issues"`
+
+---
+
+## Git Workflow
+
+The wiki uses git for version control. Every modification (ingest, archive, lint, cascade-update)
+is automatically committed with a descriptive message. This enables:
+- Rollback: `git log --oneline` to find a commit, `git checkout <hash> -- <file>` to restore
+- Diff: `git diff HEAD~1` to see what changed in the last operation
+- Time travel: `git log --since="2026-01-01"` to see all changes in a period
+
+The git history is append-only. Never rewrite history (no `git rebase` or `git commit --amend`).
 
 ---
 

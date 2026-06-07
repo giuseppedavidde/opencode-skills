@@ -1,20 +1,21 @@
 """
-Sentiment Engine — 8-Dimension Scoring Module
+Sentiment Engine — 9-Dimension Scoring Module
 ===============================================
-Computes a 0-100 sentiment score from 8 independent sub-dimensions.
+Computes a 0-100 sentiment score from 9 independent sub-dimensions.
 Designed to be called in parallel (each ticker independent).
 
 Sub-dimensions:
-  1. Short Interest (SI% + DTC, dynamic thresholds by market cap)
-  2. Options Sentiment (Put/Call volume, IV skew)
-  3. Insider Trading (recent buy/sell transactions)
-  4. Retail Sentiment (WSB heuristic: volume, beta, analyst gap)
-  5. Institutional (holdings + buyback)
-  6. Relative Momentum (vs SPY on 1mo/3mo/6mo)
-  7. Web News Sentiment (Finviz headlines polarity)
-  8. Social Media Sentiment (WSB hotlist cross-reference)
+  1. Short Interest (SI% + DTC from yfinance info, dynamic thresholds by market cap)
+  2. Options Sentiment (Put/Call volume, IV skew from option_chain)
+  3. Insider Trading (recent buy/sell transactions) [TODO: Phase 2 refinement]
+  4. Retail Sentiment (WSB heuristic: volume, beta, analyst gap) [TODO: Phase 4]
+  5. Institutional (holdings + buyback, institutional ownership from yfinance)
+  6. Relative Momentum (vs SPY on 1mo/3mo/6mo via 20/50/200-day price data)
+  7. Web News Sentiment (fallback chain: Finviz → Yahoo RSS → Google News RSS → MarketBeat → generic)
+  8. Social Media Sentiment (WSB hotlist cross-reference) [TODO: Phase 4]
+  9. Earnings Quality (earnings surprise trend) [TODO: earnings surprise trend]
 
-Output: (score: int, detail_str: str, sub_dimensions: dict)
+Output: (score: int, detail_str: str, sub_dimensions: dict with all 9 sub-scores)
 """
 
 import logging
@@ -30,18 +31,18 @@ from bs4 import BeautifulSoup
 log = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────
-# Weights for the 8 sub-dimensions
+# Weights for the 9 sub-dimensions
 # ─────────────────────────────────────────────
 WEIGHTS = {
     "short_interest": 0.12,
-    "options": 0.12,
-    "insider": 0.12,
-    "retail": 0.08,
+    "options_sentiment": 0.12,
+    "insider_trading": 0.12,
+    "retail_sentiment": 0.08,
     "institutional": 0.12,
     "momentum": 0.08,
     "web_news": 0.08,
     "social_media": 0.08,
-    "earnings_quality": 0.20,  # nuova: earnings surprise trend (Sloan 1996)
+    "earnings_quality": 0.20,
 }
 
 
@@ -54,7 +55,7 @@ def compute_sentiment(
     fetch_news: bool = False,
 ) -> tuple[int, str, dict]:
     """
-    Main entry point — runs all 8 sub-dimensions and aggregates with confidence weighting.
+    Main entry point — runs all 9 sub-dimensions and aggregates with confidence weighting.
 
     Args:
         ticker: yfinance Ticker object (used for options chain, insider txns)
@@ -72,13 +73,13 @@ def compute_sentiment(
     sub_details: dict[str, str] = {}
 
     scores["short_interest"], sub_details["short_interest"] = _short_interest(info)
-    scores["options"], sub_details["options"] = _options_sentiment(ticker, info)
-    scores["insider"], sub_details["insider"] = _insider_sentiment(ticker)
-    scores["retail"], sub_details["retail"] = _retail_sentiment(info)
+    scores["options_sentiment"], sub_details["options_sentiment"] = _options_sentiment(ticker, info)
+    scores["insider_trading"], sub_details["insider_trading"] = _insider_sentiment(ticker)
+    scores["retail_sentiment"], sub_details["retail_sentiment"] = _retail_sentiment(info)
     scores["institutional"], sub_details["institutional"] = _institutional(info)
     scores["momentum"], sub_details["momentum"] = _momentum(hist, spx_hist)
 
-    # New sub-dimensions: Web News + Social Media
+    # Web News (fallback chain) + Social Media + Earnings Quality
     symbol = info.get("symbol", ticker.ticker if hasattr(ticker, "ticker") else "?")
     scores["web_news"], sub_details["web_news"] = _web_news_sentiment(symbol, fetch=fetch_news)
     scores["social_media"], sub_details["social_media"] = _social_media_sentiment(symbol, wsb_hotlist=wsb_hotlist)
@@ -556,22 +557,85 @@ def _momentum(hist: pd.DataFrame, spx_hist: pd.DataFrame | None = None) -> tuple
 
 
 # ─────────────────────────────────────────────
-# 7. Web News Sentiment (Finviz headlines)
+# 7. Web News Sentiment (fallback chain)
 # ─────────────────────────────────────────────
-def _web_news_sentiment(symbol: str, fetch: bool = False) -> tuple[int | None, str]:
-    """
-    Fetch headlines from Finviz and score polarity.
 
-    Args:
-        symbol: Ticker symbol (e.g. "AAPL")
-        fetch: If False, skip API call and return None/neutral
+# Rate-limiting: track last request time per domain
+_LAST_REQUEST: dict[str, float] = {}
+_RATE_DELAY = 1.0  # seconds between requests to same domain
 
-    Returns:
-        (score 0-100, detail string)
-    """
-    if not fetch:
-        return None, "Web news skipped (fetch_news=False)"
 
+def _rate_limit(domain: str) -> None:
+    """Enforce min delay between requests to the same domain."""
+    now = time.time()
+    last = _LAST_REQUEST.get(domain, 0)
+    elapsed = now - last
+    if elapsed < _RATE_DELAY:
+        time.sleep(_RATE_DELAY - elapsed)
+    _LAST_REQUEST[domain] = time.time()
+
+
+# Shared keyword sets for headline polarity scoring
+_BULLISH_KEYWORDS = {
+    "upgrade", "buy", "bullish", "outperform", "beat", "raised", "positive",
+    "growth", "strong", "record", "surge", "rally", "gain", "soar", "jump",
+    "launch", "approve", "partner", "contract", "expansion", "dividend",
+    "buyback", "profit", "revenue", "guidance", "momentum", "breakout",
+    "accumulate", "overweight", "target", "up", "green", "optimistic",
+    "leap", "boost", "accelerate", "innovation", "leadership",
+}
+
+_BEARISH_KEYWORDS = {
+    "downgrade", "sell", "bearish", "underperform", "miss", "cut", "negative",
+    "decline", "weak", "loss", "drop", "fall", "plunge", "crash", "slump",
+    "lawsuit", "investigation", "SEC", "fine", "penalty", "regulation",
+    "warning", "caution", "risk", "uncertainty", "volatile", "downturn",
+    "recession", "layoff", "restructuring", "debt", "default", "bankruptcy",
+    "investigation", "probe", "charge", "write-down", "impairment",
+    "suspension", "delay", "setback", "disappoint", "below estimate",
+}
+
+
+def _score_headlines(headlines: list[str]) -> tuple[int, str]:
+    """Score a list of headline strings by keyword polarity."""
+    if not headlines:
+        return 50, "No headlines found"
+
+    bullish_count = 0
+    bearish_count = 0
+
+    for h in headlines:
+        h_lower = h.lower()
+        h_bullish = sum(1 for kw in _BULLISH_KEYWORDS if kw in h_lower)
+        h_bearish = sum(1 for kw in _BEARISH_KEYWORDS if kw in h_lower)
+
+        if h_bullish > h_bearish:
+            bullish_count += 1
+        elif h_bearish > h_bullish:
+            bearish_count += 1
+
+    net = bullish_count - bearish_count
+    total = len(headlines)
+
+    if total >= 4 and net >= 3:
+        return 90, f"4+ bullish headlines ({bullish_count}B/{bearish_count}S/{total}T) (+40)"
+    if net >= 2:
+        return 70, f"Mostly bullish ({bullish_count}B/{bearish_count}S/{total}T) (+20)"
+    if net >= 1:
+        return 60, f"Slightly bullish ({bullish_count}B/{bearish_count}S/{total}T) (+10)"
+    if net == 0 and total > 0:
+        return 50, f"Neutral/mixed ({bullish_count}B/{bearish_count}S/{total}T) (+0)"
+    if net <= -2:
+        return 30, f"Mostly bearish ({bullish_count}B/{bearish_count}S/{total}T) (-20)"
+    if net <= -1:
+        return 40, f"Slightly bearish ({bullish_count}B/{bearish_count}S/{total}T) (-10)"
+
+    return 50, f"No clear polarity ({bullish_count}B/{bearish_count}S/{total}T) (+0)"
+
+
+def _fetch_finviz_headlines(symbol: str) -> list[str] | None:
+    """Try Finviz as primary news source."""
+    _rate_limit("finviz.com")
     url = f"https://finviz.com/quote.ashx?t={symbol}"
     headers = {
         "User-Agent": (
@@ -586,15 +650,15 @@ def _web_news_sentiment(symbol: str, fetch: bool = False) -> tuple[int | None, s
     try:
         resp = requests.get(url, headers=headers, timeout=15)
         if resp.status_code != 200:
-            return None, f"Finviz HTTP {resp.status_code}"
+            log.warning("Finviz HTTP %s for %s", resp.status_code, symbol)
+            return None
     except requests.RequestException as e:
-        return None, f"Finviz error: {e}"
+        log.warning("Finviz error for %s: %s", symbol, e)
+        return None
 
-    # Parse news table from Finviz HTML
     soup = BeautifulSoup(resp.text, "html.parser")
     headlines = []
 
-    # Finviz news links: look for <a class="tab-link-news"> inside the news table
     for a_tag in soup.find_all("a", class_=re.compile(r"tab-link-news", re.I)):
         text = a_tag.get_text(strip=True)
         if text and len(text) > 10:
@@ -602,7 +666,6 @@ def _web_news_sentiment(symbol: str, fetch: bool = False) -> tuple[int | None, s
         if len(headlines) >= 10:
             break
 
-    # Fallback: find any links with "news" in the href inside the fullview-news div
     if not headlines:
         news_div = soup.find("div", id=re.compile(r"news", re.I))
         if not news_div:
@@ -615,75 +678,158 @@ def _web_news_sentiment(symbol: str, fetch: bool = False) -> tuple[int | None, s
                 if len(headlines) >= 10:
                     break
 
-    if not headlines:
-        return 50, "No Finviz headlines found"
+    return headlines if headlines else None
 
-    # Score headlines by keyword polarity
-    bullish_keywords = {
-        "upgrade", "buy", "bullish", "outperform", "beat", "raised", "positive",
-        "growth", "strong", "record", "surge", "rally", "gain", "soar", "jump",
-        "launch", "approve", "partner", "contract", "expansion", "dividend",
-        "buyback", "profit", "revenue", "guidance", "momentum", "breakout",
-        "accumulate", "overweight", "target", "up", "green", "optimistic",
-        "leap", "boost", "accelerate", "innovation", "leadership",
-    }
-    bearish_keywords = {
-    "downgrade", "sell", "bearish", "underperform", "miss", "cut", "negative",
-        "decline", "weak", "loss", "drop", "fall", "plunge", "crash", "slump",
-        "lawsuit", "investigation", "SEC", "fine", "penalty", "regulation",
-        "warning", "caution", "risk", "uncertainty", "volatile", "downturn",
-        "recession", "layoff", "restructuring", "debt", "default", "bankruptcy",
-        "investigation", "probe", "charge", "write-down", "impairment",
-        "suspension", "delay", "setback", "disappoint", "below estimate",
+
+def _fetch_yahoo_rss_headlines(symbol: str) -> list[str] | None:
+    """Try Yahoo Finance RSS as fallback source #2."""
+    _rate_limit("finance.yahoo.com")
+    url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={symbol}&region=US&lang=en-US"
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/125.0.0.0 Safari/537.36"
+        ),
     }
 
-    bullish_count = 0
-    bearish_count = 0
-    matched: list[str] = []
+    try:
+        resp = requests.get(url, headers=headers, timeout=15)
+        if resp.status_code != 200:
+            log.warning("Yahoo RSS HTTP %s for %s", resp.status_code, symbol)
+            return None
+    except requests.RequestException as e:
+        log.warning("Yahoo RSS error for %s: %s", symbol, e)
+        return None
 
-    for h in headlines:
-        h_lower = h.lower()
-        h_bullish = sum(1 for kw in bullish_keywords if kw in h_lower)
-        h_bearish = sum(1 for kw in bearish_keywords if kw in h_lower)
+    soup = BeautifulSoup(resp.text, "xml")
+    headlines = []
+    for item in soup.find_all("item")[:10]:
+        title_tag = item.find("title")
+        if title_tag:
+            text = title_tag.get_text(strip=True)
+            if text and len(text) > 10:
+                headlines.append(text)
 
-        if h_bullish > h_bearish:
-            bullish_count += 1
-            matched.append(f"BULL: {h[:80]}")
-        elif h_bearish > h_bullish:
-            bearish_count += 1
-            matched.append(f"BEAR: {h[:80]}")
-        else:
-            matched.append(f"NEU:  {h[:80]}")
+    return headlines if headlines else None
 
-    net = bullish_count - bearish_count
-    total = len(headlines)
 
-    score = 50  # base neutral
+def _fetch_google_news_rss_headlines(symbol: str) -> list[str] | None:
+    """Try Google News RSS as fallback source #3."""
+    _rate_limit("news.google.com")
+    url = f"https://news.google.com/rss/search?q={symbol}+stock&hl=en-US&gl=US&ceid=US:en"
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/125.0.0.0 Safari/537.36"
+        ),
+    }
 
-    if total >= 4 and net >= 3:
-        score = 90
-        detail = f"4+ bullish headlines ({bullish_count}B/{bearish_count}S/{total}T) (+40)"
-    elif net >= 2:
-        score = 70
-        detail = f"Mostly bullish ({bullish_count}B/{bearish_count}S/{total}T) (+20)"
-    elif net >= 1:
-        score = 60
-        detail = f"Slightly bullish ({bullish_count}B/{bearish_count}S/{total}T) (+10)"
-    elif net == 0 and total > 0:
-        score = 50
-        detail = f"Neutral/mixed ({bullish_count}B/{bearish_count}S/{total}T) (+0)"
-    elif net <= -2:
-        score = 30
-        detail = f"Mostly bearish ({bullish_count}B/{bearish_count}S/{total}T) (-20)"
-    elif net <= -1:
-        score = 40
-        detail = f"Slightly bearish ({bullish_count}B/{bearish_count}S/{total}T) (-10)"
-    else:
-        score = 50
-        detail = f"No clear polarity ({bullish_count}B/{bearish_count}S/{total}T) (+0)"
+    try:
+        resp = requests.get(url, headers=headers, timeout=15)
+        if resp.status_code != 200:
+            log.warning("Google News RSS HTTP %s for %s", resp.status_code, symbol)
+            return None
+    except requests.RequestException as e:
+        log.warning("Google News RSS error for %s: %s", symbol, e)
+        return None
 
-    score = min(100, max(0, score))
-    return score, detail
+    soup = BeautifulSoup(resp.text, "xml")
+    headlines = []
+    for item in soup.find_all("item")[:10]:
+        title_tag = item.find("title")
+        if title_tag:
+            text = title_tag.get_text(strip=True)
+            if text and len(text) > 10:
+                # Strip " - SourceName" suffix typical in Google News
+                text = text.rsplit(" - ", 1)[0]
+                headlines.append(text)
+
+    return headlines if headlines else None
+
+
+def _fetch_marketbeat_headlines(symbol: str) -> list[str] | None:
+    """Try MarketBeat headlines as fallback source #4."""
+    _rate_limit("www.marketbeat.com")
+    symbol_upper = symbol.upper().replace(".MI", "").replace(".DE", "").replace(".PA", "")
+    url = f"https://www.marketbeat.com/stocks/NYSE/{symbol_upper}/headlines/"
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/125.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+
+    try:
+        resp = requests.get(url, headers=headers, timeout=15)
+        if resp.status_code != 200:
+            log.warning("MarketBeat HTTP %s for %s", resp.status_code, symbol)
+            return None
+    except requests.RequestException as e:
+        log.warning("MarketBeat error for %s: %s", symbol, e)
+        return None
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+    headlines = []
+
+    for a_tag in soup.find_all("a", href=True):
+        text = a_tag.get_text(strip=True)
+        if text and len(text) > 15 and not text.startswith("http"):
+            # Filter out navigation links (short text, nav elements)
+            parent = a_tag.parent
+            if parent and parent.name in ("h2", "h3", "h4", "li", "div"):
+                headlines.append(text)
+        if len(headlines) >= 10:
+            break
+
+    return headlines if headlines else None
+
+
+def _web_news_sentiment(symbol: str, fetch: bool = False) -> tuple[int | None, str]:
+    """
+    Fetch headlines via fallback chain and score polarity.
+
+    Fallback order:
+      1. Finviz (primary)
+      2. Yahoo Finance RSS
+      3. Google News RSS
+      4. MarketBeat headlines
+      5. Generic websearch stub
+
+    Args:
+        symbol: Ticker symbol (e.g. "AAPL")
+        fetch: If False, skip all API calls and return None/neutral
+
+    Returns:
+        (score 0-100, detail string)
+    """
+    if not fetch:
+        return None, "Web news skipped (fetch_news=False)"
+
+    sources = [
+        ("Finviz", _fetch_finviz_headlines),
+        ("Yahoo RSS", _fetch_yahoo_rss_headlines),
+        ("Google News RSS", _fetch_google_news_rss_headlines),
+        ("MarketBeat", _fetch_marketbeat_headlines),
+    ]
+
+    for src_name, fetcher in sources:
+        try:
+            headlines = fetcher(symbol)
+            if headlines:
+                score, detail = _score_headlines(headlines)
+                detail = f"[{src_name}] {detail}"
+                return min(100, max(0, score)), detail
+        except Exception as e:
+            log.warning("%s failed for %s: %s", src_name, symbol, e)
+            continue
+
+    # Fallback #5: generic websearch stub
+    print(f"websearch {symbol} stock news")
+    return 50, "All sources exhausted; websearch stub (neutral 50)"
 
 
 # ─────────────────────────────────────────────
@@ -851,6 +997,65 @@ def _earnings_quality(info: dict, hist: pd.DataFrame) -> tuple[int | None, str]:
 
 
 # ─────────────────────────────────────────────
+# Earnings Proximity Adjustment (Phase 3.4)
+# ─────────────────────────────────────────────
+def earnings_proximity_adjustment(
+    ticker: str,
+    days_to_earnings: int | None,
+    iv_rank: float | None,
+) -> dict:
+    """
+    Adjust option strategy selection based on earnings proximity and IV regime.
+
+    Args:
+        ticker: Ticker symbol
+        days_to_earnings: Days until next earnings report (None if unknown)
+        iv_rank: Implied volatility rank 0-100 (None if unknown)
+
+    Returns:
+        dict with:
+          - strategy_modifier: str describing how to adjust strategy selection
+          - rules: list[str] of specific rules triggered
+    """
+    if days_to_earnings is None:
+        return {
+            "strategy_modifier": "No earnings data; use default strategy selection",
+            "rules": [],
+        }
+
+    rules = []
+    modifier = ""
+
+    if days_to_earnings < 7:
+        if iv_rank is not None and iv_rank > 80:
+            modifier = "Earnings imminent (<7d) with very high IV. SELL PREMIUM."
+            rules.append("Sell premium (IV crush post-earnings expected)")
+        elif iv_rank is not None and iv_rank < 30:
+            modifier = "Earnings imminent (<7d) with low IV. BUY PREMIUM."
+            rules.append("Buy premium (cheap vol, capture earnings move)")
+        elif iv_rank is not None and 30 <= iv_rank <= 80:
+            modifier = "Earnings imminent (<7d) with moderate IV. AVOID OPTIONS."
+            rules.append("Avoid options; use underlying")
+        else:
+            modifier = "Earnings imminent (<7d). IV unknown; AVOID OPTIONS."
+            rules.append("Avoid options; use underlying")
+    elif 7 <= days_to_earnings <= 21:
+        modifier = "Earnings within 3 weeks. PREFER DIRECTIONAL STRATEGIES."
+        rules.append(
+            "Avoid iron condors/butterflies; "
+            "prefer covered calls or cash-secured puts"
+        )
+    elif days_to_earnings > 21:
+        modifier = "Earnings distant. NO RESTRICTIONS."
+        rules.append("No restriction; exit before earnings if profitable")
+
+    return {
+        "strategy_modifier": modifier,
+        "rules": rules,
+    }
+
+
+# ─────────────────────────────────────────────
 # Standalone usage
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
@@ -880,7 +1085,7 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"Error loading WSB hotlist: {e}")
 
-    print(f"\nComputing 8-dimension sentiment for {symbol}...\n")
+    print(f"\nComputing 9-dimension sentiment for {symbol}...\n")
 
     t = yf.Ticker(symbol)
     info = t.info or {}

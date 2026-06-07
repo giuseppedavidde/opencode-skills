@@ -1,5 +1,6 @@
 ---
 name: stock-crypto-analysis
+version: "1.1"
 description: >
   Unified market analysis that produces a single verdict (Long-Term Investment,
   Short-Term Speculation, or Avoid/Wait) by integrating 9 source skills:
@@ -15,11 +16,22 @@ allowed-tools:
   - websearch
   - webfetch
   - task
+  - bash
 argument-hint: [ticker, stock symbol, crypto name, or "what to do with X"]
 orchestrator:
   parallel: true
   split_by: ticker
   chunk_size: 1
+depends_on:
+  wyckoff-2-0: "1.0"
+  volume-profile: "1.0"
+  volume-price-analysis: "1.0"
+  price-action-volman: "1.0"
+  trades-about-to-happen: "1.0"
+  trading-against-the-crowd: "1.0"
+  market-data-fetch: "1.0"
+  crypto-technical-analysis: "1.0"
+  crypto-crash-course: "1.0"
   merge: rank
   merge_key: final_score
   top_n: 3
@@ -50,7 +62,10 @@ This skill loads and integrates:
 
 Every asset is scored across 6 independent dimensions. Each dimension contributes a weighted sub-score (0–100). The final score determines the verdict.
 
-### Weight Table
+### Weight Table (Base — Static)
+
+These are the **base weights**. Phase 0c (Dynamic Weight Rebalancing) adjusts
+them based on detected market regime through `scripts/dynamic_weights.py`.
 
 | # | Dimensione | Peso Stock | Peso Crypto | Skill Sorgente Primaria |
 |---|-----------|-----------|-------------|------------------------|
@@ -689,6 +704,63 @@ Analysis Score: X% | Composite Score: X% | Adaptive Macro x Analysis
 
 ---
 
+## Structured Output Protocol
+
+After producing the markdown verdict, the skill MUST also emit a structured JSON
+object conforming to `UnifiedVerdict` from `schemas.py` (sibling file in this directory).
+This enables downstream skills (`options-strategy-suggestions`, `market-accumulation-scanner`
+chained mode) to consume verdicts programmatically.
+
+**How to emit**: After the final output template, produce:
+```
+## 📋 Structured Data
+```json
+{UnifiedVerdict.model_dump_json()}
+```
+```
+
+The JSON is written to `/tmp/opencode/verdict_{ticker}_{timestamp}.json` and
+can be consumed by `scripts/log_trade.py --verdict-file <path>`.
+
+## Tooling
+
+| Script | Purpose | Usage |
+|--------|---------|-------|
+| `schemas.py` | Pydantic models for inter-skill communication | Import by other skills |
+| `scripts/log_trade.py` | Record entries/exits in trade log | `python3 scripts/log_trade.py new --ticker AAPL --verdict-file <json>` |
+| `scripts/feedback_loop.py` | Analyze trade log performance | `python3 scripts/feedback_loop.py --report report.md` |
+| `scripts/backtest.py` | Historical validation of scoring | `python3 scripts/backtest.py --ticker AAPL --lookback 252` |
+| `scripts/correlation_check.py` | Portfolio concentration warnings | `python3 scripts/correlation_check.py --tickers AAPL,MSFT,NVDA` |
+| `scripts/dynamic_weights.py` | Regime-aware weight adjustment | `python3 scripts/dynamic_weights.py --vix 18.5 --dxy-trend falling` |
+
+### Trade Logging (Phase 6 — New)
+
+After producing a verdict:
+1. Write `UnifiedVerdict` JSON to `/tmp/opencode/verdict_{ticker}.json`
+2. Run `scripts/log_trade.py new --ticker {ticker} --verdict-file /tmp/opencode/verdict_{ticker}.json`
+3. When the position is closed, run `scripts/log_trade.py exit --trade-id {id} --exit-price {price} --reason {reason}`
+
+Run `scripts/feedback_loop.py` periodically to measure engine accuracy.
+Results feed back into score calibration.
+
+### Regression-Weight Rebalancing (Phase 0 — Step 3b)
+
+After Step 3 (Adaptive Macro Verdict), run regime detection and apply dynamic weights:
+```bash
+WEIGHTS=$(python3 scripts/dynamic_weights.py --vix $VIX --dxy-trend $DXY_TREND --macro-window $WINDOW --json)
+```
+The output `weights` dict replaces the static weight table for the current analysis.
+
+### Correlation Check (After Risk Sizing)
+
+Before finalizing the Risk Sizing Matrix recommendation:
+```bash
+python3 scripts/correlation_check.py --tickers {new_ticker},{existing_positions} --days 252
+```
+If high-correlation clusters are detected, reduce the recommended position size by 30-50%.
+
+---
+
 ## Execution Order
 
 1. Determine `is_crypto` from asset name or user context
@@ -698,17 +770,23 @@ Analysis Score: X% | Composite Score: X% | Adaptive Macro x Analysis
    - Determine macro window: FULL / NORMAL / SELECTIVE / DEFENSIVE
    - If SELECTIVE or DEFENSIVE: run Geopolitical Sector Vector
    - Output window + settori favoriti/sfavoriti
-3. Run **Phase 0b — Multi-Timeframe Alignment**
-4. If macro window = DEFENSIVE AND asset settore NON benedetto: output "NO TRADE — DEFENSIVE window, settore sfavorito", STOP
-5. Otherwise: proceed with Phase 1-5
-6. Load all 9 skill frameworks via `load_skills_knowledge(["wyckoff-2-0", ...])`
-7. Fetch data using `market-data-fetch` templates (Phase 1)
-8. Run Phases 2-5 sequentially, computing each dimension score (include new Competitive Positioning dimension)
-9. Apply Adaptive Macro penalty + weights, compute composite score, map to verdict
-10. Apply Risk Sizing Matrix based on composite score + macro window
-11. Output formatted verdict with Adaptive Macro detail + risk sizing + exit rules
-12. Always include invalidation criteria specific to the asset
-13. If composite score ≥ 70 **e** la richiesta include una scadenza opzioni → passa a `options-strategy-suggestions`
+3. **Run Phase 0b — Multi-Timeframe Alignment**
+4. **Run Phase 0c — Dynamic Weight Rebalancing** (nuovo)
+   - Esegui `scripts/dynamic_weights.py` con VIX, DXY trend e macro window
+   - I pesi dinamici sostituiscono la tabella statica per questa analisi
+5. If macro window = DEFENSIVE AND asset settore NON benedetto: output "NO TRADE — DEFENSIVE window, settore sfavorito", STOP
+6. Otherwise: proceed with Phase 1-5
+7. Load all 9 skill frameworks
+8. Fetch data using `market-data-fetch` templates (Phase 1)
+9. Run Phases 2-5 sequentially, computing each dimension score (include Competitive Positioning)
+10. Apply Adaptive Macro penalty + **dynamic weights** (da Step 4), compute composite score, map to verdict
+11. **Run Correlation Check** (nuovo) — `scripts/correlation_check.py --tickers {ticker}` contro posizioni esistenti
+12. Apply Risk Sizing Matrix based on composite score + macro window + correlation warnings
+13. Output formatted verdict with Adaptive Macro detail + risk sizing + exit rules
+14. **Emit Structured JSON** (nuovo) — `UnifiedVerdict` a `/tmp/opencode/verdict_{ticker}.json`
+15. **Log Trade** (nuovo) — `scripts/log_trade.py new --ticker {ticker} --verdict-file <json>`
+16. Always include invalidation criteria specific to the asset
+17. If composite score ≥ 70 **e** la richiesta include una scadenza opzioni → passa a `options-strategy-suggestions`
 
 ---
 

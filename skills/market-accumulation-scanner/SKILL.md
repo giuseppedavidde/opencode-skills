@@ -56,7 +56,34 @@ price action, favorable sentiment setups, and solid fundamentals.
 `analizza [singolo ticker]`, `scansiona [singolo ticker]`,
 `[ticker] scan`, `[ticker] opzioni [scadenza]`,
 `scansiona [ticker] e opzioni [scadenza]`,
-`analisi [ticker] con opzioni [scadenza]`
+`analisi [ticker] con opzioni [scadenza]`,
+`confronta report`, `compare reports`, `A/B test scanner`,
+`confronto A/B`, `report comparison`, `differenze report`
+
+## Tooling
+
+| Script | Purpose | Usage |
+|--------|---------|-------|
+| `scripts/compare_reports.py` | Confronto A/B tra report vecchio e nuovo formato | `python3 scripts/compare_reports.py <vecchio.csv> <nuovo.csv> [--report output.md]` |
+| `scripts/scheduler.py` | Scheduling cron di scan periodici | `python3 scripts/scheduler.py --setup` |
+| `scripts/watchlist_update.py` | Aggiornamento watchlist con evoluzione score | `python3 scripts/watchlist_update.py` |
+
+### Report Comparison (A/B Test)
+
+Per confrontare l'impatto delle nuove funzionalità (competitive dimension, sentiment breakdown):
+```bash
+# Confronto manuale
+python3 scripts/compare_reports.py <vecchio.csv> <nuovo.csv> --report reports/comparison.md
+
+# Confronto automatico (ultimi due report)
+python3 scripts/compare_reports.py --auto --report reports/comparison_latest.md
+```
+
+Il report mostra:
+- Delta final_score per ticker comuni
+- Impatto della dimensione competitive (+5.0 per score=100)
+- Analisi sentiment breakdown (aggregato vs media sub-dimensioni)
+- Statistiche aggregate (ticker migliorati/peggiorati)
 
 ## Core Framework — 5 Phase Workflow
 

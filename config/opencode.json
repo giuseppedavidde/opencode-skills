@@ -10,23 +10,10 @@
       },
       "models": {
         "local": {
-          "name": "DeepSeek-Coder-V2-Lite-Instruct-IQ4_XS"
+          "name": "Qwen3.6-35B-A3B-UDT-Q3_K_XL_MTP"
         }
       }
     }
   },
-  "model": "opencode/deepseek-v4-flash-free",
-  "agent": {
-    "plan": {
-      "model": "opencode/deepseek-v4-flash-free",
-      "variant": "medium"
-    },
-    "build": {
-      "model": "opencode/deepseek-v4-flash-free",
-      "variant": "medium"
-    }
-  },
-  "plugin": [
-    ".opencode/plugins/graphify.js"
-  ]
+  "model": "opencode-go/deepseek-v4-pro"
 }
