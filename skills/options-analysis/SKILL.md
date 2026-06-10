@@ -31,7 +31,8 @@ python ~/.config/opencode/skills/options-analysis/scripts/analyze_position.py TI
   --leg "type strike qty entry" \
   [--leg "type strike qty entry" ...] \
   [--expiry "YYYY-MM-DD"] \
-  [--output json]
+  [--output json] \
+  [--auto-chain]
 ```
 
 ### Input format
@@ -50,6 +51,20 @@ python ~/.config/opencode/skills/options-analysis/scripts/analyze_position.py TI
 5. **Payoff scenarios** at expiration (13 price levels + breakevens)
 6. **Probabilities** — ITM/OTM per strike, overall P&L > 0
 7. **Recommendations** — Hold / Adjust / Close with integrated context from all frameworks
+8. **Scanner Context** *(when `--auto-chain` is used)* — Full `market-accumulation-scanner` score (Wyckoff, Volume Profile, Price Action, Sentiment, Fundamentals) plus deep-dive details (phase, shape, EMA25, P/E, etc.)
+
+### Auto-Chain Mode
+
+When `--auto-chain` is passed, the script **intelligently** checks for existing upstream analysis:
+
+1. **Searches** `market-accumulation-scanner` reports (`reports/*/scan_report_*.csv`) for the ticker
+2. **Searches** `market-accumulation-scanner` deep-dive JSON (`reports/deep_dives/deep_dive_<ticker>.json`)
+3. **If nothing found**, automatically runs:
+   - `scanner.py --tickers <TICKER> --json-output --fetch-news` (live 6-dimension score)
+   - `deep_dive.py <TICKER> --save` (full Wyckoff/VP/PA/Sentiment/Fundamentals verdict)
+4. **Integrates** the scanner data into the options report under the **Scanner Context** section
+
+**Agent rule**: Always use `--auto-chain` when the user asks for an options analysis on a single ticker, unless they explicitly ask for a fast/skip mode. This enriches the recommendation with Wyckoff phase, Volume Profile shape, Rally Velocity, and Fundamentals context that the base options script does not compute.
 
 ### Greeks conventions
 

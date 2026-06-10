@@ -4,6 +4,16 @@ Composite patterns detected by the scanner. Each pattern is defined by a
 specific combination of per-dimension scores that form a recognized setup
 from the source frameworks.
 
+## Scoring Framework (5 Dimensions)
+
+| # | Dimension | Weight |
+|---|-----------|:------:|
+| 1 | Wyckoff Structure | 20% |
+| 2 | Volume Profile | 20% |
+| 3 | Price Action | 15% |
+| 4 | Sentiment (9 sub-dimensions) | 20% |
+| 5 | Fundamentals + Competitive Positioning | 25% |
+
 ## 1. Accumulation Spring (Strong Long)
 
 **Source**: Wyckoff 2.0 + Trades About to Happen + Web News Confirmation
@@ -162,31 +172,38 @@ in control. Do not buy the dip.
 ## Pattern Matching Logic
 
 When presenting results, the scanner identifies which pattern (if any) each
-ticker matches. The Sentiment now includes 3 sub-dimensions (T=traditional,
-N=web_news, S=social) used in pattern detection:
+ticker matches. Sentiment sub-dimensions from the 9-factor engine are used:
 
 ```python
-if wyckoff >= 70 and spring_detected:
+# Sentiment sub-scores are extracted from sentiment_engine output:
+#   traditional = sentiment_subs["short_interest"]   (proxy via SI/DTC)
+#   web_news    = sentiment_subs["web_news"]          (Finviz → Yahoo chain)
+#   social      = sentiment_subs["social_media"]      (WSB hotlist cross-ref)
+#   traditional_si = info.get("shortPercentOfFloat")  (raw SI for squeeze detection)
+
+if wyckoff >= 70 and "Spring" in wyckoff_detail:
     pattern = "Accumulation Spring"
 elif volprof >= 70 and profile_shape == "D" and fundamentals >= 60:
     pattern = "D-Profile Value Zone"
-elif volprof >= 70 and profile_shape == "P" and pa >= 70 and social >= 60:
+elif volprof >= 70 and pa >= 70 and social and social >= 60:
     pattern = "P-Profile Breakout"
-elif social >= 70 and social >= 60 and pa >= 50 and vol_ratio > 2:
+elif social and social >= 70 and pa >= 50:
     pattern = "WSB Hype Confirmation"
-elif web_news >= 80 and wyckoff <= 70 and pa >= 40 and pa <= 60:
+elif web_news and web_news >= 80 and wyckoff <= 70 and 40 <= pa <= 60:
     pattern = "News Catalyst Buildup"
-elif traditional >= 80 and short_interest > 20:
+elif pa >= 70 and sentiment >= 50:
+    pattern = "P-Profile Breakout"
+elif sentiment >= 70 and si > 0.20:
     pattern = "Squeeze Setup"
-elif wyckoff >= 65 and golden_cross and fundamentals >= 60:
+elif wyckoff >= 65 and fundamentals >= 60:
     pattern = "Golden Cross Accumulation"
-elif volprof <= 30 and profile_shape == "b":
+elif volprof < 30:
     pattern = "b-Profile Trap"
 else:
     pattern = "Mixed / No dominant pattern"
 ```
 
-Note: `social` = social_media score, `web_news` = web_news score,
-`traditional` = traditional sentiment score. The aggregated `sentiment` is
-still used for final_score calculation. These 3 sub-scores are used for
-pattern matching.
+Note: `social` = social_media score, `web_news` = web_news score.
+`traditional` = short_interest sub-score. When news/social fetching
+is disabled (--fetch-news not passed), web_news and social_media
+are None → those patterns are skipped.

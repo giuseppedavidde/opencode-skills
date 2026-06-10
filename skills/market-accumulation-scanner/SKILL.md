@@ -4,7 +4,9 @@ description: >
   Scans US (NYSE/NASDAQ S&P 500, NASDAQ 100) and European (FTSE MIB, DAX 40,
   CAC 40, FTSE 100, IBEX 35) stock markets for tickers exhibiting accumulation
   patterns, Wyckoff Springs, favorable Volume Profile setups, and fundamental
-  value — derived from the stock-crypto-analysis 6-dimensional framework.
+  value — derived from the stock-crypto-analysis 5-dimensional framework
+  with enhancement modifiers (Multi-TF, SOT/Weis Wave, Squeeze Play,
+  Earnings Surprise, 6-Clue Test). Supports US, European, and Crypto universes.
   Use when the user asks "scan accumulation", "scanner", "screening mercati",
   "market scan", "find stocks", "cerca ticker", "scan europe", "scan US",
   "stock screener", "accumulation scan", "find me stocks to analyze",
@@ -16,7 +18,7 @@ allowed-tools:
   - glob
   - grep
   - task
-argument-hint: [universe name (us_large, us_tech, italy, germany, france, uk, spain, all) or custom ticker list like "MSFT, AAPL, ENI.MI"]
+argument-hint: [universe name (us_large, us_tech, italy, germany, france, uk, spain, all, crypto) or custom ticker list like "MSFT, AAPL, ENI.MI"]
 orchestrator:
   parallel: true
   split_by: ticker
@@ -162,21 +164,41 @@ python3 scripts/scanner.py --tickers "MSFT, AAPL, ENI.MI" --top 15
 python3 scripts/scanner.py --universe us_large --min-score 50 --top 15
 ```
 
-**6 Dimensions** (each 0–100, weighted):
+**5 Dimensions** (each 0–100, weighted) + Enhancement Modifiers:
 
-| # | Dimensione | Peso | Metriche Chiave | Nuovi Modificatori |
-|---|-----------|:----:|-----------------|-------------------|
-| 1 | **Wyckoff** | 15% | Range position, HH/HL, Spring, MA50/200, volume trend | — |
+| # | Dimensione | Peso | Metriche Chiave | Enhancement Modifiers |
+|---|-----------|:----:|-----------------|----------------------|
+| 1 | **Wyckoff** | 20% | Range position, HH/HL, Spring, MA50/200, volume trend | **SOT/Weis Wave** (±10), **6-Clue Test** (±10) |
 | 2 | **Volume Profile** | 20% | Price vs VPOC/VA, vol ratio, profile shape | — |
-| 3 | **Price Action** | 20% | RSI, 25ema slope, VPA validations, Effort/Result | **Rally Velocity Check**: >20% in 15gg → penalità, rallentamento sano su volume crescente → bonus |
-| 4 | **Competitive Positioning** | 10% | ROE, profit margins, ROA, market cap (proxy per moat/pricing power) | **Nuova dimensione**: qualità del business indipendentemente dal prezzo |
-| 5 | **Sentiment** | 15% | 9 sub-dimensioni: SI, Options, Insider, Retail, Institutional, Momentum, Web News, Social Media, **Earnings Quality** | **Earnings Quality Trend** (Sloan 1996): EPS growth trend + accrual proxy + FCF quality |
-| 6 | **Fundamentals** | 20% | P/E + Earnings Quality Modifier, Value Trap Check, Price vs Consensus, revenue growth, margins, D/E | **Earnings Quality Modifier** (rimpiazza P/E semplice), **Value Trap Alert**, **Price vs Consensus Divergence** |
+| 3 | **Price Action** | 15% | RSI, 25ema slope, VPA validations, Rally Velocity | **Multi-Timeframe Analysis** (±10) |
+| 4 | **Sentiment** | 20% | 9 sub-dimensions: SI, Options, Insider, Retail, Institutional, Momentum, Web News, Social Media, Earnings Quality | **Squeeze Play System** (±10) |
+| 5 | **Fundamentals** | 25% | P/E + EQM, Value Trap Check, Price vs Consensus, revenue, margins, D/E, ROE, ROA | **Earnings Surprise Trend** (±10) |
 
-**Aggregazione** (6 dimensioni):
+**Aggregazione** (5 dimensioni + modifiers):
 ```
-final = wyckoff * 0.15 + volprof * 0.20 + pa * 0.20 + competitive * 0.10 + sentiment * 0.15 + fundamentals * 0.20
+wyckoff_adj = wyckoff + sot_mod + clue6_mod
+pa_adj = pa + mtf_mod
+sentiment_adj = sentiment + squeeze_mod
+fundamentals_adj = fundamentals + earnings_surprise_mod
+
+final = wyckoff_adj * 0.20 + volprof * 0.20 + pa_adj * 0.15 + sentiment_adj * 0.20 + fundamentals_adj * 0.25
 ```
+
+### Enhancement Modifiers (da libri di trading)
+
+| Modifier | Fonte | Effetto | Range |
+|----------|-------|---------|-------|
+| **Multi-Timeframe Analysis** | VPA (Coulling) | Allinea trend su 3 TF (20d/50d/200d) | ±10 su PA |
+| **SOT + Weis Wave** | Trades About to Happen (Weis) | Shortening of Thrust + onde volume + Crabel NR7/ID-NR4 | ±10 su Wyckoff |
+| **Squeeze Play System** | Trading Against the Crowd (Summa) | Sentiment oscillator EMA + price trigger + Smart Money divergence | ±10 su Sentiment |
+| **Earnings Surprise Trend** | Earnings data (yfinance) | Beat/miss streak, avg surprise magnitude | ±10 su Fundamentals |
+| **6-Clue Test** | Wyckoff 2.0 (Villahermosa) | 6 indizi formali accumulazione/distribuzione | ±10 su Wyckoff |
+
+### Crypto Universe (Alert-Predict-Confirm)
+
+Per crypto (`--universe crypto`), il framework usa:
+- **Wyckoff** 25% + **Volume Profile** 25% + **Price Action** 20% + **Crypto APC** 30%
+- **Alert-Predict-Confirm** (Crypto Technical Analysis - John & Law): RSI divergence (Alert), MACD crossover (Predict), Volume confirmation (Confirm). Tutti e 3 allineati = segnale forte.
 
 ### Sentiment — Sub-Dimension Breakdown
 

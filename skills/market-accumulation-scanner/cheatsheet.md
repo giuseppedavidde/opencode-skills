@@ -1,24 +1,50 @@
 # Cheatsheet — Market Accumulation Scanner
 
-## Weight Table
+## Weight Table (5 Dimensions)
 
 | # | Dimension | Weight | Source |
 |---|-----------|:------:|--------|
-| 1 | Wyckoff Structure | 25% | yfinance 1y daily |
+| 1 | Wyckoff Structure | 20% | yfinance 1y daily + Vol-Price Divergence |
 | 2 | Volume Profile | 20% | yfinance 3mo daily |
-| 3 | Price Action | 20% | yfinance 1mo daily |
-| 4 | **Sentiment** | **15%** | yfinance info + Finviz news + Reddit/X social |
-| 5 | Fundamentals | 20% | yfinance info |
+| 3 | Price Action | 15% | yfinance 1mo daily + Rally Velocity |
+| 4 | **Sentiment** | **20%** | 9 sub-dimensions (see below) |
+| 5 | Fundamentals + Competitive | 25% | yfinance info (P/E, margins, D/E, ROE, ROA, FCF, earnings quality, value trap, price vs consensus) |
 
-## Sentiment Sub-Dimension Weights
+Note: Competitive Positioning (ROE, ROA, operating margins, moat proxy) has been merged into Fundamentals.
+The old 6-dimension formula (including separate Competitive at 10%) is superseded by this 5-dimension formula.
+
+### Aggregation Formula
+
+```
+final = wyckoff * 0.20 + volprof * 0.20 + pa * 0.15 + sentiment * 0.20 + fundamentals * 0.25
+```
+
+### Macro Regime Multiplier (Phase 0)
+
+Applied post-aggregation. Controlled via `--regime` CLI arg (default: NORMAL).
+
+| Regime | Multiplier | Sector Adjustments |
+|--------|:---------:|--------------------|
+| FULL | 1.08x | All sectors boosted (risk-on) |
+| NORMAL | 1.00x | No adjustment |
+| SELECTIVE | 1.00x | Defensive (+5%), Cyclical (-10%) |
+| DEFENSIVE | 0.85x | All sectors penalized (cap at 60) |
+
+## Sentiment Sub-Dimension Weights (9 total)
 
 | Sub-Dimension | % of Sentiment | % of Total | Data Collection |
 |:-------------:|:--------------:|:----------:|-----------------|
-| Traditional | 40% | 6.0% | yfinance (SI, DTC, Inst) |
-| Web News | 35% | 5.25% | Finviz RSS / Yahoo Finance |
-| Social Media | 25% | 3.75% | WSB hotlist (wallstreetbets-pump-detect) + X/Twitter |
+| Short Interest | 12% | 2.4% | yfinance (SI%, DTC, dynamic thresholds by mcap) |
+| Options Sentiment | 12% | 2.4% | P/C volume, P/C OI, IV skew |
+| Insider Trading | 12% | 2.4% | yfinance insider transactions |
+| Retail Sentiment | 8% | 1.6% | Volume ratio, beta, analyst gap |
+| Institutional | 12% | 2.4% | Holdings %, buyback yield |
+| Relative Momentum | 8% | 1.6% | vs SPX on 1mo/3mo/6mo |
+| Web News | 8% | 1.6% | Finviz → Yahoo RSS → Google News → MarketBeat |
+| Social Media | 8% | 1.6% | WSB hotlist cross-reference |
+| **Earnings Quality** | **20%** | **4.0%** | EPS growth, FCF, accrual proxy (Sloan 1996) |
 
-**Aggregation**: `sentiment = traditional * 0.40 + web_news * 0.35 + social_media * 0.25`
+**Aggregation**: Weighted average of available sub-dimensions, re-normalized.
 
 ## Wyckoff — Score Table
 
@@ -31,6 +57,10 @@
 | Spring detected | +30 | 30 |
 | MA50 > MA200 (golden cross setup) | +15 | 15 |
 | Volume decreasing in range (absorption) | +15 | 15 |
+| **Volume-Price Divergence**: ↑Vol + ↓Price (Accumulation) | +25 | 25 |
+| **Volume-Price Divergence**: ↓Vol + ↑Price (Distribution) | -20 | 0 |
+| **Volume-Price Divergence**: ↑Vol + ↑Price (Markup) | +15 | 15 |
+| **Volume-Price Divergence**: ↓Vol + ↓Price (Markdown) | -15 | 0 |
 | Base | +20 | 20 |
 | **Total cap** | | **100** |
 
@@ -149,7 +179,12 @@ else:
 | Debt/Equity < 1.0 | +15 | 15 |
 | Debt/Equity < 0.5 | +25 | 25 |
 | Market Cap > $10B | +10 | 10 |
-| Base | +10 | 10 |
+| ROE > 20% (competitive moat) | +15 | 15 |
+| ROE > 15% | +10 | 10 |
+| ROA > 10% | +10 | 10 |
+| ROA > 5% | +5 | 5 |
+| Operating Margins > 20% (efficiency) | +10 | 10 |
+| Base | +5 | 5 |
 | **Total cap** | | **100** |
 
 ## Verdict Thresholds
@@ -177,6 +212,9 @@ Escludi automaticamente se:
 | `--output-dir` | `.` | Directory for CSV/HTML reports |
 | `--batch-size` | 20 | Tickers per API batch |
 | `--batch-sleep` | 1.0 | Seconds between batches |
+| `--regime` | `NORMAL` | Macro regime: FULL, NORMAL, SELECTIVE, DEFENSIVE |
+| `--fetch-news` | false | Fetch Finviz/Yahoo news for web news sentiment (slower) |
+| `--wsb-hotlist` | None | Path to WSB hotlist JSON from wallstreetbets-pump-detect |
 
 ## CLI Examples
 

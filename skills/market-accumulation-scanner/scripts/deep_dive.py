@@ -11,6 +11,19 @@ import yfinance as yf
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 from sentiment_engine import compute_sentiment as compute_sentiment_6d
+from scanner import (
+    compute_candlestick_patterns,
+    compute_fibonacci,
+    compute_bollinger,
+    compute_obv,
+    compute_support_resistance,
+    compute_psychology_score,
+    compute_ichimoku,
+    compute_candlestick_advanced,
+    compute_risk_reward,
+    compute_psychology_advanced,
+    compute_point_figure,
+)
 
 
 def heading(s: str) -> None:
@@ -40,6 +53,22 @@ def analyze(ticker: str, verbose: bool = True) -> dict:
     t = yf.Ticker(ticker)
     sent_score, sent_d_str, sent_subs = compute_sentiment_6d(t, info, df, spx_hist)
 
+    # NEW: Candlestick, Fibonacci, Bollinger, OBV, S/R, Psychology
+    candle_score, candle_d = compute_candlestick_patterns(df)
+    fib_score, fib_d = compute_fibonacci(df)
+    bb_score, bb_d = compute_bollinger(df)
+    obv_score, obv_d = compute_obv(df)
+    sr_score, sr_d = compute_support_resistance(df)
+    psych_score, psych_d = compute_psychology_score(df)
+
+    # NEW v2: Ichimoku, Adv Candles, Risk/Reward, Psych Advanced, P&F
+    current_price = float(df["Close"].iloc[-1])
+    ichi_score, ichi_d = compute_ichimoku(df)
+    candle_adv_score, candle_adv_d = compute_candlestick_advanced(df)
+    risk_reward_score, risk_reward_d = compute_risk_reward(df, current_price)
+    psych_adv_score, psych_adv_d = compute_psychology_advanced(df)
+    pf_score, pf_d = compute_point_figure(df)
+
     final, dims = _aggregate(wyckoff_score, vp_score, pa_score, sent_score, fund_score)
 
     verdict, direction, action = _verdict(final)
@@ -62,6 +91,30 @@ def analyze(ticker: str, verbose: bool = True) -> dict:
         "verdict": verdict,
         "direction": direction,
         "action": action,
+        # NEW book-concept scores
+        "candlestick": candle_score,
+        "candlestick_detail": candle_d,
+        "fibonacci": fib_score,
+        "fibonacci_detail": fib_d,
+        "bollinger": bb_score,
+        "bollinger_detail": bb_d,
+        "obv": obv_score,
+        "obv_detail": obv_d,
+        "support_resistance": sr_score,
+        "support_resistance_detail": sr_d,
+        "psychology": psych_score,
+        "psychology_detail": psych_d,
+        # NEW v2
+        "ichimoku": ichi_score,
+        "ichimoku_detail": ichi_d,
+        "candlestick_advanced": candle_adv_score,
+        "candlestick_advanced_detail": candle_adv_d,
+        "risk_reward": risk_reward_score,
+        "risk_reward_detail": risk_reward_d,
+        "psychology_advanced": psych_adv_score,
+        "psychology_advanced_detail": psych_adv_d,
+        "point_figure": pf_score,
+        "point_figure_detail": pf_d,
     }
 
 
@@ -320,6 +373,20 @@ def _fundamentals(info, ticker):
         if dte > 300: score -= 10
         elif dte < 50: score += 10
 
+    roe = info.get("returnOnEquity")
+    if roe is not None:
+        if roe > 0.20: score += 15; reasons.append(f"ROE {roe*100:.0f}% (moat)")
+        elif roe > 0.15: score += 10; reasons.append(f"ROE {roe*100:.0f}%")
+
+    roa = info.get("returnOnAssets")
+    if roa is not None:
+        if roa > 0.10: score += 10
+        elif roa > 0.05: score += 5
+
+    op_margins = info.get("operatingMargins")
+    if op_margins is not None and op_margins > 0.20:
+        score += 10; reasons.append(f"Op margins {op_margins*100:.0f}% (efficient)")
+
     fcf = info.get("freeCashflow")
     if fcf is not None and fcf > 0: score += 10
 
@@ -334,7 +401,7 @@ def _fundamentals(info, ticker):
 
 
 def _aggregate(w, vp, pa, s, f):
-    weights = {"wyckoff": 0.25, "volprof": 0.20, "pa": 0.20, "sentiment": 0.15, "fundamentals": 0.20}
+    weights = {"wyckoff": 0.20, "volprof": 0.20, "pa": 0.15, "sentiment": 0.20, "fundamentals": 0.25}
     dims = {"Wyckoff": (w, weights["wyckoff"]), "Volume Profile": (vp, weights["volprof"]),
             "Price Action": (pa, weights["pa"]), "Sentiment": (s, weights["sentiment"]),
             "Fundamentals": (f, weights["fundamentals"])}
@@ -429,7 +496,8 @@ def main():
 
     result = analyze(args.ticker)
     if args.save and "error" not in result:
-        out_dir = Path("/home/giuseppe/Progetti/Github/opencode-skills/skills/market-accumulation-scanner/reports/us_large")
+        skill_dir = Path(__file__).resolve().parent.parent
+        out_dir = skill_dir / "reports" / "deep_dives"
         out_dir.mkdir(parents=True, exist_ok=True)
         path = out_dir / f"deep_dive_{args.ticker.lower()}.json"
         with open(path, "w") as f:

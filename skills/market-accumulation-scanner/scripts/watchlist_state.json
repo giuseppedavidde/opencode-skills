@@ -1,1 +1,6 @@
-{"last_updated": null, "tickers": {}}
+{
+  "last_updated": null,
+  "tickers": {},
+  "schema_version": "1.0",
+  "description": "Persistent watchlist state for market-accumulation-scanner. Tracks score deltas and alerts across scans."
+}

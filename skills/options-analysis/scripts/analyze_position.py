@@ -21,10 +21,12 @@ Example:
 """
 
 import argparse
+import json
 import math
+import subprocess
 import sys
-
 from datetime import date, datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
@@ -138,6 +140,274 @@ def safe_float(val) -> float:
         return v
     except (TypeError, ValueError):
         return 0.0
+
+
+# ───── Auto-Chain: Scanner & Deep Dive Integration ─────
+
+
+def _skills_dir() -> Path:
+    """Resolve the skills directory from this script location."""
+    # This script is in .../options-analysis/scripts/
+    # Skills dir is the parent of options-analysis
+    return Path(__file__).resolve().parent.parent.parent
+
+
+def _find_scanner_report(ticker: str) -> dict | None:
+    """Search for an existing scanner CSV report containing the ticker."""
+    skills_dir = _skills_dir()
+    reports_dir = skills_dir / "market-accumulation-scanner" / "reports"
+    if not reports_dir.exists():
+        return None
+    csv_files = sorted(reports_dir.rglob("scan_report_*.csv"), reverse=True)
+    for csv_path in csv_files[:10]:
+        try:
+            df = pd.read_csv(csv_path)
+            row = df[df["symbol"].str.upper() == ticker.upper()]
+            if not row.empty:
+                r = row.iloc[0].to_dict()
+                return {
+                    "final_score": float(r.get("final_score", 0) or 0),
+                    "wyckoff": float(r.get("wyckoff", 0) or 0),
+                    "volprof": float(r.get("volprof", 0) or 0),
+                    "pa": float(r.get("pa", 0) or 0),
+                    "sentiment": float(r.get("sentiment", 0) or 0),
+                    "fundamentals": float(r.get("fundamentals", 0) or 0),
+                    "competitive": float(r.get("competitive", 0) or 0),
+                    "pattern": str(r.get("pattern", "N/A")),
+                    "source": str(csv_path),
+                }
+        except Exception:
+            continue
+    return None
+
+
+def _find_deep_dive_report(ticker: str) -> dict | None:
+    """Search for an existing deep dive JSON report."""
+    skills_dir = _skills_dir()
+    dd_path = (
+        skills_dir
+        / "market-accumulation-scanner"
+        / "reports"
+        / "deep_dives"
+        / f"deep_dive_{ticker.lower()}.json"
+    )
+    if dd_path.exists():
+        try:
+            with open(dd_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return None
+    return None
+
+
+def _run_scanner(ticker: str) -> dict | None:
+    """Run the market-accumulation-scanner for a single ticker and parse JSON output."""
+    skills_dir = _skills_dir()
+    scanner_script = skills_dir / "market-accumulation-scanner" / "scripts" / "scanner.py"
+    venv_python = skills_dir / "market-accumulation-scanner" / ".venv" / "bin" / "python"
+    if not venv_python.exists():
+        venv_python = Path(sys.executable)
+    try:
+        result = subprocess.run(
+            [
+                str(venv_python),
+                str(scanner_script),
+                "--tickers",
+                ticker,
+                "--json-output",
+                "--fetch-news",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if result.returncode != 0:
+            print(f"  Scanner error: {result.stderr[:200]}", file=sys.stderr)
+            return None
+        data = json.loads(result.stdout)
+        if not data:
+            return None
+        r = data[0]
+        return {
+            "final_score": float(r.get("final_score", 0) or 0),
+            "wyckoff": float(r.get("wyckoff", 0) or 0),
+            "volprof": float(r.get("volprof", 0) or 0),
+            "pa": float(r.get("pa", 0) or 0),
+            "sentiment": float(r.get("sentiment", 0) or 0),
+            "fundamentals": float(r.get("fundamentals", 0) or 0),
+            "competitive": float(r.get("competitive", 0) or 0),
+            "pattern": str(r.get("pattern", "N/A")),
+            "source": "live_scan",
+        }
+    except Exception as e:
+        print(f"  Scanner run failed: {e}", file=sys.stderr)
+        return None
+
+
+def _run_deep_dive(ticker: str) -> dict | None:
+    """Run deep_dive.py for a single ticker and parse JSON output."""
+    skills_dir = _skills_dir()
+    dd_script = skills_dir / "market-accumulation-scanner" / "scripts" / "deep_dive.py"
+    venv_python = skills_dir / "market-accumulation-scanner" / ".venv" / "bin" / "python"
+    if not venv_python.exists():
+        venv_python = Path(sys.executable)
+    try:
+        result = subprocess.run(
+            [str(venv_python), str(dd_script), ticker, "--save"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if result.returncode != 0:
+            print(f"  Deep dive error: {result.stderr[:200]}", file=sys.stderr)
+            return None
+        return _find_deep_dive_report(ticker)
+    except Exception as e:
+        print(f"  Deep dive run failed: {e}", file=sys.stderr)
+        return None
+
+
+def _fetch_scanner_data(ticker: str, auto_chain: bool) -> dict | None:
+    """Fetch scanner data: from existing report, or run scanner if auto_chain."""
+    data = _find_scanner_report(ticker)
+    if data:
+        print(f"  Found scanner report: {data['source']}", file=sys.stderr)
+        return data
+    dd = _find_deep_dive_report(ticker)
+    if dd:
+        print(f"  Found deep-dive report: deep_dive_{ticker.lower()}.json", file=sys.stderr)
+        return {
+            "final_score": float(dd.get("final_score", 0) or 0),
+            "wyckoff": float(dd.get("wyckoff", {}).get("score", 0) or 0),
+            "volprof": float(dd.get("volume_profile", {}).get("score", 0) or 0),
+            "pa": float(dd.get("price_action", {}).get("score", 0) or 0),
+            "sentiment": float(dd.get("sentiment", {}).get("score", 0) or 0),
+            "fundamentals": float(dd.get("fundamentals", {}).get("score", 0) or 0),
+            "competitive": 0,
+            "pattern": str(dd.get("verdict", "N/A")),
+            "source": "deep_dive_json",
+            "deep_dive": dd,
+            # Pass through v1 and v2 fields from deep_dive
+            "candlestick": dd.get("candlestick"),
+            "fibonacci": dd.get("fibonacci"),
+            "bollinger": dd.get("bollinger"),
+            "obv": dd.get("obv"),
+            "support_resistance": dd.get("support_resistance"),
+            "psychology": dd.get("psychology"),
+            "ichimoku": dd.get("ichimoku"),
+            "candlestick_advanced": dd.get("candlestick_advanced"),
+            "candlestick_advanced_detail": dd.get("candlestick_advanced_detail"),
+            "risk_reward": dd.get("risk_reward"),
+            "psychology_advanced": dd.get("psychology_advanced"),
+            "point_figure": dd.get("point_figure"),
+            "ichimoku_detail": dd.get("ichimoku_detail"),
+            "risk_reward_detail": dd.get("risk_reward_detail"),
+            "psychology_advanced_detail": dd.get("psychology_advanced_detail"),
+            "point_figure_detail": dd.get("point_figure_detail"),
+        }
+    if auto_chain:
+        print(
+            f"  No existing scanner report for {ticker}. Running scanner...",
+            file=sys.stderr,
+        )
+        data = _run_scanner(ticker)
+        if data:
+            return data
+        dd = _run_deep_dive(ticker)
+        if dd:
+            return {
+                "final_score": float(dd.get("final_score", 0) or 0),
+                "wyckoff": float(dd.get("wyckoff", {}).get("score", 0) or 0),
+                "volprof": float(dd.get("volume_profile", {}).get("score", 0) or 0),
+                "pa": float(dd.get("price_action", {}).get("score", 0) or 0),
+                "sentiment": float(dd.get("sentiment", {}).get("score", 0) or 0),
+                "fundamentals": float(dd.get("fundamentals", {}).get("score", 0) or 0),
+                "competitive": 0,
+                "pattern": str(dd.get("verdict", "N/A")),
+                "source": "deep_dive_live",
+                "deep_dive": dd,
+                "candlestick": dd.get("candlestick"),
+                "fibonacci": dd.get("fibonacci"),
+                "bollinger": dd.get("bollinger"),
+                "obv": dd.get("obv"),
+                "support_resistance": dd.get("support_resistance"),
+                "psychology": dd.get("psychology"),
+                "ichimoku": dd.get("ichimoku"),
+                "candlestick_advanced": dd.get("candlestick_advanced"),
+            "candlestick_advanced_detail": dd.get("candlestick_advanced_detail"),
+                "risk_reward": dd.get("risk_reward"),
+                "psychology_advanced": dd.get("psychology_advanced"),
+                "point_figure": dd.get("point_figure"),
+                "ichimoku_detail": dd.get("ichimoku_detail"),
+                "risk_reward_detail": dd.get("risk_reward_detail"),
+                "psychology_advanced_detail": dd.get("psychology_advanced_detail"),
+                "point_figure_detail": dd.get("point_figure_detail"),
+            }
+    return None
+
+
+def _format_scanner_context(data: dict) -> list[str]:
+    """Format scanner data into report lines."""
+    lines = []
+    if not data:
+        return lines
+    source = data.get("source", "unknown")
+    label = "Live Scanner" if "live" in source or "deep_dive" in source else "Cached Report"
+    lines.append(f"  {'── Scanner Context (' + label + ') ──':^60s}")
+    lines.append(f"  Final Score: {data.get('final_score', 0):.1f}/100")
+    lines.append(f"  Pattern:     {data.get('pattern', 'N/A')}")
+    lines.append(
+        f"  Wyckoff:     {data.get('wyckoff', 0):.0f}/100 | "
+        f"VP: {data.get('volprof', 0):.0f}/100 | "
+        f"PA: {data.get('pa', 0):.0f}/100"
+    )
+    lines.append(
+        f"  Sentiment:   {data.get('sentiment', 0):.0f}/100 | "
+        f"Fund: {data.get('fundamentals', 0):.0f}/100 | "
+        f"Comp: {data.get('competitive', 0):.0f}/100"
+    )
+    dd = data.get("deep_dive")
+    if dd:
+        wyckoff = dd.get("wyckoff", {})
+        vp = dd.get("volume_profile", {})
+        pa = dd.get("price_action", {})
+        fund = dd.get("fundamentals", {})
+        lines.append("")
+        lines.append(f"  Wyckoff Phase: {wyckoff.get('phase', 'N/A')}")
+        lines.append(
+            f"  VP Shape:      {vp.get('shape', 'N/A')} | "
+            f"POC: ${vp.get('poc_price', 'N/A')} | "
+            f"VAL: ${vp.get('val', 'N/A')} | "
+            f"VAH: ${vp.get('vah', 'N/A')}"
+        )
+        lines.append(
+            f"  PA Verdict:    {pa.get('verdict', 'N/A')} | "
+            f"EMA25: {'▲' if pa.get('ema25_slope_up') else '▼'} | "
+            f"Buildup: {'Yes' if pa.get('buildup') else 'No'}"
+        )
+        lines.append(
+            f"  Fundamentals:  P/E {fund.get('pe_ratio', 'N/A')} | "
+            f"Rev Growth {fund.get('revenue_growth_pct', 'N/A')}% | "
+            f"Margins {fund.get('profit_margins_pct', 'N/A')}%"
+        )
+    # V2 book-concept scores
+    ichi = data.get("ichimoku")
+    rrw = data.get("risk_reward")
+    pf = data.get("point_figure")
+    if ichi is not None or rrw is not None or pf is not None:
+        lines.append(
+            f"  Ichimoku:     {ichi or 'N/A'}/100 | "
+            f"Risk/Reward: {rrw or 'N/A'}/100 | "
+            f"P&F: {pf or 'N/A'}/100"
+        )
+        ichi_d = data.get("ichimoku_detail", "")
+        rrw_d = data.get("risk_reward_detail", "")
+        if ichi_d:
+            lines.append(f"  → Ichimoku: {ichi_d[:80]}")
+        if rrw_d:
+            lines.append(f"  → Risk/Reward: {rrw_d[:80]}")
+    lines.append("")
+    return lines
 
 
 def compute_iv_rank(ticker: yf.Ticker, current_price: float) -> Optional[float]:
@@ -463,6 +733,7 @@ def run_analysis(
     legs: list[OptionLeg],
     target_expiry: Optional[str],
     output_json: bool,
+    scanner_data: dict | None = None,
 ):
     yf_ticker = yf.Ticker(ticker)
     info = yf_ticker.info
@@ -768,8 +1039,122 @@ def run_analysis(
     short_puts = [l for l in legs if l.opt_type == "put" and l.qty < 0]
     short_calls = [l for l in legs if l.opt_type == "call" and l.qty < 0]
 
-    # HOLD
+    # Initialize recommendation accumulators
     hold_why = []
+    close_why = []
+    adjust_lines = []
+
+    # ── Scanner-based Recommendations (enriched) ──
+    if scanner_data:
+        dd = scanner_data.get("deep_dive", {})
+        pa = dd.get("price_action", {})
+        vp = dd.get("volume_profile", {})
+        wk = dd.get("wyckoff", {})
+        fund = dd.get("fundamentals", {})
+        psych = dd.get("psychology", {})
+
+        # Candlestick pattern override
+        candle = scanner_data.get("candlestick", 50)
+        if candle >= 70:
+            hold_why.append("strong bullish candlestick pattern detected")
+        elif candle <= 30:
+            close_why.append("bearish candlestick pattern (reversal risk)")
+
+        # Bollinger override
+        bb = scanner_data.get("bollinger", 50)
+        if bb >= 75:
+            hold_why.append("Bollinger Squeeze — volatility expansion imminent")
+        elif bb <= 30:
+            close_why.append("price at Bollinger extreme (mean reversion likely)")
+
+        # OBV override
+        obv = scanner_data.get("obv", 50)
+        if obv >= 70:
+            hold_why.append("OBV confirms buying pressure")
+        elif obv <= 30:
+            close_why.append("OBV divergence — smart money exiting")
+
+        # S/R override
+        sr = scanner_data.get("support_resistance", 50)
+        if sr >= 70:
+            hold_why.append("price at strong support level")
+        elif sr <= 30:
+            close_why.append("price at resistance / role reversal bearish")
+
+        # Fibonacci override
+        fib = scanner_data.get("fibonacci", 50)
+        if fib >= 70:
+            hold_why.append("price at deep Fibonacci support (61.8%/78.6%)")
+        elif fib <= 30:
+            close_why.append("shallow Fibonacci retracement — weak support")
+
+        # Psychology / FOMO override
+        psych_score = scanner_data.get("psychology", 50)
+        if psych_score >= 70:
+            hold_why.append("panic selling detected (contrarian buy signal)")
+        elif psych_score <= 30:
+            close_why.append("FOMO / exhaustion detected — distribution risk")
+
+        # Deep-dive specific: Wyckoff phase
+        phase = wk.get("phase", "")
+        if "Distribution" in phase or "SOW" in phase:
+            close_why.append(f"Wyckoff phase: {phase} — bearish structure")
+        elif "Accumulation" in phase or "Spring" in phase:
+            hold_why.append(f"Wyckoff phase: {phase} — bullish structure")
+
+        # Deep-dive: EMA25 slope
+        if pa.get("ema25_slope_up") is False:
+            adjust_lines.append("  ▶ ADJUST — EMA25 declining (momentum loss). Consider reducing delta exposure.")
+
+        # Deep-dive: Buildup
+        if pa.get("buildup") is True:
+            hold_why.append("buildup detected (pre-breakout tension)")
+
+        # Deep-dive: P/E vs value
+        pe = fund.get("pe_ratio")
+        if pe is not None and pe > 50:
+            close_why.append(f"P/E {pe:.1f} very high — value risk")
+        elif pe is not None and pe < 15:
+            hold_why.append(f"P/E {pe:.1f} attractive — value support")
+
+        # ── NEW v2: Ichimoku, Adv Candles, Risk/Reward, Psych Advanced, P&F ──
+
+        # Ichimoku Cloud
+        ichi = scanner_data.get("ichimoku", 50)
+        if ichi >= 70:
+            hold_why.append("Ichimoku bullish (price above cloud, Tenkan/Kijun cross up)")
+        elif ichi <= 30:
+            close_why.append("Ichimoku bearish (price below cloud, bearish cross)")
+
+        # Advanced Candlestick Patterns
+        candle_adv = scanner_data.get("candlestick_advanced", 50)
+        if candle_adv >= 70:
+            hold_why.append("advanced bullish patterns (Piercing/Abandoned Baby)")
+        elif candle_adv <= 30:
+            close_why.append("advanced bearish patterns (Dark Cloud Cover/Bearish Engulf)")
+
+        # Risk/Reward
+        rrw = scanner_data.get("risk_reward", 50)
+        if rrw >= 70:
+            hold_why.append(f"excellent risk/reward ratio — favorable position sizing")
+        elif rrw <= 30:
+            close_why.append(f"poor risk/reward — reduce position or exit")
+
+        # Psychology Advanced (Cycle of Doom)
+        psych_adv = scanner_data.get("psychology_advanced", 50)
+        if psych_adv >= 70:
+            hold_why.append("capitulation detected — contrarian buy signal")
+        elif psych_adv <= 30:
+            close_why.append("euphoria/anchoring bias — distribution phase")
+
+        # Point & Figure
+        pf = scanner_data.get("point_figure", 50)
+        if pf >= 70:
+            hold_why.append("P&F bullish projection (accumulation columns)")
+        elif pf <= 30:
+            close_why.append("P&F bearish projection (distribution columns)")
+
+    # HOLD
     if total_pos_theta > 0.001:
         hold_why.append("positive theta (time decay works for you)")
     if total_pos_delta > 0.3 and total_pos_delta < 3.0:
@@ -784,16 +1169,14 @@ def run_analysis(
         hold_extra.append("price extended above VAH — trend is up")
     if sent["contrarian_signal"] is None and sent["oi_signal"] != "bearish":
         hold_extra.append("no sentiment extremes")
+    hold_why.extend(hold_extra)
 
-    if hold_why or hold_extra:
-        all_hold = hold_why + hold_extra
-        lines.append(f"  ▶ HOLD — {'. '.join(all_hold)}.")
+    if hold_why:
+        lines.append(f"  ▶ HOLD — {'. '.join(hold_why)}.")
     else:
         lines.append("  ▶ HOLD — Maintain current position.")
 
     # ADJUST
-    adjust_lines = []
-
     # Short put risk
     if short_puts and total_pos_delta > 0.8:
         total_put_risk = sum(abs(l.qty) * l.strike for l in short_puts)
@@ -847,7 +1230,6 @@ def run_analysis(
         lines.append(adj_line)
 
     # CLOSE
-    close_why = []
     if total_pnl >= 3.0:
         close_why.append(f"you are up ${total_pnl:.2f}/sh (${total_pnl * 100:.0f} per set)")
     if dte < 45:
@@ -864,6 +1246,9 @@ def run_analysis(
         lines.append(f"  ▶ CLOSE — Lock in current P&L of ${total_pnl:+.2f}/sh.")
 
     lines.append("")
+    # ── Scanner Context ──
+    if scanner_data:
+        lines.extend(_format_scanner_context(scanner_data))
     lines.append("  " + "─" * 60)
     lines.append(f"  Data: Yahoo Finance  |  Model: Black-Scholes  |  Greeks: BS with r={RISK_FREE_RATE*100:.1f}%")
     lines.append("  Frameworks: Options Playbook / Volume Profile / Trading Against the Crowd")
@@ -916,8 +1301,9 @@ def run_analysis(
             "breakevens": breakevens,
             "prob_positive": round(prob_positive, 4) if prob_positive is not None else None,
             "scenarios": scenarios,
+            "scanner_context": scanner_data,
         }
-        print(json.dumps(result, indent=2))
+        print(json.dumps(result, indent=2, default=str))
     else:
         print(output)
 
@@ -935,6 +1321,11 @@ def main():
     )
     parser.add_argument("--expiry", type=str, help="Target expiration date YYYY-MM-DD")
     parser.add_argument("--output", choices=["text", "json"], default="text", help="Output format")
+    parser.add_argument(
+        "--auto-chain",
+        action="store_true",
+        help="Auto-run market-accumulation-scanner / deep-dive if no cached report",
+    )
     args = parser.parse_args()
 
     legs: list[OptionLeg] = []
@@ -950,7 +1341,11 @@ def main():
             print(f"Error parsing leg '{leg_str}': {e}")
             sys.exit(1)
 
-    run_analysis(args.ticker, legs, args.expiry, args.output == "json")
+    scanner_data = None
+    if getattr(args, "auto_chain", False):
+        scanner_data = _fetch_scanner_data(args.ticker, auto_chain=True)
+
+    run_analysis(args.ticker, legs, args.expiry, args.output == "json", scanner_data)
 
 
 if __name__ == "__main__":
