@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import random
 import sys
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -298,11 +299,84 @@ def find_patterns(trades: list[dict]) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Bootstrap
+# ---------------------------------------------------------------------------
+
+
+def bootstrap_metrics(
+    trades: list[dict],
+    n_iterations: int = 10_000,
+    seed: int = 42,
+) -> dict:
+    """Bootstrap resample trade PnLs to produce confidence intervals.
+
+    Resamples closed trades with replacement n_iterations times.
+    For each resample computes: hit rate, avg PnL, max drawdown, Sharpe-like.
+    Returns percentiles (5th, 50th, 95th) + mean for each metric.
+    Returns empty dict if fewer than 3 closed trades.
+    """
+    closed = [t["pnl_pct"] for t in trades
+              if not t.get("is_open", True) and t.get("pnl_pct") is not None]
+    if len(closed) < 3:
+        return {}
+
+    n = len(closed)
+    rng = random.Random(seed)
+
+    hit_rates: list[float] = []
+    avg_pnls: list[float] = []
+    sharpes: list[float] = []
+    max_dds: list[float] = []
+
+    for _ in range(n_iterations):
+        sample = [closed[rng.randint(0, n - 1)] for _ in range(n)]
+        wins = sum(1 for p in sample if p > 0)
+        hit_rates.append(wins / n * 100)
+        avg_pnls.append(sum(sample) / n)
+        if n >= 2:
+            mean_ = sum(sample) / n
+            var_ = sum((x - mean_) ** 2 for x in sample) / (n - 1)
+            sharpes.append(mean_ / math.sqrt(var_) if var_ > 0 else 0.0)
+        else:
+            sharpes.append(0.0)
+
+        cumulative = 0.0
+        peak = 0.0
+        max_dd = 0.0
+        for p in sample:
+            cumulative += p
+            peak = max(peak, cumulative)
+            max_dd = max(max_dd, peak - cumulative)
+        max_dds.append(max_dd)
+
+    def _ci(values: list[float]) -> dict:
+        sorted_v = sorted(values)
+        return {
+            "mean": round(sum(values) / len(values), 3),
+            "ci_low": round(sorted_v[int(n_iterations * 0.05)], 3),
+            "ci_high": round(sorted_v[int(n_iterations * 0.95)], 3),
+            "median": round(sorted_v[n_iterations // 2], 3),
+            "std": round(math.sqrt(sum((x - sum(values) / len(values)) ** 2 for x in values) / len(values)), 3),
+        }
+
+    return {
+        "n_iterations": n_iterations,
+        "resample_size": n,
+        "hit_rate": _ci(hit_rates),
+        "avg_pnl": _ci(avg_pnls),
+        "sharpe_like": _ci(sharpes),
+        "max_drawdown": _ci(max_dds),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Report generation
 # ---------------------------------------------------------------------------
 
 
-def generate_report(trades: list[dict]) -> dict:
+def generate_report(trades: list[dict], bootstrap: bool = True,
+                    bootstrap_iterations: int = 10_000,
+                    bootstrap_seed: int = 42) -> dict:
     """Generate the full feedback report as a dict."""
     hit_rate = compute_hit_rate(trades)
     sharpe = compute_sharpe_like(trades)
@@ -311,7 +385,7 @@ def generate_report(trades: list[dict]) -> dict:
 
     open_count = len([t for t in trades if t.get("is_open", True)])
 
-    return {
+    report: dict[str, Any] = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "total_trades": len(trades),
         "open_trades": open_count,
@@ -321,6 +395,13 @@ def generate_report(trades: list[dict]) -> dict:
         "drawdown": dd,
         "patterns": patterns,
     }
+
+    if bootstrap:
+        report["bootstrap"] = bootstrap_metrics(
+            trades, bootstrap_iterations, bootstrap_seed,
+        )
+
+    return report
 
 
 def format_report(report: dict) -> str:
@@ -385,6 +466,21 @@ def format_report(report: dict) -> str:
                     f"hit rate {stats['hit_rate']}%, avg PnL {stats['avg_pnl']:+.2f}%"
                 )
 
+    # Bootstrap confidence intervals
+    bs = report.get("bootstrap")
+    if bs:
+        lines.append("\n## Bootstrap Confidence Intervals (90% CI)")
+        lines.append(f"- Resamples: {bs['n_iterations']:,} | Sample size: {bs['resample_size']}")
+        for label, key in [("Hit rate", "hit_rate"), ("Avg PnL", "avg_pnl"),
+                           ("Sharpe-like", "sharpe_like"), ("Max drawdown", "max_drawdown")]:
+            stats = bs.get(key)
+            if stats:
+                lines.append(
+                    f"- **{label}**: mean {stats['mean']:.2f}  "
+                    f"[{stats['ci_low']:.2f} – {stats['ci_high']:.2f}]  "
+                    f"(median {stats['median']:.2f})"
+                )
+
     # Patterns
     patterns = report.get("patterns", [])
     if patterns:
@@ -407,6 +503,11 @@ def main() -> None:
     parser.add_argument("--json", action="store_true", help="Output JSON")
     parser.add_argument("--report", type=str, help="Write markdown report to file")
     parser.add_argument("--since", type=str, help="Filter trades since date (YYYY-MM-DD)")
+    parser.add_argument("--no-bootstrap", action="store_true", help="Skip bootstrap resampling")
+    parser.add_argument("--bootstrap-iterations", type=int, default=10_000,
+                        help="Bootstrap resample count (default 10,000)")
+    parser.add_argument("--bootstrap-seed", type=int, default=42,
+                        help="Random seed for bootstrap reproducibility")
     args = parser.parse_args()
 
     log_path = Path(args.log_path)
@@ -420,7 +521,12 @@ def main() -> None:
         print("No trades found in log.")
         return
 
-    report = generate_report(trades)
+    report = generate_report(
+        trades,
+        bootstrap=not args.no_bootstrap,
+        bootstrap_iterations=args.bootstrap_iterations,
+        bootstrap_seed=args.bootstrap_seed,
+    )
 
     if args.json:
         print(json.dumps(report, indent=2, ensure_ascii=False, default=str))
