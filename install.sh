@@ -33,7 +33,12 @@ if [[ -d "$SKILLS_SRC" ]]; then
     echo "Installing skills..."
     mkdir -p "$CONFIG_DIR/skills"
     if $FORCE; then
-        cp -r "$SKILLS_SRC"/* "$CONFIG_DIR/skills/"
+        for item in "$SKILLS_SRC"/*; do
+            name=$(basename "$item")
+            target="$CONFIG_DIR/skills/$name"
+            rm -rf "$target" 2>/dev/null || true
+            ln -sf "$item" "$target"
+        done
     else
         for item in "$SKILLS_SRC"/*; do
             name=$(basename "$item")
@@ -41,8 +46,34 @@ if [[ -d "$SKILLS_SRC" ]]; then
             if [[ -e "$target" ]]; then
                 echo "  SKIP  $name  (already exists)"
             else
-                cp -r "$item" "$target"
-                echo "  COPY  $name"
+                ln -s "$item" "$target"
+                echo "  LINK  $name"
+            fi
+        done
+    fi
+fi
+
+# Install plugins
+PLUGINS_SRC="$REPO_DIR/plugins"
+if [[ -d "$PLUGINS_SRC" ]]; then
+    echo "Installing plugins..."
+    mkdir -p "$CONFIG_DIR/.opencode/plugins"
+    if $FORCE; then
+        for item in "$PLUGINS_SRC"/*; do
+            name=$(basename "$item")
+            target="$CONFIG_DIR/.opencode/plugins/$name"
+            rm -rf "$target" 2>/dev/null || true
+            ln -sf "$item" "$target"
+        done
+    else
+        for item in "$PLUGINS_SRC"/*; do
+            name=$(basename "$item")
+            target="$CONFIG_DIR/.opencode/plugins/$name"
+            if [[ -e "$target" ]]; then
+                echo "  SKIP  $name  (already exists)"
+            else
+                ln -s "$item" "$target"
+                echo "  LINK  $name"
             fi
         done
     fi
@@ -58,10 +89,24 @@ if [[ -d "$CONFIG_SRC" ]]; then
         if [[ -e "$target" ]] && ! $FORCE; then
             echo "  SKIP  $name  (already exists)"
         else
-            cp "$item" "$target"
-            echo "  COPY  $name"
+            rm -rf "$target" 2>/dev/null || true
+            ln -s "$item" "$target"
+            echo "  LINK  $name"
         fi
     done
 fi
 
 echo "Done."
+
+# Offer headroom installation
+HEADROOM_SH="$REPO_DIR/setup-headroom.sh"
+if [[ -x "$HEADROOM_SH" ]]; then
+    echo ""
+    echo "Vuoi installare anche headroom (compressione token 60-95%)?"
+    read -r -p "  [y/N] " answer
+    if [[ "$answer" =~ ^[Yy]$ ]]; then
+        "$HEADROOM_SH"
+    else
+        echo "  Salta headroom. Puoi installarlo dopo con: ./setup-headroom.sh"
+    fi
+fi

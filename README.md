@@ -56,6 +56,22 @@ python install.py -v         # verbose output
 ./install.sh --force         # overwrite existing files
 ```
 
+### Headroom (token compression)
+
+Headroom comprime i tool output prima che arrivino al LLM (60-95% token in meno).
+
+```bash
+./setup-headroom.sh
+```
+
+Cosa fa:
+- Crea un virtual environment in `~/.local/share/opencode/headroom-venv/`
+- Installa `headroom-ai[mcp]`
+- `opencode.json` è già preconfigurato per usarlo come MCP server
+- `AGENTS.md` forza la compressione automatica di ogni output >2000 caratteri
+
+Richiede Python 3.10+.
+
 ## Contents
 
 | Skill                       | Description                                                                                                    |
@@ -84,8 +100,9 @@ python install.py -v         # verbose output
 | `volume-price-analysis`     | Knowledge base from 'A Complete Guide To Volume Price Analysis' by Anna Coulling                               |
 | `volume-profile`            | Knowledge base from 'VOLUME PROFILE' by Trader Dale (volume profile frameworks for institutional trading)      |
 | `wyckoff-2-0`               | Knowledge base from 'Wyckoff 2.0' by Rubén Villahermosa Chaves (volume profile, order flow, Wyckoff Method)    |
-| `config/AGENTS.md`          | Global rules that load skills automatically                                                                    |
-| `config/opencode.json`      | Provider/model configuration (modify before installing)                                                        |
+| `config/AGENTS.md`          | Global rules that load skills automatically + headroom compression mandatory                                                                    |
+| `config/opencode.json`      | Provider/model configuration + MCP headroom server (modify before installing)                                                        |
+| `setup-headroom.sh`         | Installs headroom in a dedicated venv for token compression (60-95% savings)                                                            |
 
 ## Requires
 

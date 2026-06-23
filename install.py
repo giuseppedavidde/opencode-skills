@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import argparse
-import shutil
+import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -64,6 +64,19 @@ def discover_skill_files(repo_root: Path) -> list[tuple[Path, str]]:
     return result
 
 
+def discover_plugin_files(repo_root: Path) -> list[tuple[Path, str]]:
+    """Walk plugins/ directory returning (source, relative_path) pairs."""
+    plugins_dir = repo_root / "plugins"
+    if not plugins_dir.is_dir():
+        return []
+    result: list[tuple[Path, str]] = []
+    for path in plugins_dir.rglob("*"):
+        if path.is_file():
+            rel = path.relative_to(plugins_dir)
+            result.append((path, str(rel)))
+    return result
+
+
 def discover_config_files(repo_root: Path) -> list[tuple[Path, str]]:
     """Walk config/ directory returning (source, relative_path) pairs."""
     config_dir = repo_root / "config"
@@ -89,6 +102,13 @@ def build_plan(options: InstallOptions) -> InstallPlan:
             action.reason = "exists"
         actions.append(action)
 
+    for source, rel in discover_plugin_files(repo_root):
+        dest = options.config_dir / ".opencode" / "plugins" / rel
+        action = FileAction(source=source, dest=dest, category="plugin")
+        if dest.exists() and not options.force:
+            action.reason = "exists"
+        actions.append(action)
+
     if not options.skip_config:
         for source, rel in discover_config_files(repo_root):
             dest = options.config_dir / rel
@@ -109,13 +129,16 @@ def execute_plan(plan: InstallPlan) -> None:
             continue
 
         if plan.options.dry_run:
-            print(f"  COPY  {action.source}  →  {action.dest}")
+            symbol = "LINK" if action.category == "plugin" else "COPY"
+            print(f"  {symbol}  {action.source}  →  {action.dest}")
             continue
 
         action.dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(action.source, action.dest)
+        if action.dest.exists() or action.dest.is_symlink():
+            action.dest.unlink()
+        os.symlink(action.source, action.dest)
         if plan.options.verbose:
-            print(f"  COPY  {action.source}  →  {action.dest}")
+            print(f"  LINK  {action.source}  →  {action.dest}")
 
 
 def print_summary(plan: InstallPlan) -> None:
