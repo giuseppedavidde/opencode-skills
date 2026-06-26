@@ -15,13 +15,41 @@ This includes:
 ## Graphify Knowledge Graph
 CRITICAL: Whenever you need to understand a codebase, project architecture, or file relationships, load the @skills/graphify skill and use `/graphify .` to build a knowledge graph. This turns any folder into a queryable graph with community detection, god nodes, and surprising connections.
 
-## Headroom Compression — MANDATORY
-CRITICAL: You MUST use headroom to compress content and minimize token usage at ALL times:
+## Headroom Compression — MANDATORY & ACTIVE
+CRITICAL: You MUST use headroom to compress content and minimize token usage at ALL times.
+This is NOT optional or situational: every session must demonstrate measurable compression.
+A session that ends with `headroom_stats` showing 0 compressions is a FAILED session.
 
-1. **Compress large tool outputs** — After any tool returns >2000 chars of output, compress it with `headroom_compress` BEFORE reasoning over it. Use `headroom_retrieve` with the hash if you later need the full original.
+### When to compress (threshold: ≥800 chars of tool output)
+Compress with `headroom_compress` BEFORE reasoning over the content, in these cases:
+1. **Any tool result ≥800 chars** — bash, read, grep, glob, webfetch, task outputs.
+2. **JSON/CSV reports** — scanner outputs, deep-dive JSON, options chain dumps, earnings data.
+3. **Multi-file reads** — when reading 2+ files in parallel, compress each non-trivial one.
+4. **Skill content** — when a loaded skill's SKILL.md is long, compress it after first read.
+5. **Large bash outputs** — piped command results, directory listings, log tails.
 
-2. **Compress before grep/read results** — Large file reads, search results, logs, JSON outputs must be compressed first.
+### Workflow rules — GOAL: maximize token savings
+- **Compress the RAW tool output, not a summary**: ALWAYS pass the original, intact tool result
+  to `headroom_compress`. NEVER substitute it with your own hand-written summary, excerpt, or
+  paraphrase. A summary bypasses the compressor and yields `router:noop` (0 tokens saved).
+  The compressor needs the full text to achieve real 70-85% reduction.
+- **Compress early, retrieve late**: compress on first sight, use `headroom_retrieve` with the hash
+  only when you actually need full detail (numbers, exact strings, code).
+- **Always prefer compression over truncation** — Never use head/tail to limit output when you
+  can compress and retrieve on demand.
+- **Check `headroom_stats` at least twice per session**: once mid-session, once at the end.
+- **Quote hashes, not full content** — when referring to compressed data, reference the hash,
+  don't re-paste the original.
+- **Batch compress**: if multiple tools return large content in one turn, call `headroom_compress`
+  once per result, in parallel.
+- **Verify non-noop**: after each compress, confirm the returned `strategy` is NOT `router:noop`.
+  If it IS noop, the input was too small or already compressed — feed larger raw content next time.
 
-3. **Use `headroom_stats` periodically** — Check savings at the end of session or after heavy tool usage.
-
-4. **Always prefer compression over truncation** — Never truncate with head/tail when you can compress and retrieve on demand.
+### Anti-patterns (forbidden)
+- **Passing a hand-written summary to `headroom_compress` instead of the raw tool output** (causes
+  noop, 0 savings — this is the #1 failure mode).
+- Reasoning over >800-char tool output without compressing it first.
+- Pasting full scanner JSON / analysis JSON into your reasoning context uncompressed.
+- Ending a session without calling `headroom_stats`.
+- Using `head`/`tail`/`limit` on tool outputs instead of compressing.
+- Treating the rule as "best effort": it is a hard requirement, like using a Python venv.
