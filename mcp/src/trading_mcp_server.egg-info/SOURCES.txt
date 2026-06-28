@@ -15,6 +15,7 @@ src/trading_mcp/analysis/price_action.py
 src/trading_mcp/analysis/scanner.py
 src/trading_mcp/analysis/sentiment.py
 src/trading_mcp/analysis/sentiment_6d.py
+src/trading_mcp/analysis/sentiment_web.py
 src/trading_mcp/analysis/squeeze_play.py
 src/trading_mcp/analysis/volume_profile.py
 src/trading_mcp/analysis/weis_wave.py
