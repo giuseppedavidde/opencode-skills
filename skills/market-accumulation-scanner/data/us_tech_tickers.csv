@@ -1,0 +1,75 @@
+symbol,name,suffix,market,sector
+ACN,Accenture,,US,Information Technology
+ADBE,Adobe Inc.,,US,Information Technology
+AMD,Advanced Micro Devices,,US,Information Technology
+AKAM,Akamai Technologies,,US,Information Technology
+APH,Amphenol,,US,Information Technology
+ADI,Analog Devices,,US,Information Technology
+AAPL,Apple Inc.,,US,Information Technology
+AMAT,Applied Materials,,US,Information Technology
+APP,AppLovin,,US,Information Technology
+ANET,Arista Networks,,US,Information Technology
+ADSK,Autodesk,,US,Information Technology
+AVGO,Broadcom,,US,Information Technology
+CDNS,Cadence Design Systems,,US,Information Technology
+CDW,CDW Corporation,,US,Information Technology
+CIEN,Ciena,,US,Information Technology
+CSCO,Cisco,,US,Information Technology
+CTSH,Cognizant,,US,Information Technology
+COHR,Coherent Corp.,,US,Information Technology
+GLW,Corning Inc.,,US,Information Technology
+CRWD,CrowdStrike,,US,Information Technology
+DDOG,Datadog,,US,Information Technology
+DELL,Dell Technologies,,US,Information Technology
+FFIV,"F5, Inc.",,US,Information Technology
+FICO,Fair Isaac,,US,Information Technology
+FSLR,First Solar,,US,Information Technology
+FLEX,Flex Ltd.,,US,Information Technology
+FTNT,Fortinet,,US,Information Technology
+IT,Gartner,,US,Information Technology
+GEN,Gen Digital,,US,Information Technology
+GDDY,GoDaddy,,US,Information Technology
+HPE,Hewlett Packard Enterprise,,US,Information Technology
+HPQ,HP Inc.,,US,Information Technology
+IBM,IBM,,US,Information Technology
+INTC,Intel,,US,Information Technology
+INTU,Intuit,,US,Information Technology
+JBL,Jabil,,US,Information Technology
+KEYS,Keysight Technologies,,US,Information Technology
+KLAC,KLA Corporation,,US,Information Technology
+LRCX,Lam Research,,US,Information Technology
+LITE,Lumentum,,US,Information Technology
+MRVL,Marvell Technology,,US,Information Technology
+MCHP,Microchip Technology,,US,Information Technology
+MU,Micron Technology,,US,Information Technology
+MSFT,Microsoft,,US,Information Technology
+MPWR,Monolithic Power Systems,,US,Information Technology
+MSI,Motorola Solutions,,US,Information Technology
+NTAP,NetApp,,US,Information Technology
+NVDA,Nvidia,,US,Information Technology
+NXPI,NXP Semiconductors,,US,Information Technology
+ON,ON Semiconductor,,US,Information Technology
+ORCL,Oracle Corporation,,US,Information Technology
+PLTR,Palantir Technologies,,US,Information Technology
+PANW,Palo Alto Networks,,US,Information Technology
+PTC,PTC Inc.,,US,Information Technology
+QCOM,Qualcomm,,US,Information Technology
+Q,Qnity Electronics,,US,Information Technology
+ROP,Roper Technologies,,US,Information Technology
+CRM,Salesforce,,US,Information Technology
+SNDK,Sandisk,,US,Information Technology
+STX,Seagate Technology,,US,Information Technology
+NOW,ServiceNow,,US,Information Technology
+SWKS,Skyworks Solutions,,US,Information Technology
+SMCI,Supermicro,,US,Information Technology
+SNPS,Synopsys,,US,Information Technology
+TEL,TE Connectivity,,US,Information Technology
+TDY,Teledyne Technologies,,US,Information Technology
+TER,Teradyne,,US,Information Technology
+TXN,Texas Instruments,,US,Information Technology
+TRMB,Trimble Inc.,,US,Information Technology
+TYL,Tyler Technologies,,US,Information Technology
+VRSN,Verisign,,US,Information Technology
+WDC,Western Digital,,US,Information Technology
+WDAY,"Workday, Inc.",,US,Information Technology
+ZBRA,Zebra Technologies,,US,Information Technology

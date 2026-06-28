@@ -46,6 +46,16 @@
       "type": "local",
       "command": ["/home/giuseppe/.local/share/opencode/headroom-venv/bin/headroom", "mcp", "serve"],
       "enabled": true
+    },
+    "trading": {
+      "type": "local",
+      "command": ["/home/giuseppe/.local/share/opencode/trading-mcp-venv/bin/trading-mcp"],
+      "args": [],
+      "env": {
+        "TRADING_SKILLS_DIR": "/home/giuseppe/Progetti/Github/opencode-skills/skills",
+        "TRADING_TICKERS_DIR": "/home/giuseppe/Progetti/Github/opencode-skills/skills/market-accumulation-scanner/data"
+      },
+      "enabled": true
     }
   }
 }

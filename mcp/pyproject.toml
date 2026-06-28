@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trading-mcp-server"
+version = "0.1.0"
+description = "MCP server for stock/crypto market analysis using Wyckoff, Volume Profile, VPA, and options analysis"
+license = {text = "Apache-2.0"}
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastmcp>=2.0.0",
+    "yfinance>=0.2.50",
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "pydantic>=2.0.0",
+    "pyyaml>=6.0",
+    "click>=8.0.0",
+    "scipy>=1.10.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pylint>=3.0.0",
+    "pytest>=7.0.0",
+]
+
+[project.scripts]
+trading-mcp = "trading_mcp.main:run_app"
+
+[tool.setuptools.packages.find]
+where = ["src"]

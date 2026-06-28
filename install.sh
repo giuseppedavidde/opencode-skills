@@ -32,6 +32,8 @@ SKILLS_SRC="$REPO_DIR/skills"
 if [[ -d "$SKILLS_SRC" ]]; then
     echo "Installing skills..."
     mkdir -p "$CONFIG_DIR/skills"
+    # Skills replaced by MCP tools -- skip installation
+    SKIP_SKILLS="market-accumulation-scanner stock-crypto-analysis options-analysis options-strategy-suggestions market-data-fetch"
     if $FORCE; then
         for item in "$SKILLS_SRC"/*; do
             name=$(basename "$item")
@@ -43,6 +45,10 @@ if [[ -d "$SKILLS_SRC" ]]; then
         for item in "$SKILLS_SRC"/*; do
             name=$(basename "$item")
             target="$CONFIG_DIR/skills/$name"
+            if [[ " $SKIP_SKILLS " == *" $name "* ]]; then
+                echo "  SKIP  $name  (replaced by trading MCP)"
+                continue
+            fi
             if [[ -e "$target" ]]; then
                 echo "  SKIP  $name  (already exists)"
             else
@@ -108,5 +114,18 @@ if [[ -x "$HEADROOM_SH" ]]; then
         "$HEADROOM_SH"
     else
         echo "  Salta headroom. Puoi installarlo dopo con: ./setup-headroom.sh"
+    fi
+fi
+
+# Offer trading-mcp installation
+TRADING_MCP_SH="$REPO_DIR/setup-trading-mcp.sh"
+if [[ -x "$TRADING_MCP_SH" ]]; then
+    echo ""
+    echo "Vuoi installare anche trading-mcp (analisi mercati via MCP)?"
+    read -r -p "  [y/N] " answer
+    if [[ "$answer" =~ ^[Yy]$ ]]; then
+        "$TRADING_MCP_SH"
+    else
+        echo "  Salta trading-mcp. Puoi installarlo dopo con: ./setup-trading-mcp.sh"
     fi
 fi

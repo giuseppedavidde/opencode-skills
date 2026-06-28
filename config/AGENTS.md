@@ -15,6 +15,29 @@ This includes:
 ## Graphify Knowledge Graph
 CRITICAL: Whenever you need to understand a codebase, project architecture, or file relationships, load the @skills/graphify skill and use `/graphify .` to build a knowledge graph. This turns any folder into a queryable graph with community detection, god nodes, and surprising connections.
 
+## Trading MCP Tools — PREFERRED
+CRITICAL: For ALL market analysis tasks, use the `trading` MCP tools FIRST. Never load or execute the old trading skills directly.
+This includes:
+- Market scanning → use `scan_market` instead of @skills/market-accumulation-scanner
+- Stock/crypto analysis → use `analyze_stock` instead of @skills/stock-crypto-analysis
+- Options analysis → use `analyze_options` instead of @skills/options-analysis
+- Options strategy → use `suggest_options_strategy` instead of @skills/options-strategy-suggestions
+- Market data fetch → use `fetch_stock_data` / `fetch_crypto_data` instead of @skills/market-data-fetch
+- Macro context → use `get_macro_context` (always run this FIRST before any analysis)
+- Framework knowledge → use `get_skill_knowledge` for on-demand knowledge from Wyckoff, VPA, VP, etc.
+
+The MCP tools save 80-95% token usage vs loading trading skills into context.
+Only fall back to @skills knowledge bases (wyckoff-2-0, volume-profile, etc.) if get_skill_knowledge does not cover the specific need.
+
+### Trading MCP + Headroom Compression
+CRITICAL: Trading MCP outputs (scan_market, analyze_stock, fetch_options_chain) are large JSON
+payloads. You MUST compress them with `headroom_compress` BEFORE reasoning over the content.
+- scan_market with 10+ tickers → compress immediately, retrieve only top 3 for deep dive
+- analyze_stock → compress, retrieve only dimensions/verdict/confidence
+- fetch_options_chain → compress the full chain, retrieve only ATM strikes + IV metrics
+- Never paste raw trading JSON into reasoning context uncompressed
+- Batch compress: if scan + 3× analyze_stock return in one turn, compress all in parallel
+
 ## Headroom Compression — MANDATORY & ACTIVE
 CRITICAL: You MUST use headroom to compress content and minimize token usage at ALL times.
 This is NOT optional or situational: every session must demonstrate measurable compression.

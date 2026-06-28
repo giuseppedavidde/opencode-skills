@@ -1,0 +1,2 @@
+[console_scripts]
+trading-mcp = trading_mcp.main:run_app

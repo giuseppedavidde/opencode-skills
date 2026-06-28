@@ -66,9 +66,46 @@ price action, favorable sentiment setups, and solid fundamentals.
 
 | Script | Purpose | Usage |
 |--------|---------|-------|
+| `scripts/refresh_tickers.py` | Aggiornamento ticker list da fonti live (Wikipedia, CoinGecko) | `python3 scripts/refresh_tickers.py --universe all` |
 | `scripts/compare_reports.py` | Confronto A/B tra report vecchio e nuovo formato | `python3 scripts/compare_reports.py <vecchio.csv> <nuovo.csv> [--report output.md]` |
 | `scripts/scheduler.py` | Scheduling cron di scan periodici | `python3 scripts/scheduler.py --setup` |
 | `scripts/watchlist_update.py` | Aggiornamento watchlist con evoluzione score | `python3 scripts/watchlist_update.py` |
+
+### Ticker List Refresh (Live Sources)
+
+I CSV dei ticker in `data/` vengono rigenerati da fonti autorevoli live.
+**Esegui il refresh prima di ogni scan** per garantire che gli indici siano aggiornati.
+
+```bash
+# Refresh completo (tutti gli universi)
+python3 scripts/refresh_tickers.py --universe all
+
+# Refresh singolo universo
+python3 scripts/refresh_tickers.py --universe us_large
+python3 scripts/refresh_tickers.py --universe crypto
+
+# Dry-run: mostra cosa cambierebbe senza scrivere
+python3 scripts/refresh_tickers.py --universe all --dry-run
+
+# Check-only: esci con codice 1 se ci sono cambiamenti
+python3 scripts/refresh_tickers.py --universe all --check-only
+```
+
+**Fonti per universo:**
+
+| Universo | Fonte primaria | Fonte secondaria |
+|----------|---------------|-------------------|
+| S&P 500 (`us_large`) | Wikipedia | GitHub dataset (cross-check) |
+| US Tech (`us_tech`) | Wikipedia (filtrato per GICS "Information Technology") | — |
+| FTSE MIB (`italy`) | Wikipedia | — |
+| DAX 40 (`germany`) | Wikipedia | — |
+| CAC 40 (`france`) | Wikipedia | — |
+| FTSE 100 (`uk`) | Wikipedia | — |
+| IBEX 35 (`spain`) | Wikipedia | — |
+| Crypto (`crypto`) | CoinGecko API (top 50 per market cap) | — |
+
+**Backup automatico:** Prima di ogni scrittura, i CSV esistenti vengono copiati in `data/backups/` con timestamp.
+**Dual-source S&P 500:** I ticker vengono confrontati tra Wikipedia e GitHub; eventuali discrepanze generano warnings.
 
 ### Report Comparison (A/B Test)
 
@@ -95,14 +132,15 @@ Il report mostra:
 
 | Name | Markets | Size | Suffix | Source |
 |------|---------|:----:|--------|--------|
-| `us_large` | NYSE, NASDAQ | ~500 | — | SPY constituents |
-| `us_tech` | NASDAQ | ~100 | — | QQQ constituents |
-| `italy` | Milan | 40 | `.MI` | FTSE MIB |
-| `germany` | Frankfurt | 40 | `.DE` | DAX 40 |
-| `france` | Euronext Paris | 40 | `.PA` | CAC 40 |
-| `uk` | London | 100 | `.L` | FTSE 100 |
-| `spain` | Madrid | 35 | `.MC` | IBEX 35 |
-| `all` | All combined | ~900 | mixed | — |
+| `us_large` | NYSE, NASDAQ | 503 | — | S&P 500 (Wikipedia + GitHub dual-source) |
+| `us_tech` | NYSE, NASDAQ | ~75 | — | S&P 500 filtrato per GICS "Information Technology" |
+| `italy` | Milan | 40 | `.MI` | FTSE MIB (Wikipedia) |
+| `germany` | Frankfurt | 40 | `.DE` | DAX 40 (Wikipedia) |
+| `france` | Euronext Paris | 40 | `.PA` | CAC 40 (Wikipedia) |
+| `uk` | London | 100 | `.L` | FTSE 100 (Wikipedia) |
+| `spain` | Madrid | 35 | `.MC` | IBEX 35 (Wikipedia) |
+| `crypto` | — | 50 | `-USD` | CoinGecko (top 50) |
+| `all` | All combined | ~760 | mixed | — |
 
 #### Custom Ticker List
 
@@ -112,7 +150,7 @@ Pass comma-separated tickers to skip universe loading:
 scan accumulation on MSFT, AAPL, ENI.MI, SAP.DE, BNP.PA
 ```
 
-Ticker lists are in `data/us_tickers.csv` and `data/europe_tickers.csv`.
+Ticker lists are in `data/us_tickers.csv` and per-market files (`data/italy_tickers.csv`, `data/germany_tickers.csv`, etc.). Esegui `python3 scripts/refresh_tickers.py --universe all` per aggiornarli prima dello scan.
 
 ### Phase 2 — Multi-Dimensional Screening
 

@@ -1,0 +1,85 @@
+Metadata-Version: 2.4
+Name: trading-mcp-server
+Version: 0.1.0
+Summary: MCP server for stock/crypto market analysis using Wyckoff, Volume Profile, VPA, and options analysis
+License: Apache-2.0
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: fastmcp>=2.0.0
+Requires-Dist: yfinance>=0.2.50
+Requires-Dist: pandas>=2.0.0
+Requires-Dist: numpy>=1.24.0
+Requires-Dist: pydantic>=2.0.0
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: click>=8.0.0
+Requires-Dist: scipy>=1.10.0
+Provides-Extra: dev
+Requires-Dist: pylint>=3.0.0; extra == "dev"
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+
+# trading-mcp-server
+
+MCP server for stock/crypto market analysis using Wyckoff, Volume Profile, VPA, and options analysis.
+
+Part of the [opencode-skills](https://github.com/biocontext-ai/opencode-skills) ecosystem.
+
+## Overview
+
+Exposes 9 MCP tools for deterministic market analysis:
+
+| Tool | Category | Description |
+|------|----------|-------------|
+| `fetch_stock_data` | Data | OHLCV + fundamentals via yfinance |
+| `fetch_crypto_data` | Data | CoinGecko + yfinance crypto |
+| `fetch_options_chain` | Data | Options chain + Greeks + IV metrics |
+| `scan_market` | Analysis | Multi-market accumulation scanner (ranked) |
+| `analyze_stock` | Analysis | Deep single-stock Wyckoff/VP/VPA analysis |
+| `analyze_options` | Analysis | Multi-leg options: Greeks, payoff, probabilities |
+| `get_macro_context` | Knowledge | VIX, DXY, Fed, regime, dynamic weights |
+| `get_skill_knowledge` | Knowledge | On-demand skill knowledge from SKILL.md |
+| `suggest_options_strategy` | Knowledge | Strategy recommendation from verdict |
+
+## Quick Install
+
+```bash
+./setup-trading-mcp.sh
+```
+
+This creates a venv at `~/.local/share/opencode/trading-mcp-venv/` and installs the package.
+
+Then add to your `opencode.json`:
+
+```json
+{
+  "mcp": {
+    "trading": {
+      "type": "local",
+      "command": ["/home/giuseppe/.local/share/opencode/trading-mcp-venv/bin/trading-mcp"],
+      "args": [],
+      "enabled": true
+    }
+  }
+}
+```
+
+## Development
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+```
+
+## Token Savings
+
+When used with OpenCode, this MCP server reduces context window usage by 80-95% compared to loading full trading skills. Analysis that previously consumed ~20K tokens now uses ~1K.
+
+## Architecture
+
+```
+trading_mcp/
+├── data/           # yfinance, CoinGecko, options chain fetch
+├── analysis/       # Wyckoff, Volume Profile, VPA, sentiment, indicators
+├── knowledge/      # Skill bridge (reads SKILL.md)
+└── tools/          # MCP tool registration
+```

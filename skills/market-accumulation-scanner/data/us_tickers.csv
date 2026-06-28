@@ -1,384 +1,504 @@
-symbol,name,suffix,market
-AAPL,Apple Inc.,,US
-MSFT,Microsoft Corporation,,US
-GOOGL,Alphabet Inc.,,US
-AMZN,Amazon.com Inc.,,US
-NVDA,NVIDIA Corporation,,US
-META,Meta Platforms Inc.,,US
-TSLA,Tesla Inc.,,US
-BRK-B,Berkshire Hathaway Inc.,,US
-JPM,JPMorgan Chase & Co.,,US
-V,Visa Inc.,,US
-UNH,UnitedHealth Group Inc.,,US
-JNJ,Johnson & Johnson,,US
-MA,Mastercard Inc.,,US
-PG,Procter & Gamble Co.,,US
-XOM,Exxon Mobil Corporation,,US
-HD,Home Depot Inc.,,US
-KO,Coca-Cola Co.,,US
-CVX,Chevron Corporation,,US
-MRK,Merck & Co. Inc.,,US
-ABBV,AbbVie Inc.,,US
-PFE,Pfizer Inc.,,US
-PEP,PepsiCo Inc.,,US
-WMT,Walmart Inc.,,US
-ABT,Abbott Laboratories,,US
-COST,Costco Wholesale Corp.,,US
-CRM,Salesforce Inc.,,US
-TMO,Thermo Fisher Scientific Inc.,,US
-AVGO,Broadcom Inc.,,US
-ACN,Accenture plc,,US
-DHR,Danaher Corporation,,US
-NFLX,Netflix Inc.,,US
-ADBE,Adobe Inc.,,US
-CMCSA,Comcast Corporation,,US
-LIN,Linde plc,,US
-NKE,Nike Inc.,,US
-NVDA,NVIDIA Corporation,,US
-T,AT&T Inc.,,US
-VZ,Verizon Communications Inc.,,US
-WFC,Wells Fargo & Co.,,US
-C,Citigroup Inc.,,US
-BA,Boeing Co.,,US
-DIS,The Walt Disney Co.,,US
-INTC,Intel Corporation,,US
-AMD,Advanced Micro Devices Inc.,,US
-PYPL,PayPal Holdings Inc.,,US
-QCOM,Qualcomm Inc.,,US
-TXN,Texas Instruments Inc.,,US
-CAT,Caterpillar Inc.,,US
-LOW,Lowe's Companies Inc.,,US
-GE,General Electric Co.,,US
-IBM,International Business Machines,,US
-SPY,SPDR S&P 500 ETF Trust,,US
-QQQ,Invesco QQQ Trust,,US
-IWM,iShares Russell 2000 ETF,,US
-XLF,Financial Select Sector SPDR,,US
-XLE,Energy Select Sector SPDR,,US
-XLK,Technology Select Sector SPDR,,US
-LMT,Lockheed Martin Corp.,,US
-MMM,3M Co.,,US
-AXP,American Express Co.,,US
-BK,Bank of New York Mellon Corp.,,US
-BLK,BlackRock Inc.,,US
-SCHW,Charles Schwab Corp,,US
-GS,Goldman Sachs Group Inc.,,US
-MS,Morgan Stanley,,US
-USB,U.S. Bancorp,,US
-PNC,PNC Financial Services Group,,US
-TFC,Truist Financial Corp.,,US
-MU,Micron Technology Inc.,,US
-AMAT,Applied Materials Inc.,,US
-LRCX,Lam Research Corp.,,US
-KLAC,KLA Corp.,,US
-ASML,ASML Holding NV,,US
-NOW,Servicenow Inc.,,US
-ISIS,Illumina Inc.,,US
-BSX,Boston Scientific Corp.,,US
-MDT,Medtronic plc,,US
-SYK,Stryker Corp.,,US
-EW,Edwards Lifesciences Corp.,,US
-ZBH,Zimmer Biomet Holdings Inc,,US
-BDX,Becton Dickinson and Co.,,US
-ANTM,Elevance Health Inc.,,US
-CI,Cigna Corp.,,US
-HUM,Humana Inc.,,US
-AET,Aetna Inc.,,US
-UNP,Union Pacific Corp.,,US
-CSX,CSX Corp.,,US
-NSC,Norfolk Southern Corp.,,US
-UPS,United Parcel Service Inc.,,US
-FDX,FedEx Corp.,,US
-RTX,RTX Corp.,,US
-HON,Honeywell International Inc.,,US
-MMM,3M Co.,,US
-EMR,Emerson Electric Co.,,US
-PH,Parker-Hannifin Corp.,,US
-ROK,Rockwell Automation Inc.,,US
-ETN,Eaton Corp. plc,,US
-ITW,Illinois Tool Works Inc.,,US
-DOV,Dover Corp.,,US
-SWK,Stanley Black & Decker Inc.,,US
-SBUX,Starbucks Corp.,,US
-MCD,McDonald's Corp.,,US
-YUM,Yum! Brands Inc.,,US
-DRI,Darden Restaurants Inc.,,US
-CMG,Chipotle Mexican Grill Inc.,,US
-PLTR,Palantir Technologies Inc.,,US
-SNOW,Snowflake Inc.,,US
-DDOG,Datadog Inc.,,US
-ZS,Zscaler Inc.,,US
-CRWD,CrowdStrike Holdings Inc.,,US
-PANW,Palo Alto Networks Inc.,,US
-FTNT,Fortinet Inc.,,US
-OKTA,Okta Inc.,,US
-NET,Cloudflare Inc.,,US
-SQ,Block Inc.,,US
-ROKU,Roku Inc.,,US
-ZM,Zoom Video Communications Inc.,,US
-DOCU,DocuSign Inc.,,US
-TEAM,Atlassian Corp. plc,,US
-WDAY,Workday Inc.,,US
-ADSK,Autodesk Inc.,,US
-SPLK,Splunk Inc.,,US
-SHOP,Shopify Inc.,,US
-MRNA,Moderna Inc.,,US
-GILD,Gilead Sciences Inc.,,US
-REGN,Regeneron Pharmaceuticals Inc,,US
-BIIB,Biogen Inc.,,US
-VRTX,Vertex Pharmaceuticals Inc.,,US
-ALXN,Alexion Pharmaceuticals Inc.,,US
-CELG, Celgene Corp.,,US
-AMGN,Amgen Inc.,,US
-ILMN,Illumina Inc.,,US
-DXCM,DexCom Inc.,,US
-PODD,Insulet Corp.,,US
-ABMD,ABIOMED Inc.,,US
-ISRG,Intuitive Surgical Inc.,,US
-ALGN,Align Technology Inc.,,US
-MASI,Masimo Corp.,,US
-COO,The Cooper Companies Inc.,,US
-TFX,Teleflex Inc.,,US
-WST,West Pharmaceutical Services,,US
-MTD,Mettler-Toledo International,,US
-KEYS,Keysight Technologies Inc.,,US
-FLIR,FLIR Systems Inc.,,US
-AME,AMETEK Inc.,,US
-GNRC,Generac Holdings Inc.,,US
-CHD,Church & Dwight Co. Inc.,,US
-CL,Colgate-Palmolive Co.,,US
-KMB,Kimberly-Clark Corp.,,US
-EL,Estee Lauder Companies Inc.,,US
-NEM,Newmont Corp.,,US
-FCX,Freeport-McMoRan Inc.,,US
-BHP,BHP Group Ltd.,,US
-RIO,Rio Tinto plc,,US
-SCCO,Southern Copper Corp.,,US
-F, Ford Motor Co.,,US
-GM,General Motors Co.,,US
-TSLA,Tesla Inc.,,US
-RIVN,Rivian Automotive Inc.,,US
-LCID,Lucid Group Inc.,,US
-PLUG,Plug Power Inc.,,US
-ENPH,Enphase Energy Inc.,,US
-SEDG,SolarEdge Technologies Inc,,US
-FSLR,First Solar Inc.,,US
-JKS,JinkoSolar Holding Co Ltd,,US
-DQ,Daqo New Energy Corp.,,US
-NOVA,Sunnova Energy International,,US
-RUN,Sunrun Inc.,,US
-BE,Bloom Energy Corp.,,US
-FCEL,FuelCell Energy Inc.,,US
-SO,Southern Co.,,US
-DUK,Duke Energy Corp.,,US
-NEE,NextEra Energy Inc.,,US
-AEP,American Electric Power Co,,US
-EXC,Exelon Corp.,,US
-ED,Consolidated Edison Inc.,,US
-XEL,Xcel Energy Inc.,,US
-PEG,Public Service Enterprise Grp,,US
-EIX,Edison International,,US
-D,Dominion Energy Inc.,,US
-WMB,Williams Companies Inc.,,US
-OKE,ONEOK Inc.,,US
-KMI,Kinder Morgan Inc.,,US
-ET,Energy Transfer LP,,US
-MPLX,MPLX LP,,US
-DOW,Dow Inc.,,US
-LYB,LyondellBasell Industries NV,,US
-DD,DuPont de Nemours Inc.,,US
-ECL,Ecolab Inc.,,US
-PPG,PPG Industries Inc.,,US
-SHW,Sherwin-Williams Co.,,US
-APD,Air Products and Chemicals Inc,,US
-LIN,Linde plc,,US
-CE,Celanese Corp.,,US
-FMC,FMC Corp.,,US
-ALB,Albemarle Corp.,,US
-SQM,Sociedad Quimica y Minera,,US
-MOS,Mosaic Co.,,US
-CF,CF Industries Holdings Inc.,,US
-COF,Capital One Financial Corp.,,US
-DFS,Discover Financial Services,,US
-SYF,Synchrony Financial,,US
-AXP,American Express Co.,,US
-JPM,JPMorgan Chase & Co.,,US
-WFC,Wells Fargo & Co.,,US
-BAC,Bank of America Corp.,,US
-C,Citigroup Inc.,,US
-MS,Morgan Stanley,,US
-GS,Goldman Sachs Group Inc.,,US
-SCHW,Charles Schwab Corp,,US
-IBKR,Interactive Brokers Group Inc,,US
-HOOD,Robinhood Markets Inc.,,US
-SOFI,SoFi Technologies Inc.,,US
-UPST,Upstart Holdings Inc.,,US
-LC,LendingClub Corp.,,US
-AFRM,Affirm Holdings Inc.,,US
-COIN,Coinbase Global Inc.,,US
-MSTR,MicroStrategy Inc.,,US
-RIOT,Riot Platforms Inc.,,US
-MARA,Mara Holdings Inc.,,US
-CLSK,CleanSpark Inc.,,US
-WULF,TeraWulf Inc.,,US
-ORCL,Oracle Corp.,,US
-SAP,SAP SE,,US
-CRM,Salesforce Inc.,,US
-NOW,Servicenow Inc.,,US
-ADBE,Adobe Inc.,,US
-INTU,Intuit Inc.,,US
-MSFT,Microsoft Corp.,,US
-GOOGL,Alphabet Inc.,,US
-META,Meta Platforms Inc.,,US
-AMZN,Amazon.com Inc.,,US
-AAPL,Apple Inc.,,US
-NVDA,NVIDIA Corp.,,US
-AMD,Advanced Micro Devices Inc.,,US
-INTC,Intel Corp.,,US
-MU,Micron Technology Inc.,,US
-STM,STMicroelectronics NV,,US
-TSM,Taiwan Semiconductor Manufacturing,,US
-AVGO,Broadcom Inc.,,US
-QCOM,Qualcomm Inc.,,US
-TXN,Texas Instruments Inc.,,US
-ADI,Analog Devices Inc.,,US
-NXPI,NXP Semiconductors NV,,US
-MRVL,Marvell Technology Inc.,,US
-WDC,Western Digital Corp.,,US
-STX,Seagate Technology Holdings,,US
-DELL,Dell Technologies Inc.,,US
-HPQ,HP Inc.,,US
-HPE,Hewlett Packard Enterprise,,US
-CSCO,Cisco Systems Inc.,,US
-ANET,Arista Networks Inc.,,US
-JNPR,Juniper Networks Inc.,,US
-MSI,Motorola Solutions Inc.,,US
-VZ,Verizon Communications Inc.,,US
-T,AT&T Inc.,,US
-TMUS,T-Mobile US Inc.,,US
-CMCSA,Comcast Corp.,,US
-CHTR,Charter Communications Inc.,,US
-ROKU,Roku Inc.,,US
-NFLX,Netflix Inc.,,US
-DIS,Walt Disney Co.,,US
-WBD,Warner Bros Discovery Inc.,,US
-PARA,Paramount Global,,US
-NXST,Nexstar Media Group Inc.,,US
-TGT,Target Corp.,,US
-WMT,Walmart Inc.,,US
-COST,Costco Wholesale Corp.,,US
-AMZN,Amazon.com Inc.,,US
-EBAY,eBay Inc.,,US
-ETSY,Etsy Inc.,,US
-HD,Home Depot Inc.,,US
-LOW,Lowe's Companies Inc.,,US
-TJX,TJX Companies Inc.,,US
-ROST,Ross Stores Inc.,,US
-GPS,Gap Inc.,,US
-AEO,American Eagle Outfitters Inc,,US
-ANF,Abercrombie & Fitch Co.,,US
-URBN,Urban Outfitters Inc.,,US
-M, Macy's Inc.,,US
-KSS,Kohl's Corp.,,US
-JWN,Nordstrom Inc.,,US
-DKS,DICK'S Sporting Goods Inc.,,US
-BBY,Best Buy Co. Inc.,,US
-AMZN,Amazon.com Inc.,,US
-RCL,Royal Caribbean Cruises Ltd,,US
-CCL,Carnival Corp.,,US
-NCLH,Norwegian Cruise Line Holdings,,US
-EXPE,Expedia Group Inc.,,US
-BKNG,Booking Holdings Inc.,,US
-ABNB,Airbnb Inc.,,US
-UBER,Uber Technologies Inc.,,US
-LYFT,Lyft Inc.,,US
-DASH,DoorDash Inc.,,US
-GRUB,Just Eat Takeaway.com,,US
-DPZ, Domino's Pizza Inc.,,US
-YUM,Yum! Brands Inc.,,US
-MCD,McDonald's Corp.,,US
-SBUX,Starbucks Corp.,,US
-CMG,Chipotle Mexican Grill Inc.,,US
-QSR,Restaurant Brands International,,US
-DRI,Darden Restaurants Inc.,,US
-WEN, Wendy's Co.,,US
-MRNA,Moderna Inc.,,US
-PFE,Pfizer Inc.,,US
-MRK,Merck & Co. Inc.,,US
-ABBV,AbbVie Inc.,,US
-BMY,Bristol-Myers Squibb Co.,,US
-GILD,Gilead Sciences Inc.,,US
-VRTX,Vertex Pharmaceuticals Inc.,,US
-BIIB,Biogen Inc.,,US
-REGN,Regeneron Pharmaceuticals Inc,,US
-ILMN,Illumina Inc.,,US
-TMO,Thermo Fisher Scientific Inc.,,US
-DHR,Danaher Corp.,,US
-A,Agilent Technologies Inc.,,US
-WAT,Waters Corp.,,US
-BDX,Becton Dickinson and Co.,,US
-BSX,Boston Scientific Corp.,,US
-SYK,Stryker Corp.,,US
-MDT,Medtronic plc,,US
-ZBH,Zimmer Biomet Holdings Inc,,US
-EW,Edwards Lifesciences Corp.,,US
-GE,General Electric Co.,,US
-HON,Honeywell International Inc.,,US
-MMM,3M Co.,,US
-CAT,Caterpillar Inc.,,US
-DE,Deere & Co.,,US
-PCAR,PACCAR Inc.,,US
-CMI,Cummins Inc.,,US
-FTV,Fortive Corp.,,US
-DOV,Dover Corp.,,US
-PH,Parker-Hannifin Corp.,,US
-ROK,Rockwell Automation Inc.,,US
-ETN,Eaton Corp. plc,,US
-ITW,Illinois Tool Works Inc.,,US
-IR,Ingersoll Rand Inc.,,US
-PWR,Quanta Services Inc.,,US
-EMR,Emerson Electric Co.,,US
-AME,AMETEK Inc.,,US
-TT, Trane Technologies plc,,US
-CARR,Carrier Global Corp.,,US
-JCI,Johnson Controls International,,US
-OC,Owens Corning,,US
-BLDR,Builders FirstSource Inc.,,US
-MAS,Masco Corp.,,US
-TOL,Toll Brothers Inc.,,US
-DHI,D.R. Horton Inc.,,US
-LEN,Lennar Corp.,,US
-PHM,PulteGroup Inc.,,US
-NVR,NVR Inc.,,US
-HD,Home Depot Inc.,,US
-LOW,Lowe's Companies Inc.,,US
-LLY,Eli Lilly and Co.,,US
-JNJ,Johnson & Johnson,,US
-ABT,Abbott Laboratories,,US
-UNH,UnitedHealth Group Inc.,,US
-CI,Cigna Group,,US
-HUM,Humana Inc.,,US
-ANTM,Elevance Health Inc.,,US
-CVS,CVS Health Corp.,,US
-WBA,Walgreens Boots Alliance Inc,,US
-MCK,McKesson Corp.,,US
-ABC, AmerisourceBergen Corp.,,US
-CAH,Cardinal Health Inc.,,US
-BAH,Booz Allen Hamilton Holding,,US
-LDOS,Leidos Holdings Inc.,,US
-SAIC,Sciences Applications Intl Corp,,US
-GD,General Dynamics Corp.,,US
-LMT,Lockheed Martin Corp.,,US
-NOC,Northrop Grumman Corp.,,US
-RTX,RTX Corp.,,US
-LHX,L3Harris Technologies Inc.,,US
-HII,Huntington Ingalls Industries,,US
-GE,General Electric Co.,,US
-BA,Boeing Co.,,US
-TXT,Textron Inc.,,US
-COL,Rockwell Collins Inc.,,US
-SPCE,Virgin Galactic Holdings Inc,,US
-ASTS,AST SpaceMobile Inc.,,US
-RKLB,Rocket Lab USA Inc.,,US
-RDW,Redwire Corp.,,US
-MAXR,Maxar Technologies Inc.,,US
+symbol,name,suffix,market,sector
+MMM,3M,,US,Industrials
+AOS,A. O. Smith,,US,Industrials
+ABT,Abbott Laboratories,,US,Health Care
+ABBV,AbbVie,,US,Health Care
+ACN,Accenture,,US,Information Technology
+ADBE,Adobe Inc.,,US,Information Technology
+AMD,Advanced Micro Devices,,US,Information Technology
+AES,AES Corporation,,US,Utilities
+AFL,Aflac,,US,Financials
+A,Agilent Technologies,,US,Health Care
+APD,Air Products,,US,Materials
+ABNB,Airbnb,,US,Consumer Discretionary
+AKAM,Akamai Technologies,,US,Information Technology
+ALB,Albemarle Corporation,,US,Materials
+ARE,Alexandria Real Estate Equities,,US,Real Estate
+ALGN,Align Technology,,US,Health Care
+ALLE,Allegion,,US,Industrials
+LNT,Alliant Energy,,US,Utilities
+ALL,Allstate,,US,Financials
+GOOGL,Alphabet Inc. (Class A),,US,Communication Services
+GOOG,Alphabet Inc. (Class C),,US,Communication Services
+MO,Altria,,US,Consumer Staples
+AMZN,Amazon,,US,Consumer Discretionary
+AMCR,Amcor,,US,Materials
+AEE,Ameren,,US,Utilities
+AEP,American Electric Power,,US,Utilities
+AXP,American Express,,US,Financials
+AIG,American International Group,,US,Financials
+AMT,American Tower,,US,Real Estate
+AWK,American Water Works,,US,Utilities
+AMP,Ameriprise Financial,,US,Financials
+AME,Ametek,,US,Industrials
+AMGN,Amgen,,US,Health Care
+APH,Amphenol,,US,Information Technology
+ADI,Analog Devices,,US,Information Technology
+AON,Aon plc,,US,Financials
+APA,APA Corporation,,US,Energy
+APO,Apollo Global Management,,US,Financials
+AAPL,Apple Inc.,,US,Information Technology
+AMAT,Applied Materials,,US,Information Technology
+APP,AppLovin,,US,Information Technology
+APTV,Aptiv,,US,Consumer Discretionary
+ACGL,Arch Capital Group,,US,Financials
+ADM,Archer Daniels Midland,,US,Consumer Staples
+ARES,Ares Management,,US,Financials
+ANET,Arista Networks,,US,Information Technology
+AJG,Arthur J. Gallagher & Co.,,US,Financials
+AIZ,Assurant,,US,Financials
+T,AT&T,,US,Communication Services
+ATO,Atmos Energy,,US,Utilities
+ADSK,Autodesk,,US,Information Technology
+ADP,Automatic Data Processing,,US,Industrials
+AZO,AutoZone,,US,Consumer Discretionary
+AVB,AvalonBay Communities,,US,Real Estate
+AVY,Avery Dennison,,US,Materials
+AXON,Axon Enterprise,,US,Industrials
+BKR,Baker Hughes,,US,Energy
+BALL,Ball Corporation,,US,Materials
+BAC,Bank of America,,US,Financials
+BAX,Baxter International,,US,Health Care
+BDX,Becton Dickinson,,US,Health Care
+BRK.B,Berkshire Hathaway,,US,Financials
+BBY,Best Buy,,US,Consumer Discretionary
+TECH,Bio-Techne,,US,Health Care
+BIIB,Biogen,,US,Health Care
+BLK,BlackRock,,US,Financials
+BX,Blackstone Inc.,,US,Financials
+XYZ,"Block, Inc.",,US,Financials
+BNY,BNY Mellon,,US,Financials
+BA,Boeing,,US,Industrials
+BKNG,Booking Holdings,,US,Consumer Discretionary
+BSX,Boston Scientific,,US,Health Care
+BMY,Bristol Myers Squibb,,US,Health Care
+AVGO,Broadcom,,US,Information Technology
+BR,Broadridge Financial Solutions,,US,Industrials
+BRO,Brown & Brown,,US,Financials
+BF.B,Brown–Forman,,US,Consumer Staples
+BLDR,Builders FirstSource,,US,Industrials
+BG,Bunge Global,,US,Consumer Staples
+BXP,"BXP, Inc.",,US,Real Estate
+CHRW,C.H. Robinson,,US,Industrials
+CDNS,Cadence Design Systems,,US,Information Technology
+CPT,Camden Property Trust,,US,Real Estate
+COF,Capital One,,US,Financials
+CAH,Cardinal Health,,US,Health Care
+CCL,Carnival Corporation,,US,Consumer Discretionary
+CARR,Carrier Global,,US,Industrials
+CVNA,Carvana,,US,Consumer Discretionary
+CASY,Casey's,,US,Consumer Staples
+CAT,Caterpillar Inc.,,US,Industrials
+CBOE,Cboe Global Markets,,US,Financials
+CBRE,CBRE Group,,US,Real Estate
+CDW,CDW Corporation,,US,Information Technology
+COR,Cencora,,US,Health Care
+CNC,Centene Corporation,,US,Health Care
+CNP,CenterPoint Energy,,US,Utilities
+CF,CF Industries,,US,Materials
+CRL,Charles River Laboratories,,US,Health Care
+SCHW,Charles Schwab Corporation,,US,Financials
+CHTR,Charter Communications,,US,Communication Services
+CVX,Chevron Corporation,,US,Energy
+CMG,Chipotle Mexican Grill,,US,Consumer Discretionary
+CB,Chubb Limited,,US,Financials
+CHD,Church & Dwight,,US,Consumer Staples
+CIEN,Ciena,,US,Information Technology
+CI,Cigna,,US,Health Care
+CINF,Cincinnati Financial,,US,Financials
+CTAS,Cintas,,US,Industrials
+CSCO,Cisco,,US,Information Technology
+C,Citigroup,,US,Financials
+CFG,Citizens Financial Group,,US,Financials
+CLX,Clorox,,US,Consumer Staples
+CME,CME Group,,US,Financials
+CMS,CMS Energy,,US,Utilities
+KO,Coca-Cola Company (The),,US,Consumer Staples
+CTSH,Cognizant,,US,Information Technology
+COHR,Coherent Corp.,,US,Information Technology
+COIN,Coinbase,,US,Financials
+CL,Colgate-Palmolive,,US,Consumer Staples
+CMCSA,Comcast,,US,Communication Services
+FIX,Comfort Systems USA,,US,Industrials
+CAG,Conagra Brands,,US,Consumer Staples
+COP,ConocoPhillips,,US,Energy
+ED,Consolidated Edison,,US,Utilities
+STZ,Constellation Brands,,US,Consumer Staples
+CEG,Constellation Energy,,US,Utilities
+COO,Cooper Companies (The),,US,Health Care
+CPRT,Copart,,US,Industrials
+GLW,Corning Inc.,,US,Information Technology
+CPAY,Corpay,,US,Financials
+CTVA,Corteva,,US,Materials
+CSGP,CoStar Group,,US,Real Estate
+COST,Costco,,US,Consumer Staples
+CRH,CRH plc,,US,Materials
+CRWD,CrowdStrike,,US,Information Technology
+CCI,Crown Castle,,US,Real Estate
+CSX,CSX Corporation,,US,Industrials
+CMI,Cummins,,US,Industrials
+CVS,CVS Health,,US,Health Care
+DHR,Danaher Corporation,,US,Health Care
+DRI,Darden Restaurants,,US,Consumer Discretionary
+DDOG,Datadog,,US,Information Technology
+DVA,DaVita,,US,Health Care
+DECK,Deckers Brands,,US,Consumer Discretionary
+DE,Deere & Company,,US,Industrials
+DELL,Dell Technologies,,US,Information Technology
+DAL,Delta Air Lines,,US,Industrials
+DVN,Devon Energy,,US,Energy
+DXCM,Dexcom,,US,Health Care
+FANG,Diamondback Energy,,US,Energy
+DLR,Digital Realty,,US,Real Estate
+DG,Dollar General,,US,Consumer Staples
+DLTR,Dollar Tree,,US,Consumer Staples
+D,Dominion Energy,,US,Utilities
+DPZ,Domino's,,US,Consumer Discretionary
+DASH,DoorDash,,US,Consumer Discretionary
+DOV,Dover Corporation,,US,Industrials
+DOW,Dow Inc.,,US,Materials
+DHI,D. R. Horton,,US,Consumer Discretionary
+DTE,DTE Energy,,US,Utilities
+DUK,Duke Energy,,US,Utilities
+DD,DuPont,,US,Materials
+ETN,Eaton Corporation,,US,Industrials
+EBAY,eBay Inc.,,US,Consumer Discretionary
+ECHO,EchoStar,,US,Communication Services
+ECL,Ecolab,,US,Materials
+EIX,Edison International,,US,Utilities
+EW,Edwards Lifesciences,,US,Health Care
+EA,Electronic Arts,,US,Communication Services
+ELV,Elevance Health,,US,Health Care
+EME,Emcor,,US,Industrials
+EMR,Emerson Electric,,US,Industrials
+ETR,Entergy,,US,Utilities
+EOG,EOG Resources,,US,Energy
+EQT,EQT Corporation,,US,Energy
+EFX,Equifax,,US,Industrials
+EQIX,Equinix,,US,Real Estate
+EQR,Equity Residential,,US,Real Estate
+ERIE,Erie Indemnity,,US,Financials
+ESS,Essex Property Trust,,US,Real Estate
+EL,Estée Lauder Companies (The),,US,Consumer Staples
+EG,Everest Group,,US,Financials
+EVRG,Evergy,,US,Utilities
+ES,Eversource Energy,,US,Utilities
+EXC,Exelon,,US,Utilities
+EXE,Expand Energy,,US,Energy
+EXPE,Expedia Group,,US,Consumer Discretionary
+EXPD,Expeditors International,,US,Industrials
+EXR,Extra Space Storage,,US,Real Estate
+XOM,ExxonMobil,,US,Energy
+FFIV,"F5, Inc.",,US,Information Technology
+FDS,FactSet,,US,Financials
+FICO,Fair Isaac,,US,Information Technology
+FAST,Fastenal,,US,Industrials
+FRT,Federal Realty Investment Trust,,US,Real Estate
+FDX,FedEx,,US,Industrials
+FDXF,FedEx Freight,,US,Industrials
+FIS,Fidelity National Information Services,,US,Financials
+FITB,Fifth Third Bancorp,,US,Financials
+FSLR,First Solar,,US,Information Technology
+FE,FirstEnergy,,US,Utilities
+FISV,Fiserv,,US,Financials
+FLEX,Flex Ltd.,,US,Information Technology
+F,Ford Motor Company,,US,Consumer Discretionary
+FTNT,Fortinet,,US,Information Technology
+FTV,Fortive,,US,Industrials
+FOXA,Fox Corporation (Class A),,US,Communication Services
+FOX,Fox Corporation (Class B),,US,Communication Services
+BEN,Franklin Resources,,US,Financials
+FCX,Freeport-McMoRan,,US,Materials
+GRMN,Garmin,,US,Consumer Discretionary
+IT,Gartner,,US,Information Technology
+GE,GE Aerospace,,US,Industrials
+GEHC,GE HealthCare,,US,Health Care
+GEV,GE Vernova,,US,Industrials
+GEN,Gen Digital,,US,Information Technology
+GNRC,Generac,,US,Industrials
+GD,General Dynamics,,US,Industrials
+GIS,General Mills,,US,Consumer Staples
+GM,General Motors,,US,Consumer Discretionary
+GPC,Genuine Parts Company,,US,Consumer Discretionary
+GILD,Gilead Sciences,,US,Health Care
+GPN,Global Payments,,US,Financials
+GL,Globe Life,,US,Financials
+GDDY,GoDaddy,,US,Information Technology
+GS,Goldman Sachs,,US,Financials
+HAL,Halliburton,,US,Energy
+HIG,Hartford (The),,US,Financials
+HAS,Hasbro,,US,Consumer Discretionary
+HCA,HCA Healthcare,,US,Health Care
+DOC,Healthpeak Properties,,US,Real Estate
+HSIC,Henry Schein,,US,Health Care
+HSY,Hershey Company (The),,US,Consumer Staples
+HPE,Hewlett Packard Enterprise,,US,Information Technology
+HLT,Hilton Worldwide,,US,Consumer Discretionary
+HD,Home Depot (The),,US,Consumer Discretionary
+HON,Honeywell,,US,Industrials
+HRL,Hormel Foods,,US,Consumer Staples
+HST,Host Hotels & Resorts,,US,Real Estate
+HWM,Howmet Aerospace,,US,Industrials
+HPQ,HP Inc.,,US,Information Technology
+HUBB,Hubbell Incorporated,,US,Industrials
+HUM,Humana,,US,Health Care
+HBAN,Huntington Bancshares,,US,Financials
+HII,Huntington Ingalls Industries,,US,Industrials
+IBM,IBM,,US,Information Technology
+IEX,IDEX Corporation,,US,Industrials
+IDXX,Idexx Laboratories,,US,Health Care
+ITW,Illinois Tool Works,,US,Industrials
+INCY,Incyte,,US,Health Care
+IR,Ingersoll Rand,,US,Industrials
+PODD,Insulet Corporation,,US,Health Care
+INTC,Intel,,US,Information Technology
+IBKR,Interactive Brokers,,US,Financials
+ICE,Intercontinental Exchange,,US,Financials
+IFF,International Flavors & Fragrances,,US,Materials
+IP,International Paper,,US,Materials
+INTU,Intuit,,US,Information Technology
+ISRG,Intuitive Surgical,,US,Health Care
+IVZ,Invesco,,US,Financials
+INVH,Invitation Homes,,US,Real Estate
+IQV,IQVIA,,US,Health Care
+IRM,Iron Mountain,,US,Real Estate
+JBHT,J.B. Hunt,,US,Industrials
+JBL,Jabil,,US,Information Technology
+JKHY,Jack Henry & Associates,,US,Financials
+J,Jacobs Solutions,,US,Industrials
+JNJ,Johnson & Johnson,,US,Health Care
+JCI,Johnson Controls,,US,Industrials
+JPM,JPMorgan Chase,,US,Financials
+KVUE,Kenvue,,US,Consumer Staples
+KDP,Keurig Dr Pepper,,US,Consumer Staples
+KEY,KeyCorp,,US,Financials
+KEYS,Keysight Technologies,,US,Information Technology
+KMB,Kimberly-Clark,,US,Consumer Staples
+KIM,Kimco Realty,,US,Real Estate
+KMI,Kinder Morgan,,US,Energy
+KKR,KKR & Co.,,US,Financials
+KLAC,KLA Corporation,,US,Information Technology
+KHC,Kraft Heinz,,US,Consumer Staples
+KR,Kroger,,US,Consumer Staples
+LHX,L3Harris,,US,Industrials
+LH,Labcorp,,US,Health Care
+LRCX,Lam Research,,US,Information Technology
+LVS,Las Vegas Sands,,US,Consumer Discretionary
+LDOS,Leidos,,US,Industrials
+LEN,Lennar,,US,Consumer Discretionary
+LII,Lennox International,,US,Industrials
+LLY,Lilly (Eli),,US,Health Care
+LIN,Linde plc,,US,Materials
+LYV,Live Nation Entertainment,,US,Communication Services
+LMT,Lockheed Martin,,US,Industrials
+L,Loews Corporation,,US,Financials
+LOW,Lowe's,,US,Consumer Discretionary
+LULU,Lululemon Athletica,,US,Consumer Discretionary
+LITE,Lumentum,,US,Information Technology
+LYB,LyondellBasell,,US,Materials
+MTB,M&T Bank,,US,Financials
+MPC,Marathon Petroleum,,US,Energy
+MAR,Marriott International,,US,Consumer Discretionary
+MRSH,Marsh McLennan,,US,Financials
+MLM,Martin Marietta Materials,,US,Materials
+MRVL,Marvell Technology,,US,Information Technology
+MAS,Masco,,US,Industrials
+MA,Mastercard,,US,Financials
+MKC,McCormick & Company,,US,Consumer Staples
+MCD,McDonald's,,US,Consumer Discretionary
+MCK,McKesson Corporation,,US,Health Care
+MDT,Medtronic,,US,Health Care
+MRK,Merck & Co.,,US,Health Care
+META,Meta Platforms,,US,Communication Services
+MET,MetLife,,US,Financials
+MTD,Mettler Toledo,,US,Health Care
+MGM,MGM Resorts,,US,Consumer Discretionary
+MCHP,Microchip Technology,,US,Information Technology
+MU,Micron Technology,,US,Information Technology
+MSFT,Microsoft,,US,Information Technology
+MAA,Mid-America Apartment Communities,,US,Real Estate
+MRNA,Moderna,,US,Health Care
+TAP,Molson Coors Beverage Company,,US,Consumer Staples
+MDLZ,Mondelez International,,US,Consumer Staples
+MPWR,Monolithic Power Systems,,US,Information Technology
+MNST,Monster Beverage,,US,Consumer Staples
+MCO,Moody's Corporation,,US,Financials
+MS,Morgan Stanley,,US,Financials
+MOS,Mosaic Company (The),,US,Materials
+MSI,Motorola Solutions,,US,Information Technology
+MSCI,MSCI Inc.,,US,Financials
+NDAQ,"Nasdaq, Inc.",,US,Financials
+NTAP,NetApp,,US,Information Technology
+NFLX,Netflix,,US,Communication Services
+NEM,Newmont,,US,Materials
+NWSA,News Corp (Class A),,US,Communication Services
+NWS,News Corp (Class B),,US,Communication Services
+NEE,NextEra Energy,,US,Utilities
+NKE,"Nike, Inc.",,US,Consumer Discretionary
+NI,NiSource,,US,Utilities
+NDSN,Nordson Corporation,,US,Industrials
+NSC,Norfolk Southern,,US,Industrials
+NTRS,Northern Trust,,US,Financials
+NOC,Northrop Grumman,,US,Industrials
+NCLH,Norwegian Cruise Line Holdings,,US,Consumer Discretionary
+NRG,NRG Energy,,US,Utilities
+NUE,Nucor,,US,Materials
+NVDA,Nvidia,,US,Information Technology
+NVR,"NVR, Inc.",,US,Consumer Discretionary
+NXPI,NXP Semiconductors,,US,Information Technology
+ORLY,O’Reilly Automotive,,US,Consumer Discretionary
+OXY,Occidental Petroleum,,US,Energy
+ODFL,Old Dominion,,US,Industrials
+OMC,Omnicom Group,,US,Communication Services
+ON,ON Semiconductor,,US,Information Technology
+OKE,Oneok,,US,Energy
+ORCL,Oracle Corporation,,US,Information Technology
+OTIS,Otis Worldwide,,US,Industrials
+PCAR,Paccar,,US,Industrials
+PKG,Packaging Corporation of America,,US,Materials
+PLTR,Palantir Technologies,,US,Information Technology
+PANW,Palo Alto Networks,,US,Information Technology
+PSKY,Paramount Skydance Corporation,,US,Communication Services
+PH,Parker Hannifin,,US,Industrials
+PAYX,Paychex,,US,Industrials
+PYPL,PayPal,,US,Financials
+PNR,Pentair,,US,Industrials
+PEP,PepsiCo,,US,Consumer Staples
+PFE,Pfizer,,US,Health Care
+PCG,PG&E Corporation,,US,Utilities
+PM,Philip Morris International,,US,Consumer Staples
+PSX,Phillips 66,,US,Energy
+PNW,Pinnacle West Capital,,US,Utilities
+PNC,PNC Financial Services,,US,Financials
+PPG,PPG Industries,,US,Materials
+PPL,PPL Corporation,,US,Utilities
+PFG,Principal Financial Group,,US,Financials
+PG,Procter & Gamble,,US,Consumer Staples
+PGR,Progressive Corporation,,US,Financials
+PLD,Prologis,,US,Real Estate
+PRU,Prudential Financial,,US,Financials
+PEG,Public Service Enterprise Group,,US,Utilities
+PTC,PTC Inc.,,US,Information Technology
+PSA,Public Storage,,US,Real Estate
+PHM,PulteGroup,,US,Consumer Discretionary
+PWR,Quanta Services,,US,Industrials
+QCOM,Qualcomm,,US,Information Technology
+DGX,Quest Diagnostics,,US,Health Care
+Q,Qnity Electronics,,US,Information Technology
+RL,Ralph Lauren Corporation,,US,Consumer Discretionary
+RJF,Raymond James Financial,,US,Financials
+RTX,RTX Corporation,,US,Industrials
+O,Realty Income,,US,Real Estate
+REG,Regency Centers,,US,Real Estate
+REGN,Regeneron Pharmaceuticals,,US,Health Care
+RF,Regions Financial Corporation,,US,Financials
+RSG,Republic Services,,US,Industrials
+RMD,ResMed,,US,Health Care
+RVTY,Revvity,,US,Health Care
+HOOD,Robinhood Markets,,US,Financials
+ROK,Rockwell Automation,,US,Industrials
+ROL,"Rollins, Inc.",,US,Industrials
+ROP,Roper Technologies,,US,Information Technology
+ROST,Ross Stores,,US,Consumer Discretionary
+RCL,Royal Caribbean Group,,US,Consumer Discretionary
+SPGI,S&P Global,,US,Financials
+CRM,Salesforce,,US,Information Technology
+SNDK,Sandisk,,US,Information Technology
+SBAC,SBA Communications,,US,Real Estate
+SLB,Schlumberger,,US,Energy
+STX,Seagate Technology,,US,Information Technology
+SRE,Sempra,,US,Utilities
+NOW,ServiceNow,,US,Information Technology
+SHW,Sherwin-Williams,,US,Materials
+SPG,Simon Property Group,,US,Real Estate
+SWKS,Skyworks Solutions,,US,Information Technology
+SJM,J.M. Smucker Company (The),,US,Consumer Staples
+SW,Smurfit Westrock,,US,Materials
+SNA,Snap-on,,US,Industrials
+SOLV,Solventum,,US,Health Care
+SO,Southern Company,,US,Utilities
+LUV,Southwest Airlines,,US,Industrials
+SWK,Stanley Black & Decker,,US,Industrials
+SBUX,Starbucks,,US,Consumer Discretionary
+STT,State Street Corporation,,US,Financials
+STLD,Steel Dynamics,,US,Materials
+STE,Steris,,US,Health Care
+SYK,Stryker Corporation,,US,Health Care
+SMCI,Supermicro,,US,Information Technology
+SYF,Synchrony Financial,,US,Financials
+SNPS,Synopsys,,US,Information Technology
+SYY,Sysco,,US,Consumer Staples
+TMUS,T-Mobile US,,US,Communication Services
+TROW,T. Rowe Price,,US,Financials
+TTWO,Take-Two Interactive,,US,Communication Services
+TPR,"Tapestry, Inc.",,US,Consumer Discretionary
+TRGP,Targa Resources,,US,Energy
+TGT,Target Corporation,,US,Consumer Staples
+TEL,TE Connectivity,,US,Information Technology
+TDY,Teledyne Technologies,,US,Information Technology
+TER,Teradyne,,US,Information Technology
+TSLA,"Tesla, Inc.",,US,Consumer Discretionary
+TXN,Texas Instruments,,US,Information Technology
+TPL,Texas Pacific Land Corporation,,US,Energy
+TXT,Textron,,US,Industrials
+TMO,Thermo Fisher Scientific,,US,Health Care
+TJX,TJX Companies,,US,Consumer Discretionary
+TKO,TKO Group Holdings,,US,Communication Services
+TTD,Trade Desk (The),,US,Communication Services
+TSCO,Tractor Supply,,US,Consumer Discretionary
+TT,Trane Technologies,,US,Industrials
+TDG,TransDigm Group,,US,Industrials
+TRV,Travelers Companies (The),,US,Financials
+TRMB,Trimble Inc.,,US,Information Technology
+TFC,Truist Financial,,US,Financials
+TYL,Tyler Technologies,,US,Information Technology
+TSN,Tyson Foods,,US,Consumer Staples
+USB,U.S. Bancorp,,US,Financials
+UBER,Uber,,US,Industrials
+UDR,"UDR, Inc.",,US,Real Estate
+ULTA,Ulta Beauty,,US,Consumer Discretionary
+UNP,Union Pacific Corporation,,US,Industrials
+UAL,United Airlines Holdings,,US,Industrials
+UPS,United Parcel Service,,US,Industrials
+URI,United Rentals,,US,Industrials
+UNH,UnitedHealth Group,,US,Health Care
+UHS,Universal Health Services,,US,Health Care
+VLO,Valero Energy,,US,Energy
+VEEV,Veeva Systems,,US,Health Care
+VTR,Ventas,,US,Real Estate
+VLTO,Veralto,,US,Industrials
+VRSN,Verisign,,US,Information Technology
+VRSK,Verisk Analytics,,US,Industrials
+VZ,Verizon,,US,Communication Services
+VRTX,Vertex Pharmaceuticals,,US,Health Care
+VRT,Vertiv,,US,Industrials
+VTRS,Viatris,,US,Health Care
+VICI,Vici Properties,,US,Real Estate
+V,Visa Inc.,,US,Financials
+VST,Vistra Corp.,,US,Utilities
+VMC,Vulcan Materials Company,,US,Materials
+WRB,W. R. Berkley Corporation,,US,Financials
+GWW,W. W. Grainger,,US,Industrials
+WAB,Wabtec,,US,Industrials
+WMT,Walmart,,US,Consumer Staples
+DIS,Walt Disney Company (The),,US,Communication Services
+WBD,Warner Bros. Discovery,,US,Communication Services
+WM,Waste Management,,US,Industrials
+WAT,Waters Corporation,,US,Health Care
+WEC,WEC Energy Group,,US,Utilities
+WFC,Wells Fargo,,US,Financials
+WELL,Welltower,,US,Real Estate
+WST,West Pharmaceutical Services,,US,Health Care
+WDC,Western Digital,,US,Information Technology
+WY,Weyerhaeuser,,US,Real Estate
+WSM,"Williams-Sonoma, Inc.",,US,Consumer Discretionary
+WMB,Williams Companies,,US,Energy
+WTW,Willis Towers Watson,,US,Financials
+WDAY,"Workday, Inc.",,US,Information Technology
+WYNN,Wynn Resorts,,US,Consumer Discretionary
+XEL,Xcel Energy,,US,Utilities
+XYL,Xylem Inc.,,US,Industrials
+YUM,Yum! Brands,,US,Consumer Discretionary
+ZBRA,Zebra Technologies,,US,Information Technology
+ZBH,Zimmer Biomet,,US,Health Care
+ZTS,Zoetis,,US,Health Care

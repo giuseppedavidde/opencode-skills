@@ -1,51 +1,51 @@
-coin_id,symbol,name
-bitcoin,BTC,Bitcoin
-ethereum,ETH,Ethereum
-tether,USDT,Tether
-binancecoin,BNB,BNB
-solana,SOL,Solana
-ripple,XRP,XRP
-usd-coin,USDC,USDC
-staked-ether,STETH,stETH
-cardano,ADA,Cardano
-avalanche-2,AVAX,Avalanche
-dogecoin,DOGE,Dogecoin
-tron,TRX,TRON
-chainlink,LINK,Chainlink
-polkadot,DOT,Polkadot
-wrapped-bitcoin,WBTC,WBTC
-matic-network,MATIC,Polygon
-shiba-inu,SHIB,Shiba Inu
-uniswap,UNI,Uniswap
-litecoin,LTC,Litecoin
-near-protocol,NEAR,NEAR Protocol
-ethereum-classic,ETC,Ethereum Classic
-stellar,XLM,Stellar
-cosmos,ATOM,Cosmos
-monero,XMR,Monero
-bitcoin-cash,BCH,Bitcoin Cash
-aptos,APT,Aptos
-arbitrum,ARB,Arbitrum
-optimism,OP,Optimism
-sui,SUI,Sui
-maker,MKR,Maker
-aave,AAVE,Aave
-the-graph,GRT,The Graph
-tezos,XTZ,Tezos
-algorand,ALGO,Algorand
-flow,FLOW,Flow
-vechain,VET,VeChain
-helium,HNT,Helium
-theta,THETA,Theta
-axie-infinity,AXS,Axie Infinity
-decentraland,MANA,Decentraland
-the-sandbox,SAND,The Sandbox
-apecoin,APE,ApeCoin
-filecoin,FIL,Filecoin
-quant,QNT,Quant
-eos,EOS,EOS
-neo,NEO,NEO
-iota,IOTA,IOTA
-zcash,ZEC,Zcash
-dash,DASH,Dash
-fantom,FTM,Fantom
+symbol,name,suffix,market,sector
+BTC-USD,Bitcoin,,CRYPTO,
+ETH-USD,Ethereum,,CRYPTO,
+USDT-USD,Tether,,CRYPTO,
+BNB-USD,BNB,,CRYPTO,
+USDC-USD,USDC,,CRYPTO,
+XRP-USD,XRP,,CRYPTO,
+SOL-USD,Solana,,CRYPTO,
+TRX-USD,TRON,,CRYPTO,
+FIGR_HELOC-USD,Figure Heloc,,CRYPTO,
+HYPE-USD,Hyperliquid,,CRYPTO,
+DOGE-USD,Dogecoin,,CRYPTO,
+USDS-USD,USDS,,CRYPTO,
+RAIN-USD,Rain,,CRYPTO,
+LEO-USD,LEO Token,,CRYPTO,
+ZEC-USD,Zcash,,CRYPTO,
+CC-USD,Canton,,CRYPTO,
+XMR-USD,Monero,,CRYPTO,
+XLM-USD,Stellar,,CRYPTO,
+WBT-USD,WhiteBIT Coin,,CRYPTO,
+LINK-USD,Chainlink,,CRYPTO,
+ADA-USD,Cardano,,CRYPTO,
+LAB-USD,LAB,,CRYPTO,
+USD1-USD,USD1,,CRYPTO,
+DAI-USD,Dai,,CRYPTO,
+USDE-USD,Ethena USDe,,CRYPTO,
+GRAM-USD,Gram (prev. Toncoin),,CRYPTO,
+BCH-USD,Bitcoin Cash,,CRYPTO,
+LTC-USD,Litecoin,,CRYPTO,
+USYC-USD,Circle USYC,,CRYPTO,
+HBAR-USD,Hedera,,CRYPTO,
+USDG-USD,Global Dollar,,CRYPTO,
+SUI-USD,Sui,,CRYPTO,
+PYUSD-USD,PayPal USD,,CRYPTO,
+AVAX-USD,Avalanche,,CRYPTO,
+CRO-USD,Cronos,,CRYPTO,
+XAUT-USD,Tether Gold,,CRYPTO,
+SHIB-USD,Shiba Inu,,CRYPTO,
+NEAR-USD,NEAR Protocol,,CRYPTO,
+BUIDL-USD,BlackRock USD Institutional Digital Liquidity Fund,,CRYPTO,
+USDY-USD,Ondo US Dollar Yield,,CRYPTO,
+TAO-USD,Bittensor,,CRYPTO,
+PAXG-USD,PAX Gold,,CRYPTO,
+WLFI-USD,World Liberty Financial,,CRYPTO,
+UNI-USD,Uniswap,,CRYPTO,
+ASTER-USD,Aster,,CRYPTO,
+OKB-USD,OKB,,CRYPTO,
+RLUSD-USD,Ripple USD,,CRYPTO,
+WLD-USD,Worldcoin,,CRYPTO,
+HTX-USD,HTX DAO,,CRYPTO,
+ONDO-USD,Ondo,,CRYPTO,

@@ -42,38 +42,57 @@ def load_universe(name: str) -> list[dict]:
     if name == "us_large":
         return _load_csv(DATA_DIR / "us_tickers.csv", None)
     elif name == "us_tech":
-        tech_tickers = {
-            "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA",
-            "AVGO", "QCOM", "TXN", "AMD", "INTC", "MU", "ADI", "NXPI",
-            "MRVL", "ASML", "AMAT", "LRCX", "KLAC", "CRM", "NOW", "ADBE",
-            "INTU", "NFLX", "DIS", "PYPL", "SQ", "SHOP", "SNOW", "DDOG",
-            "CRWD", "PANW", "FTNT", "ZS", "NET", "OKTA", "ZM", "DOCU",
-            "TEAM", "WDAY", "ADSK", "ROKU", "MRNA", "GILD", "REGN",
-            "VRTX", "ILMN", "ISRG", "ALGN", "COST", "SBUX", "CMG",
-            "BKNG", "ABNB", "UBER", "DASH", "NKE", "LULU", "ROST",
-            "MELI", "JD", "BABA", "TCOM", "SPOT", "TTD", "PINS",
-            "SNAP", "MTCH", "CRSP", "NTLA", "BEAM", "COIN",
-            "MSTR", "RIOT", "MAR", "RCL", "CCL", "NCLH", "EXPE",
-        }
-        return _load_csv(DATA_DIR / "us_tickers.csv", tech_tickers)
+        return _load_per_market_or_fallback("us_tech_tickers.csv",
+                                            "us_tickers.csv", "Information Technology")
     elif name == "italy":
-        return _load_csv(DATA_DIR / "europe_tickers.csv", None, market="Italy")
+        return _load_per_market_or_fallback("italy_tickers.csv",
+                                            "europe_tickers.csv", "Italy")
     elif name == "germany":
-        return _load_csv(DATA_DIR / "europe_tickers.csv", None, market="Germany")
+        return _load_per_market_or_fallback("germany_tickers.csv",
+                                            "europe_tickers.csv", "Germany")
     elif name == "france":
-        return _load_csv(DATA_DIR / "europe_tickers.csv", None, market="France")
+        return _load_per_market_or_fallback("france_tickers.csv",
+                                            "europe_tickers.csv", "France")
     elif name == "uk":
-        return _load_csv(DATA_DIR / "europe_tickers.csv", None, market="UK")
+        return _load_per_market_or_fallback("uk_tickers.csv",
+                                            "europe_tickers.csv", "UK")
     elif name == "spain":
-        return _load_csv(DATA_DIR / "europe_tickers.csv", None, market="Spain")
+        return _load_per_market_or_fallback("spain_tickers.csv",
+                                            "europe_tickers.csv", "Spain")
     elif name == "all":
         us = _load_csv(DATA_DIR / "us_tickers.csv", None)
-        eu = _load_csv(DATA_DIR / "europe_tickers.csv", None)
+        eu = _load_all_european()
         return us + eu
     elif name == "crypto":
         return _load_crypto_csv()
     else:
         raise ValueError(f"Unknown universe: {name}")
+
+
+def _load_all_european() -> list[dict]:
+    eu_markets = ["italy", "germany", "france", "uk", "spain"]
+    eu_files = [
+        "italy_tickers.csv", "germany_tickers.csv", "france_tickers.csv",
+        "uk_tickers.csv", "spain_tickers.csv",
+    ]
+    rows: list[dict] = []
+    for filename in eu_files:
+        filepath = DATA_DIR / filename
+        rows.extend(_load_csv(filepath, None))
+    if not rows:
+        rows = _load_csv(DATA_DIR / "europe_tickers.csv", None)
+    return rows
+
+
+def _load_per_market_or_fallback(new_file: str, fallback_file: str,
+                                  filter_value: str) -> list[dict]:
+    new_path = DATA_DIR / new_file
+    if new_path.exists():
+        return _load_csv(new_path, None)
+    fallback_path = DATA_DIR / fallback_file
+    log.warning("New ticker file %s not found, falling back to %s (filter=%s)",
+                new_file, fallback_file, filter_value)
+    return _load_csv(fallback_path, None, market=filter_value)
 
 
 def _load_csv(path: Path, allowed_symbols: set | None, market: str | None = None) -> list[dict]:
@@ -95,12 +114,14 @@ def _load_crypto_csv() -> list[dict]:
     with open(path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
+            symbol = row["symbol"].strip()
+            if not symbol.endswith("-USD"):
+                symbol = f"{symbol}-USD"
             rows.append({
-                "symbol": f"{row['symbol']}-USD",
-                "name": row["name"],
-                "suffix": "",
+                "symbol": symbol,
+                "name": row.get("name", "").strip(),
+                "suffix": row.get("suffix", "").strip(),
                 "market": "CRYPTO",
-                "coin_id": row.get("coin_id", ""),
             })
     return rows
 
