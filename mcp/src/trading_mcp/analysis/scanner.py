@@ -279,14 +279,32 @@ def apply_macro_regime(results: list[dict], regime: str = "NORMAL") -> list[dict
     return results
 
 
+def _fetch_with_retry(symbol: str, max_retries: int = 2) -> tuple:
+    import yfinance as yf
+    import time as _time
+    last_err = None
+    for attempt in range(max_retries + 1):
+        try:
+            t = yf.Ticker(symbol)
+            info = t.info or {}
+            hist = t.history(period="1y")
+            if hist is not None and not hist.empty:
+                return t, info, hist
+            if attempt < max_retries:
+                _time.sleep(2 ** attempt)
+        except Exception as e:
+            last_err = e
+            if attempt < max_retries:
+                _time.sleep(3 ** attempt)
+    return None, {}, None
+
+
 def process_ticker(ticker_dict: dict[str, str]) -> dict[str, Any] | None:
     """Process a single stock ticker through all analysis dimensions."""
     symbol = ticker_dict["symbol"]
     try:
-        t = yf.Ticker(symbol)
-        info = t.info or {}
-        hist = t.history(period="1y")
-        if hist.empty:
+        t, info, hist = _fetch_with_retry(symbol)
+        if hist is None or (hasattr(hist, 'empty') and hist.empty):
             return None
 
         price = info.get("currentPrice") or (float(hist["Close"].iloc[-1]) if not hist.empty else None)

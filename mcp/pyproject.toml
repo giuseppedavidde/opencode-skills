@@ -28,6 +28,7 @@ dev = [
 
 [project.scripts]
 trading-mcp = "trading_mcp.main:run_app"
+trading-cli = "trading_mcp.trading_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

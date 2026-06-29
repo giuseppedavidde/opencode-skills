@@ -5,6 +5,7 @@ src/trading_mcp/config.py
 src/trading_mcp/main.py
 src/trading_mcp/mcp.py
 src/trading_mcp/schemas.py
+src/trading_mcp/trading_cli.py
 src/trading_mcp/analysis/__init__.py
 src/trading_mcp/analysis/earnings.py
 src/trading_mcp/analysis/fundamentals.py
