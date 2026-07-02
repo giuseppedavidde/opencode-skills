@@ -1,7 +1,18 @@
 # Global Rules
 
+## Multi-Agent Architecture
+This OpenCode instance uses automatic model routing to save tokens:
+- **Router (build agent)**: deepseek-v4-flash — receives all requests, classifies, delegates
+- **@trade**: deepseek-v4-pro — trading, options, market analysis (hidden, Task-only)
+- **@coder**: deepseek-v4-pro — complex coding, refactoring, multi-file changes (hidden, Task-only)
+- **@explore / @scout**: deepseek-v4-flash — code search / web research
+
+The router delegates based on keywords. Trading requests go to @trade, complex coding to @coder.
+All agents read these AGENTS.md rules. See opencode.json for full agent configuration.
+
 ## Python Virtual Environment Mandatory
 CRITICAL: Before ANY Python operation (install, run, test), load @skills/python-venv. You MUST use a virtual environment. Never `pip install` on the system Python.
+- Use a SINGLE shared venv at `/tmp/opencode/.venv` for all temporary work. Never create duplicate venvs.
 
 ## Python Development Standards
 CRITICAL: Whenever working with Python, you MUST load and strictly adhere to the instructions defined in @skills/python-pydantic.
@@ -25,6 +36,47 @@ For ALL market analysis tasks, load the relevant @skills directly. The skills ar
 - Framework knowledge → use `get_skill_knowledge` for on-demand Wyckoff, VPA, VP concepts
 
 Always run `get_macro_context` FIRST before any analysis.
+
+### Position Repair Mandatory (CRITICAL)
+When a user presents an EXISTING options position and asks what to do / how to fix it:
+1. Run the standard flow: macro → `analyze_stock` → `analyze_options` → `suggest_options_strategy`
+2. **MANDATORY RISK AUDIT** — after step 1, audit the position for these risk flags:
+   - **Naked options** (short call/put without protection) → propose a spread to cap max loss
+   - **Negative gamma** on a directional position → propose adding long options to flip gamma positive
+   - **Unbalanced ratio** (e.g., 2:1 short vs long) → propose rebalancing to reduce leverage
+   - **Deep OTM positions** (delta < 0.15 total) → propose repair or close
+3. For EACH risk flag found, test at least 2 strikes with `analyze_options` in parallel
+4. Present a comparison table (current vs proposed adjustments) with: max loss, breakeven, net credit/debit, delta, gamma
+5. The directional verdict alone is NOT sufficient — always optimize risk regardless of outlook
+6. Query `get_skill_knowledge("options-playbook")` for relevant strategy definitions when proposing repairs
+
+### Options Execution Rules (CRITICAL — zero tolerance)
+These rules apply to ANY options trade proposal (repair, diagonal, spread, roll, etc.):
+
+1. **TIME-SHIFTED PREMIUMS — NEVER quote today's premium for a future date.**
+   - If proposing "on date X, sell Y strike @ $Z", $Z must be computed as: today's_premium − (theta × days_until_X) − (delta × expected_price_move).
+   - Use `bash` with `python3` to compute this. Show the work.
+   - Example WRONG: "Il 10 luglio vendi 300C Jul17 @ $3.18" — $3.18 is today, not July 10.
+   - Example RIGHT: compute theta decay over N days, subtract from today's mid.
+
+2. **BID-ASK SPREADS — never assume fills at mid.**
+   - Fetch real bid/ask via `fetch_options_chain` or `analyze_options`. If unavailable, estimate spread as 25-35% of mid for LHX-tier liquidity and flag the uncertainty.
+   - Compute P&L using the **bid** for sells and the **ask** for buys.
+   - If spread >50% of mid, warn the user the trade may not be executable at acceptable prices.
+
+3. **ROLL BREAK-EVEN — compute the exact price where roll flips from credit to debit.**
+   - Use `bash` with `python3`. Sweep prices from current to short strike + 20%.
+   - At each price: estimate buyback cost of current short option (intrinsic + residual time value) vs premium of new short option at roll strike/expiry.
+   - Report the break-even price. Never say "you can always roll at a credit."
+
+4. **CHECK ALL EXPIRATIONS — never propose only the nearest monthly.**
+   - Inspect `expirations` array from `analyze_stock` options_context.
+   - Evaluate at least the next 4-5 expirations (weekly + monthly) before recommending a strike/expiry.
+   - Skip expirations that encompass binary events (earnings) unless user explicitly accepts the risk.
+
+ 5. **PROBABILITY CHECK — never propose adjustment with <50% estimated success probability.**
+   - For each proposed trade, check `max_profit_prob` from `analyze_options`.
+   - If <50%, either widen the strike or skip the trade. Do not propose sub-coinflip trades.
 
 ### Trading outputs + Headroom Compression
 Trading outputs (scans, analyses, options chains) are large JSON payloads.

@@ -20,21 +20,39 @@ Any time you need to:
 - Run a Python script that uses external dependencies
 - Execute `python -m graphify` or any CLI tool that requires Python packages
 
-## How to create and use
+## REUSE FIRST — never create duplicate venvs
+
+CRITICAL: Before creating any venv, ALWAYS check if one exists and reuse it.
+
+```bash
+# Check if shared venv exists in /tmp/opencode
+ls /tmp/opencode/.venv/bin/activate 2>/dev/null && echo "EXISTS"
+
+# If it exists, ACTIVATE IT (do NOT create a new one):
+source /tmp/opencode/.venv/bin/activate
+
+# Only if it does NOT exist, create it ONCE:
+python3 -m venv /tmp/opencode/.venv
+source /tmp/opencode/.venv/bin/activate
+```
+
+### Reuse rule for /tmp/opencode
+
+- Use a **single shared venv** at `/tmp/opencode/.venv` for all temporary Python work.
+- Never create `pdf_venv`, `tensor_venv`, `tensor2_venv`, etc. — they all go in the same `.venv`.
+- Before `pip install <pkg>`, check if already installed: `pip show <pkg> 2>/dev/null`
+
+```bash
+# Check if package exists before installing
+pip show fpdf2 2>/dev/null || pip install fpdf2
+```
+
+### For project-specific work (outside /tmp/opencode)
 
 ```bash
 # Create venv in the project directory
 python3 -m venv .venv
-
-# Activate it
-source .venv/bin/activate   # Linux/macOS
-# .venv\Scripts\activate    # Windows
-
-# Install packages inside the venv
-pip install graphifyy
-
-# When done, deactivate
-deactivate
+source .venv/bin/activate
 ```
 
 ## Exceptions

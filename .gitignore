@@ -5,3 +5,4 @@ __pycache__
 
 # Scanner reports (generated locally, not for repo)
 skills/market-accumulation-scanner/reports/
+trades/*

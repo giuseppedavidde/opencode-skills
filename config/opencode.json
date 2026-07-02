@@ -1,7 +1,41 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "opencode-go/deepseek-v4-pro",
+  "model": "opencode-go/deepseek-v4-flash",
   "small_model": "opencode-go/deepseek-v4-flash",
+  "agent": {
+    "build": {
+      "mode": "primary",
+      "model": "opencode-go/deepseek-v4-flash",
+      "prompt": "{file:/home/giuseppe/.config/opencode/agents/router.md}",
+      "permission": {
+        "edit": "deny",
+        "write": "deny",
+        "bash": {
+          "*": "ask",
+          "python3 *": "allow",
+          "pip *": "deny",
+          "source *venv*": "allow",
+          "deactivate": "allow"
+        },
+        "task": {
+          "*": "allow"
+        },
+        "skill": {
+          "*": "allow"
+        },
+        "webfetch": "ask",
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow"
+      }
+    },
+    "explore": {
+      "model": "opencode-go/deepseek-v4-flash"
+    },
+    "scout": {
+      "model": "opencode-go/deepseek-v4-flash"
+    }
+  },
   "provider": {
     "llama-local": {
       "name": "LLM Locale",

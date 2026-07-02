@@ -59,6 +59,23 @@ if [[ -d "$SKILLS_SRC" ]]; then
     fi
 fi
 
+# Install agents
+AGENTS_SRC="$REPO_DIR/agents"
+if [[ -d "$AGENTS_SRC" ]]; then
+    echo "Installing agents..."
+    mkdir -p "$CONFIG_DIR/agents"
+    for item in "$AGENTS_SRC"/*; do
+        name=$(basename "$item")
+        target="$CONFIG_DIR/agents/$name"
+        if [[ -e "$target" ]]; then
+            echo "  SKIP  $name  (already exists)"
+        else
+            ln -s "$item" "$target"
+            echo "  LINK  $name"
+        fi
+    done
+fi
+
 # Install plugins
 PLUGINS_SRC="$REPO_DIR/plugins"
 if [[ -d "$PLUGINS_SRC" ]]; then
