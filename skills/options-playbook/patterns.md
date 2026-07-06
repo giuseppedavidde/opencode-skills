@@ -84,3 +84,37 @@
 - Expect move but IV is already high: Long Call Spread or Long Put Spread (reduce IV cost)
 - Expect stock to NOT move despite event: Short Straddle or Iron Condor (very risky — event gap risk)
 **Trade-off**: Earnings are the most common volatility event. IV typically expands before and collapses after. Be careful of volatility crush.
+
+## Pattern 13: Risk Audit Checklist per Posizioni Multigamba
+
+**Quando**: Ogni volta che analizzi una posizione esistente con 2+ gambe.
+
+**Checklist**:
+1. **Naked Options?** — C'è una short call senza azioni/LEAPS a copertura? Short put senza cash?
+2. **Gamma Sign** — Il gamma totale è positivo o negativo? Negativo = la posizione peggiora più velocemente in movimento.
+3. **Ratio Imbalance** — Il rapporto tra gambe short e long è equilibrato? (es. 2 short put : 1 long call = sbilanciato 2:1)
+4. **Deep OTM** — Ci sono gambe con delta < 0.15? Falsa sicurezza: se il prezzo arriva lì, gamma esplode.
+5. **Gap Analysis** — C'è una zona di prezzo dove la protezione non funziona? (es. put a 50 in un collar, prezzo tra 50 e 60 = gap scoperto)
+6. **Expiry Mismatch** — Le protezioni scadono prima dei rischi che coprono?
+7. **Theta Direction** — Il theta totale è positivo (time lavora per te) o negativo?
+
+**Azioni correttive per ogni flag**:
+- Naked → aggiungi spread o copertura
+- Gamma negativo → aggiungi long gamma (compra opzioni ATM)
+- Ratio sbilanciato → aggiusta quantità
+- Deep OTM → chiudi o rolla più vicino
+- Gap → aggiungi spread nel gap
+- Expiry mismatch → rolla protezione
+
+## Pattern 14: Exit Rules Framework
+
+Non un pattern di trading ma un **metodo per definire le exit rules** di qualsiasi posizione.
+
+Per ogni posizione, definire SEMPRE:
+1. **Take Profit** — A quanto chiudi (es. $2,000 totali, o +50% sul max profit teorico)
+2. **Hard Stop Loss** — Prezzo sotto il quale chiudi TASSATIVAMENTE (es. DRAM sotto $45)
+3. **Soft Stop Loss** — Drawdown massimo tollerato (es. P&L sotto -$1,000)
+4. **Time Stop** — Data oltre la quale chiudi (es. 1 Novembre per opzioni Dec). Motivo: gamma risk esplode sotto 45 DTE; theta non è più sfruttabile.
+5. **Trailing Stop** — Se P&L raggiunge X e poi perde Y%, chiudi
+6. **Binary Event Rule** — Non tenere posizioni attraverso earnings/catalyst. Chiudi 3-5 giorni prima o assicurati che la posizione sia immune.
+7. **Roll Limit** — Non rollare più di N volte la stessa gamba. Dopo N roll, è meglio chiudere e rientrare.

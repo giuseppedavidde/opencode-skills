@@ -231,3 +231,49 @@ Each pattern links a `stock-crypto-analysis` verdict profile + IV regime to a sp
 **Perché funziona**: IV massima = premio massimo. Theta positivo. Se IV cala (mean reversion), guadagno extra da vega.
 
 **Attenzione a**: Gamma risk letale < 20 DTE. Chiudi prima. Vedi l'Iron Condor come alternativa a rischio definito.
+
+---
+
+## 14. Collar Ladder / "Dividend Generator"
+
+**Profilo Verdetto**: Long-Term Invest (score ≥ 70) OPPURE posizione esistente già in essere, con outlook da neutrale a moderatamente bullish
+
+**Trigger**: Hai una posizione lunga (azioni, LEAPS, o Synthetic Long 2:1). Vuoi generare income mensile mantenendo protezione downside.
+
+**Strategia**:
+1. **Compra una PUT protettiva a lunga scadenza** (60-90+ DTE, strike ~ -1 ATR dal prezzo). Questa è la protezione "permanente" che non rolli.
+2. **Vendi CALL a scadenza breve** (30-45 DTE, strike ~ +1.5 ATR dal prezzo). Questa genera l'income mensile.
+3. Alla scadenza della call, ne vendi una nuova (stessa logica) — incassando un "dividendo" ogni mese.
+4. Se il titolo sale verso lo strike, **roll up** la call a strike superiore con DTE più lungo (≥ 80 DTE) per mantenere il credito.
+
+**Vantaggi**: Income ricorrente (~1-3% al mese), protezione downside definita, nessun costo upfront (se call > put).
+
+**Rischi**: Cap sull'upside (se non rolli), il titolo può crollare sotto la put (ma lì sei protetto), richiede gestione attiva mensile.
+
+**Regole**:
+- Non aprire mai se IV rank > 70 (call premium grasso ma put troppo cara)
+- Strike call: usa ~0.30 delta per alta probabilità OTM
+- Protezione put: strike ~1 ATR sotto prezzo (tipo assicurazione con deducibile)
+- Se il titolo rompe la MA50, non vendere nuove call (aspettare rimbalzo)
+
+**Esempio DRAM**: Short Put 45 Dec + Long Call 59 Dec come base. Aggiunto collar: Buy Put 50 Aug + Sell Call 75 Aug a costo zero. DRAM a $65.43. Alla scadenza Aug, vendere nuova call Sep/Oct e così via.
+
+---
+
+## 15. Roll-Up Strategy per Short Call
+
+**Profilo Verdetto**: Hai venduto una call (in un collar, covered call, o spread). Il titolo sale e la call minaccia di diventare ITM.
+
+**Trigger**: Prezzo a ~$2 dallo strike, o con 5+ giorni prima di andare ITM. Deve ancora esserci tempo sufficiente per gestire la posizione.
+
+**Strategia**:
+1. **Roll anticipato**: quando il prezzo è a ~$2 dallo strike (o con 5+ giorni prima di andare ITM), buy back la call corrente e sell una call a strike superiore.
+2. **Regola del credito**: Il roll DEVE essere a credito netto (o al massimo piccolo debito < 10% del premio originale). Se non riesci a rollare a credito, significa che il trend è troppo forte → meglio chiudere tutto.
+3. **DTE lungo per credito**: Per rollare a credito, la nuova call deve avere DTE ≥ 80 giorni (più DTE = più time value = più credito). Se rolli a stessa scadenza, sarai quasi sempre in debito.
+4. **Time-shifting**: Quando rolli, calcola il buyback come (intrinseco + tempo residuo) e la nuova call come (intrinseco + tempo futuro). Il credito netto ≈ tempo_futuro − tempo_residuo.
+
+**Regola limite**: Se il titolo è già a $5+ sopra lo strike, il roll costa troppo. Chiudi e basta.
+
+**Warning**: Non rollare più di 2-3 volte di seguito. Ogni roll riduce il potenziale profitto totale. A un certo punto è meglio chiudere.
+
+**Esempio DRAM**: DRAM sale a $73 con Short Call 75 Aug. Buyback: ~$5.03 (intrinseco $0 + tempo $5.03). Sell Call 85 Oct (84 DTE): ~$8.30. Net credit: +$3.27.

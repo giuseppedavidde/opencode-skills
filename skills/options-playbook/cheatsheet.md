@@ -47,6 +47,19 @@
 | ν Vega | $ change per 1pt IV change | Positive | Negative | Higher for longer-term. |
 | ρ Rho | $ change per 1% rate change | Slightly positive | Slightly negative | LEAPS only. |
 
+### ⚠️ Theta Correction — Mito da sfatare
+
+**Credenza comune**: "Il theta uccide tutte le opzioni vicino alla scadenza"
+
+**Realtà**: Il theta uccide solo le opzioni **ATM/OTM**. Le opzioni **deep ITM** (delta > 0.85) hanno theta irrisorio perché sono quasi tutto intrinseco. Una Call 59 con DRAM a $90 con 47 DTE ha solo $1.50 di time value — perde 3 centesimi al giorno. È trascurabile.
+
+**Conseguenza pratica**: Se la tua posizione ha una long call deep ITM, NON chiuderla per "paura del theta". Il theta è irrilevante. Il vero rischio è che il titolo scenda, non il decadimento temporale.
+
+**Regola**: Theta è pericoloso per:
+- Opzioni ATM/OTM (ogni giorno erode il premio)
+- Short option ITM/ATM (ogni giorno guadagni dal loro decadimento)
+- Opzioni con < 30 DTE (accelerazione)
+
 ## Exit Rules — When to Close
 
 | Strategy | Take Profit | Stop Loss |
@@ -61,6 +74,16 @@
 | Covered Call | Call expires or stock called away | Stock stop-loss |
 | Protective Put | Let expire if stock rises | Exercise/close if stock hits strike |
 | Calendar/Diagonal | Front month decays to near zero | Stock moves away from strike |
+| Inverted/Leased collar (multi-expiry) | +$2,000-$3,000 or stock above short call | Stock below short put or time stop (45 DTE) |
+
+### ⏰ Time Stop Guidelines
+
+| Scenario | Time Stop | Motivo |
+|----------|-----------|--------|
+| Posizione con scadenza 6-12 mesi | Chiudi 45 giorni prima della scadenza | Gamma risk esplode; theta non più sfruttabile |
+| Short option (call/put venduta) | Chiudi/rolla a 21 DTE | Gamma risk verticale: posizione esplode |
+| Long option (call/put comprata) | Chiudi a 30 DTE se ITM | Meglio vendere il tempo residuo che aspettare |
+| Collar / Spread | Chiudi a 45 DTE dalla scadenza più vicina | Gestisci prima che il gamma acceleri |
 
 ## Time Frame Guidelines
 - **Premium Sellers** (Covered Call, Credit Spreads, Iron Condor): 30-45 DTE — balance of theta decay and gamma risk.
