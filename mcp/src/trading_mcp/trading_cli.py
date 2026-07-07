@@ -28,7 +28,6 @@ from trading_mcp.analysis.scanner import (
     parse_custom_tickers,
     process_crypto_ticker,
     process_ticker,
-    set_fetch_news,
 )
 from trading_mcp.config import SKILLS_DIR, TICKERS_DIR
 from trading_mcp.data.crypto import fetch_crypto_full
@@ -46,7 +45,6 @@ def cmd_scan(args: argparse.Namespace) -> dict:
         universe_list = load_universe(args.universe, str(TICKERS_DIR))
         universe_name = args.universe
 
-    set_fetch_news(args.fetch_news)
     total = len(universe_list)
     results: list[dict] = []
     failures = 0
@@ -54,9 +52,9 @@ def cmd_scan(args: argparse.Namespace) -> dict:
 
     for t_dict in universe_list:
         if t_dict.get("market") == "CRYPTO":
-            result = process_crypto_ticker(t_dict)
+            result = process_crypto_ticker(t_dict, fetch_news=args.fetch_news)
         else:
-            result = process_ticker(t_dict)
+            result = process_ticker(t_dict, fetch_news=args.fetch_news)
         if result:
             results.append(result)
         else:
@@ -97,10 +95,8 @@ def cmd_scan(args: argparse.Namespace) -> dict:
 
 def cmd_analyze(args: argparse.Namespace) -> dict:
     """Deep single-ticker analysis."""
-    set_fetch_news(args.fetch_news)
-
     t_dict = {"symbol": args.ticker, "name": args.ticker, "market": "US"}
-    result = process_ticker(t_dict)
+    result = process_ticker(t_dict, fetch_news=args.fetch_news)
     if result is None:
         return {"error": f"Could not analyze '{args.ticker}'"}
 

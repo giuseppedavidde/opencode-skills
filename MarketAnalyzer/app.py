@@ -23,7 +23,6 @@ from trading_mcp.analysis.scanner import (  # noqa: E402
     parse_custom_tickers,
     process_crypto_ticker,
     process_ticker,
-    set_fetch_news,
 )
 from trading_mcp.analysis.options_calc import analyze_options_position  # noqa: E402
 from trading_mcp.config import TICKERS_DIR  # noqa: E402
@@ -97,7 +96,6 @@ def cached_macro() -> dict:
 
 @st.cache_data(ttl=600, show_spinner="Scanning market...")
 def cached_scan(universe, tickers_str, min_score, regime):
-    set_fetch_news(True)
     if tickers_str:
         universe_list = parse_custom_tickers(tickers_str)
     else:
@@ -105,9 +103,9 @@ def cached_scan(universe, tickers_str, min_score, regime):
     results = []
     for t_dict in universe_list:
         if t_dict.get("market") == "CRYPTO":
-            r = process_crypto_ticker(t_dict)
+            r = process_crypto_ticker(t_dict, fetch_news=True)
         else:
-            r = process_ticker(t_dict)
+            r = process_ticker(t_dict, fetch_news=True)
         if r:
             results.append(r)
     results.sort(key=lambda r: r["final_score"], reverse=True)
@@ -118,9 +116,8 @@ def cached_scan(universe, tickers_str, min_score, regime):
 
 @st.cache_data(ttl=600, show_spinner="Analyzing...")
 def cached_analyze(ticker):
-    set_fetch_news(True)
     t_dict = {"symbol": ticker, "name": ticker, "market": "US"}
-    return process_ticker(t_dict)
+    return process_ticker(t_dict, fetch_news=True)
 
 
 # ── Report HTML Generator ──

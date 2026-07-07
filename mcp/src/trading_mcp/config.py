@@ -20,3 +20,7 @@ TICKERS_DIR: Path = Path(
 )
 
 RISK_FREE_RATE: float = 0.045
+
+from trading_mcp.weights_config import load_weights, get_weights
+
+WEIGHTS_CONFIG = load_weights()

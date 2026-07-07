@@ -9,7 +9,7 @@ from fastmcp import FastMCP
 
 from trading_mcp.data.stocks import fetch_stock_full
 from trading_mcp.data.crypto import fetch_crypto_full
-from trading_mcp.data.options_chain import fetch_options_chain
+from trading_mcp.data.options_chain import fetch_options_chain as _fetch_options_chain
 
 
 def register_data_tools(mcp_server: FastMCP) -> None:
@@ -108,4 +108,4 @@ def register_data_tools(mcp_server: FastMCP) -> None:
         Returns:
             Dictionary with calls/puts lists including Greeks, and IV metrics.
         """
-        return fetch_options_chain(ticker, expiry)
+        return _fetch_options_chain(ticker, expiry)

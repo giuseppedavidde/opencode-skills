@@ -1,7 +1,7 @@
 ---
-description: Coding specialist — complex refactoring, multi-file changes, new features. Uses deepseek-v4-pro.
+description: Coding specialist — complex refactoring, multi-file changes, new features. Uses glm-5.2. Opencode 1.1.5
 mode: subagent
-model: opencode-go/deepseek-v4-pro
+model: opencode-go/glm-5.2
 hidden: true
 permission:
   edit: allow
@@ -13,8 +13,8 @@ permission:
   grep: allow
   skill:
     "*": allow
-  webfetch: ask
-  task: deny
+  webfetch: allow
+  task: allow
   external_directory: allow
   todowrite: allow
 steps: 20

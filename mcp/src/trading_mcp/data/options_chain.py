@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import time
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -15,8 +17,12 @@ from scipy.stats import norm
 
 from trading_mcp.config import RISK_FREE_RATE
 
+logger = logging.getLogger(__name__)
+
 _CACHE_DIR = Path(os.environ.get("TRADING_CACHE_DIR", "/tmp/opencode/options_cache"))
 _MEM_CACHE: dict[str, dict[str, Any]] = {}
+_MEM_CACHE_TIMES: dict[str, float] = {}
+_MEM_CACHE_TTL: float = 300.0  # 5 minutes for intraday freshness
 
 def _is_weekend() -> bool:
     return date.today().weekday() >= 5
@@ -24,8 +30,17 @@ def _is_weekend() -> bool:
 
 def _load_cached_chain(ticker: str, expiry: str | None) -> dict[str, Any] | None:
     cache_key = f"{ticker}_{expiry or 'auto'}"
+    # Check in-memory cache with TTL
     if cache_key in _MEM_CACHE:
-        return _MEM_CACHE[cache_key]
+        cached_time = _MEM_CACHE_TIMES.get(cache_key, 0.0)
+        age = time.time() - cached_time
+        if age <= _MEM_CACHE_TTL:
+            logger.debug("Options cache hit (memory) for %s (%.1fs old)", ticker, age)
+            return _MEM_CACHE[cache_key]
+        # Expired — remove from memory cache
+        del _MEM_CACHE[cache_key]
+        _MEM_CACHE_TIMES.pop(cache_key, None)
+    # Fall back to disk cache (7-day TTL for weekend/holiday use)
     cache_file = _CACHE_DIR / f"{ticker}_{expiry or 'auto'}.json"
     if cache_file.exists():
         try:
@@ -36,9 +51,11 @@ def _load_cached_chain(ticker: str, expiry: str | None) -> dict[str, Any] | None
                     days_old = (date.today() - date.fromisoformat(cached_date[:10])).days
                     if days_old <= 7:
                         _MEM_CACHE[cache_key] = data
+                        _MEM_CACHE_TIMES[cache_key] = time.time()
+                        logger.debug("Options cache hit (disk) for %s (%d days old)", ticker, days_old)
                         return data
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Failed to load options disk cache for %s: %s", ticker, e)
     return None
 
 
@@ -46,13 +63,14 @@ def _save_cached_chain(ticker: str, expiry: str | None, data: dict[str, Any]) ->
     cache_key = f"{ticker}_{expiry or 'auto'}"
     data["_cached_at"] = date.today().isoformat()
     _MEM_CACHE[cache_key] = data
+    _MEM_CACHE_TIMES[cache_key] = time.time()
     try:
         _CACHE_DIR.mkdir(parents=True, exist_ok=True)
         cache_file = _CACHE_DIR / f"{cache_key}.json"
         with open(cache_file, "w") as f:
             json.dump(data, f, default=str)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Failed to save options cache for %s: %s", ticker, e)
 
 
 def fetch_options_chain(
@@ -68,6 +86,10 @@ def fetch_options_chain(
         expiry: Optional target expiry (YYYY-MM-DD). Auto-selects if None.
         use_cache: If True, fall back to cache on failure.
     """
+    # Sanitize: MCP may send the string "null" instead of JSON null
+    if expiry is not None and isinstance(expiry, str) and expiry.strip().lower() in ("null", "none", ""):
+        expiry = None
+
     if use_cache:
         cached = _load_cached_chain(ticker, expiry)
     else:
@@ -200,11 +222,15 @@ def _select_expiry(expirations: list[str], target: str | None) -> str:
     parsed = [datetime.strptime(e, "%Y-%m-%d").date() for e in expirations]
 
     if target:
-        target_date = datetime.strptime(target, "%Y-%m-%d").date()
-        if target_date in parsed:
-            return target
-        closest = min(parsed, key=lambda d: abs((d - target_date).days))
-        return closest.strftime("%Y-%m-%d")
+        try:
+            target_date = datetime.strptime(target, "%Y-%m-%d").date()
+        except ValueError:
+            target = None  # invalid date string, fall through to auto-select
+        else:
+            if target_date in parsed:
+                return target
+            closest = min(parsed, key=lambda d: abs((d - target_date).days))
+            return closest.strftime("%Y-%m-%d")
 
     future = [d for d in parsed if d > today]
     if not future:

@@ -4,11 +4,50 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 import os
+import random
+import threading
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class CircuitBreaker:
+    """Simple circuit breaker for yfinance rate limiting protection."""
+    failure_count: int = 0
+    failure_threshold: int = 10
+    reset_timeout: float = 60.0
+    last_failure_time: float = 0.0
+    _lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def is_open(self) -> bool:
+        """Check if circuit is open (blocking calls)."""
+        with self._lock:
+            if self.failure_count >= self.failure_threshold:
+                elapsed = time.time() - self.last_failure_time
+                if elapsed < self.reset_timeout:
+                    return True
+                self.failure_count = 0
+            return False
+
+    def record_success(self) -> None:
+        with self._lock:
+            self.failure_count = 0
+
+    def record_failure(self) -> None:
+        with self._lock:
+            self.failure_count += 1
+            self.last_failure_time = time.time()
+
+
+_yfinance_breaker = CircuitBreaker()
+
+import numpy as np
 import pandas as pd
 import yfinance as yf
 
@@ -34,16 +73,16 @@ from trading_mcp.analysis.indicators import (
     compute_support_resistance,
 )
 from trading_mcp.analysis.sentiment_6d import compute_sentiment_6d, earnings_proximity_adjustment
+from trading_mcp.weights_config import get_weights
 
 
 _SPX_HIST: pd.DataFrame | None = None
+_SPX_HIST_TIME: float = 0.0
+_SPX_HIST_TTL: float = 3600.0  # 1 hour
+
 _WSB_HOTLIST: dict | None = None
-_FETCH_NEWS: bool = False
-
-
-def set_fetch_news(enabled: bool) -> None:
-    global _FETCH_NEWS
-    _FETCH_NEWS = enabled
+_WSB_HOTLIST_TIME: float = 0.0
+_WSB_HOTLIST_TTL: float = 1800.0  # 30 minutes
 
 
 def load_universe(name: str, tickers_dir: str) -> list[dict[str, str]]:
@@ -133,16 +172,31 @@ def parse_custom_tickers(ticker_str: str) -> list[dict[str, str]]:
 
 
 def _get_spx_hist() -> pd.DataFrame:
-    global _SPX_HIST
-    if _SPX_HIST is None:
+    """Get S&P 500 history with 1-hour TTL cache."""
+    global _SPX_HIST, _SPX_HIST_TIME
+    now = time.time()
+    if _SPX_HIST is None or (now - _SPX_HIST_TIME) > _SPX_HIST_TTL:
         try:
             spx = yf.Ticker("^GSPC")
             _SPX_HIST = spx.history(period="1y")
-        except Exception:
-            _SPX_HIST = pd.DataFrame()
+            _SPX_HIST_TIME = now
+            logger.debug("SPX history refreshed")
+        except Exception as e:
+            logger.warning("Failed to fetch SPX history: %s: %s", type(e).__name__, e)
+            if _SPX_HIST is None:
+                _SPX_HIST = pd.DataFrame()
     if _SPX_HIST is not None and not _SPX_HIST.empty:
         return _SPX_HIST.copy()
     return pd.DataFrame()
+
+
+def _get_wsb_hotlist() -> dict | None:
+    """Get WSB hotlist with 30-min TTL cache. Currently not implemented — returns None."""
+    global _WSB_HOTLIST, _WSB_HOTLIST_TIME
+    now = time.time()
+    if _WSB_HOTLIST is not None and (now - _WSB_HOTLIST_TIME) <= _WSB_HOTLIST_TTL:
+        return _WSB_HOTLIST
+    return None
 
 
 def compute_crypto_analysis(ticker_obj: yf.Ticker, hist: pd.DataFrame) -> tuple[int, str]:
@@ -228,31 +282,117 @@ def identify_pattern(
     info: dict[str, Any],
     wyckoff_detail: str,
     sentiment_subs: dict | None = None,
+    thresholds: dict[str, int] | None = None,
 ) -> str:
-    """Identify dominant accumulation/distribution pattern."""
+    """Identify dominant accumulation/distribution pattern.
+
+    Uses dynamic thresholds when provided (computed from universe distribution),
+    otherwise falls back to hardcoded defaults.
+    """
     si = float(info.get("shortPercentOfFloat", 0) or 0)
     web_news = sentiment_subs.get("web_news") if sentiment_subs else None
     social = sentiment_subs.get("social_media") if sentiment_subs else None
 
-    if wyckoff_score >= 70 and "Spring" in wyckoff_detail:
+    if thresholds is None:
+        thresholds = {
+            "wyckoff_strong": 70, "volprof_strong": 70,
+            "pa_strong": 70, "sentiment_strong": 70,
+            "fundamentals_moderate": 60, "wyckoff_moderate": 65,
+            "volprof_low": 30, "social_signal": 60,
+            "web_news_strong": 80, "sentiment_short_pct": 20,
+        }
+
+    t = thresholds
+
+    if wyckoff_score >= t["wyckoff_strong"] and "Spring" in wyckoff_detail:
         return "Accumulation Spring"
-    if volprof_score >= 70 and fundamentals_score >= 60:
+    if volprof_score >= t["volprof_strong"] and fundamentals_score >= t["fundamentals_moderate"]:
         return "D-Profile Value Zone"
-    if volprof_score >= 70 and pa_score >= 70 and social is not None and social >= 60:
+    if volprof_score >= t["volprof_strong"] and pa_score >= t["pa_strong"] and social is not None and social >= t["social_signal"]:
         return "P-Profile Breakout"
-    if social is not None and social >= 70 and pa_score >= 50:
+    if social is not None and social >= t["sentiment_strong"] and pa_score >= 50:
         return "WSB Hype Confirmation"
-    if web_news is not None and web_news >= 80 and wyckoff_score <= 70 and 40 <= pa_score <= 60:
+    if web_news is not None and web_news >= t["web_news_strong"] and wyckoff_score <= t["wyckoff_strong"] and 40 <= pa_score <= t["fundamentals_moderate"]:
         return "News Catalyst Buildup"
-    if pa_score >= 70 and sentiment_score >= 50:
+    if pa_score >= t["pa_strong"] and sentiment_score >= 50:
         return "P-Profile Breakout"
-    if sentiment_score >= 70 and si > 0.20:
+    if sentiment_score >= t["sentiment_strong"] and si > (t["sentiment_short_pct"] / 100.0):
         return "Squeeze Setup"
-    if wyckoff_score >= 65 and fundamentals_score >= 60:
+    if wyckoff_score >= t["wyckoff_moderate"] and fundamentals_score >= t["fundamentals_moderate"]:
         return "Golden Cross Accumulation"
-    if volprof_score < 30:
+    if volprof_score < t["volprof_low"]:
         return "b-Profile Trap"
     return "Mixed / No dominant pattern"
+
+
+def compute_dynamic_thresholds(results: list[dict]) -> dict[str, int]:
+    """Compute 75th percentile thresholds from scan score distribution."""
+    defaults: dict[str, int] = {
+        "wyckoff_strong": 70, "volprof_strong": 70,
+        "pa_strong": 70, "sentiment_strong": 70,
+        "fundamentals_moderate": 60, "wyckoff_moderate": 65,
+        "volprof_low": 30, "social_signal": 60,
+        "web_news_strong": 80, "sentiment_short_pct": 20,
+    }
+    if len(results) < 5:
+        return defaults
+
+    def _extract_dim(res_list: list[dict], idx: int) -> list[float]:
+        scores: list[float] = []
+        for r in res_list:
+            dims = r.get("dimensions", [])
+            if len(dims) > idx:
+                scores.append(float(dims[idx].get("score", 50)))
+        return scores
+
+    try:
+        wyckoff_scores = _extract_dim(results, 0)
+        volprof_scores = _extract_dim(results, 1)
+        pa_scores = _extract_dim(results, 2)
+        sentiment_scores = _extract_dim(results, 3)
+        fundamentals_scores = _extract_dim(results, 4)
+
+        wyckoff_75 = int(np.percentile(wyckoff_scores, 75))
+        volprof_75 = int(np.percentile(volprof_scores, 75))
+        pa_75 = int(np.percentile(pa_scores, 75))
+        sentiment_75 = int(np.percentile(sentiment_scores, 75))
+        fundamentals_65 = int(np.percentile(fundamentals_scores, 65))
+        wyckoff_65 = int(np.percentile(wyckoff_scores, 65))
+        volprof_25 = int(np.percentile(volprof_scores, 25))
+    except Exception:
+        logger.warning("Failed to compute dynamic thresholds", exc_info=True)
+        return defaults
+
+    return {
+        "wyckoff_strong": max(60, min(85, wyckoff_75)),
+        "volprof_strong": max(60, min(85, volprof_75)),
+        "pa_strong": max(60, min(85, pa_75)),
+        "sentiment_strong": max(60, min(85, sentiment_75)),
+        "fundamentals_moderate": max(50, min(80, fundamentals_65)),
+        "wyckoff_moderate": max(55, min(80, wyckoff_65)),
+        "volprof_low": min(40, max(15, volprof_25)),
+        "social_signal": 60,
+        "web_news_strong": 80,
+        "sentiment_short_pct": 20,
+    }
+
+
+def recompute_patterns(results: list[dict], thresholds: dict[str, int]) -> None:
+    """Recompute pattern labels for all results using dynamic thresholds."""
+    for r in results:
+        dims = r.get("dimensions", [])
+        w_s = int(dims[0]["score"]) if len(dims) > 0 else 50
+        vp_s = int(dims[1]["score"]) if len(dims) > 1 else 50
+        pa_s = int(dims[2]["score"]) if len(dims) > 2 else 50
+        sent_s = int(dims[3]["score"]) if len(dims) > 3 else 50
+        fund_s = int(dims[4]["score"]) if len(dims) > 4 else 50
+        w_d = dims[0].get("detail", "") if len(dims) > 0 else ""
+        s_subs = r.get("sentiment_breakdown")
+        info = {"shortPercentOfFloat": r.get("_si", 0)}
+        r["pattern"] = identify_pattern(
+            w_s, vp_s, pa_s, sent_s, fund_s,
+            info, w_d, s_subs, thresholds=thresholds,
+        )
 
 
 def apply_macro_regime(results: list[dict], regime: str = "NORMAL") -> list[dict]:
@@ -280,8 +420,11 @@ def apply_macro_regime(results: list[dict], regime: str = "NORMAL") -> list[dict
 
 
 def _fetch_with_retry(symbol: str, max_retries: int = 2) -> tuple:
-    import yfinance as yf
-    import time as _time
+    """Fetch ticker data with retry, circuit breaker, and jittered backoff."""
+    if _yfinance_breaker.is_open():
+        logger.warning("Circuit breaker OPEN for %s — skipping fetch (rate limit protection)", symbol)
+        return None, {}, None
+
     last_err = None
     for attempt in range(max_retries + 1):
         try:
@@ -289,17 +432,28 @@ def _fetch_with_retry(symbol: str, max_retries: int = 2) -> tuple:
             info = t.info or {}
             hist = t.history(period="1y")
             if hist is not None and not hist.empty:
+                _yfinance_breaker.record_success()
                 return t, info, hist
             if attempt < max_retries:
-                _time.sleep(2 ** attempt)
+                jitter = random.uniform(0, 1)
+                time.sleep((2 ** attempt) + jitter)
         except Exception as e:
             last_err = e
+            _yfinance_breaker.record_failure()
+            logger.warning("Fetch failed for %s (attempt %d/%d): %s: %s",
+                           symbol, attempt + 1, max_retries + 1,
+                           type(e).__name__, e)
             if attempt < max_retries:
-                _time.sleep(3 ** attempt)
+                jitter = random.uniform(0, 1)
+                time.sleep((3 ** attempt) + jitter)
+    logger.error("All %d retries exhausted for %s. Last error: %s: %s",
+                 max_retries + 1, symbol,
+                 type(last_err).__name__ if last_err else "None",
+                 last_err or "No data returned")
     return None, {}, None
 
 
-def process_ticker(ticker_dict: dict[str, str]) -> dict[str, Any] | None:
+def process_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict[str, Any] | None:
     """Process a single stock ticker through all analysis dimensions."""
     symbol = ticker_dict["symbol"]
     try:
@@ -342,8 +496,8 @@ def process_ticker(ticker_dict: dict[str, str]) -> dict[str, Any] | None:
         spx_hist = _get_spx_hist()
         sentiment_score, sentiment_d, sentiment_subs = compute_sentiment_6d(
             t, info, hist, spx_hist,
-            wsb_hotlist=_WSB_HOTLIST,
-            fetch_news=_FETCH_NEWS,
+            wsb_hotlist=_get_wsb_hotlist(),
+            fetch_news=fetch_news,
         )
 
         earnings_adj = None
@@ -362,37 +516,41 @@ def process_ticker(ticker_dict: dict[str, str]) -> dict[str, Any] | None:
             except Exception:
                 pass
 
-        mtf_mod = (mtf_score - 50) * 0.2
-        sot_mod = (sot_score - 50) * 0.2
-        squeeze_mod = (squeeze_score - 50) * 0.2
-        es_mod = (earnings_surprise_score - 50) * 0.2 if earnings_surprise_score is not None else 0
-        clue6_mod = (clue6_score - 50) * 0.2
+        wcfg = get_weights()
+        ms = wcfg.modifier_scale
+        mtf_mod = (mtf_score - 50) * ms.multi_timeframe
+        sot_mod = (sot_score - 50) * ms.sot_weis_wave
+        squeeze_mod = (squeeze_score - 50) * ms.squeeze_play
+        es_mod = (earnings_surprise_score - 50) * ms.earnings_surprise if earnings_surprise_score is not None else 0
+        clue6_mod = (clue6_score - 50) * ms.clue6_test
 
         wyckoff_adj = min(100.0, max(0.0, wyckoff_score + sot_mod + clue6_mod))
         pa_adj = min(100.0, max(0.0, pa_score + mtf_mod))
         sentiment_adj = min(100.0, max(0.0, sentiment_score + squeeze_mod))
         fundamentals_adj = min(100.0, max(0.0, fundamentals_score + es_mod))
 
+        ind = wcfg.indicators
         new_mod = (
-            (candle_score - 50) * 0.10
-            + (fib_score - 50) * 0.10
-            + (bb_score - 50) * 0.10
-            + (obv_score - 50) * 0.10
-            + (sr_score - 50) * 0.10
-            + (psych_score - 50) * 0.10
-            + (ichi_score - 50) * 0.06
-            + (candle_adv_score - 50) * 0.06
-            + (risk_reward_score - 50) * 0.06
-            + (psych_adv_score - 50) * 0.06
-            + (pf_score - 50) * 0.06
+            (candle_score - 50) * ind.candlestick
+            + (fib_score - 50) * ind.fibonacci
+            + (bb_score - 50) * ind.bollinger
+            + (obv_score - 50) * ind.obv
+            + (sr_score - 50) * ind.support_resistance
+            + (psych_score - 50) * ind.psychology
+            + (ichi_score - 50) * ind.ichimoku
+            + (candle_adv_score - 50) * ind.candlestick_advanced
+            + (risk_reward_score - 50) * ind.risk_reward
+            + (psych_adv_score - 50) * ind.psychology_advanced
+            + (pf_score - 50) * ind.point_figure
         )
 
+        sw = wcfg.stocks
         final = (
-            wyckoff_adj * 0.20
-            + volprof_score * 0.20
-            + pa_adj * 0.15
-            + sentiment_adj * 0.20
-            + fundamentals_adj * 0.25
+            wyckoff_adj * sw.wyckoff
+            + volprof_score * sw.volume_profile
+            + pa_adj * sw.price_action
+            + sentiment_adj * sw.sentiment
+            + fundamentals_adj * sw.fundamentals
             + new_mod
         )
         final = min(100.0, max(0.0, round(final, 1)))
@@ -442,13 +600,13 @@ def process_ticker(ticker_dict: dict[str, str]) -> dict[str, Any] | None:
             "pattern": pattern,
             "competitive_score": competitive_score,
             "competitive_detail": competitive_d,
+            "_si": float(info.get("shortPercentOfFloat", 0) or 0),
             "earnings_proximity": earnings_adj,
         }
-    except Exception:
+    except Exception as e:
+        logger.error("process_ticker failed for %s: %s: %s", symbol, type(e).__name__, e)
         return None
-
-
-def process_crypto_ticker(ticker_dict: dict[str, str]) -> dict[str, Any] | None:
+def process_crypto_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict[str, Any] | None:
     """Process a single crypto ticker through analysis dimensions."""
     symbol = ticker_dict["symbol"]
     try:
@@ -480,30 +638,34 @@ def process_crypto_ticker(ticker_dict: dict[str, str]) -> dict[str, Any] | None:
         psych_adv_score, psych_adv_d = compute_psychology_advanced(hist)
         pf_score, pf_d = compute_point_figure(hist)
 
-        mtf_mod = (mtf_score - 50) * 0.2
-        sot_mod = (sot_score - 50) * 0.2
+        wcfg = get_weights()
+        ms = wcfg.modifier_scale
+        mtf_mod = (mtf_score - 50) * ms.multi_timeframe
+        sot_mod = (sot_score - 50) * ms.sot_weis_wave
         wyckoff_adj = min(100.0, max(0.0, wyckoff_score + sot_mod))
         pa_adj = min(100.0, max(0.0, pa_score + mtf_mod))
 
+        ind = wcfg.indicators
         new_mod = (
-            (candle_score - 50) * 0.10
-            + (fib_score - 50) * 0.10
-            + (bb_score - 50) * 0.10
-            + (obv_score - 50) * 0.10
-            + (sr_score - 50) * 0.10
-            + (psych_score - 50) * 0.10
-            + (ichi_score - 50) * 0.06
-            + (candle_adv_score - 50) * 0.06
-            + (risk_reward_score - 50) * 0.06
-            + (psych_adv_score - 50) * 0.06
-            + (pf_score - 50) * 0.06
+            (candle_score - 50) * ind.candlestick
+            + (fib_score - 50) * ind.fibonacci
+            + (bb_score - 50) * ind.bollinger
+            + (obv_score - 50) * ind.obv
+            + (sr_score - 50) * ind.support_resistance
+            + (psych_score - 50) * ind.psychology
+            + (ichi_score - 50) * ind.ichimoku
+            + (candle_adv_score - 50) * ind.candlestick_advanced
+            + (risk_reward_score - 50) * ind.risk_reward
+            + (psych_adv_score - 50) * ind.psychology_advanced
+            + (pf_score - 50) * ind.point_figure
         )
 
+        cw = wcfg.crypto
         final = (
-            wyckoff_adj * 0.25
-            + volprof_score * 0.25
-            + pa_adj * 0.20
-            + crypto_score * 0.30
+            wyckoff_adj * cw.wyckoff
+            + volprof_score * cw.volume_profile
+            + pa_adj * cw.price_action
+            + crypto_score * cw.crypto_apc
             + new_mod
         )
         final = min(100.0, max(0.0, round(final, 1)))
@@ -536,5 +698,6 @@ def process_crypto_ticker(ticker_dict: dict[str, str]) -> dict[str, Any] | None:
             "flags": [],
             "pattern": "Crypto APC",
         }
-    except Exception:
+    except Exception as e:
+        logger.error("process_crypto_ticker failed for %s: %s: %s", symbol, type(e).__name__, e)
         return None

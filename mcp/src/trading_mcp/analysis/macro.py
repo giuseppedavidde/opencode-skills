@@ -16,20 +16,17 @@ class Regime(str, Enum):
     TRENDING_BEAR = "trending_bear"
 
 
-BASE_WEIGHTS_STOCK = {
-    "wyckoff": 0.20,
-    "volume_profile": 0.20,
-    "price_action": 0.15,
-    "sentiment": 0.20,
-    "fundamentals": 0.25,
-}
+from trading_mcp.weights_config import get_weights
 
-BASE_WEIGHTS_CRYPTO = {
-    "wyckoff": 0.25,
-    "volume_profile": 0.25,
-    "price_action": 0.20,
-    "sentiment": 0.30,
-}
+
+def _get_base_weights_stock() -> dict[str, float]:
+    """Get base stock weights from config."""
+    return get_weights().stocks.to_dict()
+
+
+def _get_base_weights_crypto() -> dict[str, float]:
+    """Get base crypto weights from config."""
+    return get_weights().crypto.to_dict()
 
 
 def detect_regime(
@@ -72,7 +69,7 @@ def get_dynamic_weights(regime: Regime, is_crypto: bool = False) -> dict[str, fl
         regime: Current market regime.
         is_crypto: If True, use crypto base weights.
     """
-    base = BASE_WEIGHTS_CRYPTO if is_crypto else BASE_WEIGHTS_STOCK
+    base = _get_base_weights_crypto() if is_crypto else _get_base_weights_stock()
     weights = dict(base)
 
     if regime == Regime.CRISIS:

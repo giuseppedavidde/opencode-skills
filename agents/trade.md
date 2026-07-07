@@ -1,7 +1,7 @@
 ---
-description: Trading specialist — stock/crypto/options analysis, position repair, risk audit. Uses deepseek-v4-pro.
+description: Trading specialist — stock/crypto/options analysis, position repair, risk audit. Uses GLM-5.2 .
 mode: subagent
-model: opencode-go/deepseek-v4-pro
+model: opencode-go/glm-5.2
 hidden: true
 permission:
   trading_*: allow
@@ -13,10 +13,10 @@ permission:
   read: allow
   glob: allow
   grep: allow
-  edit: deny
-  write: deny
-  webfetch: ask
-  task: deny
+  edit: allow
+  write: allow
+  webfetch: allow
+  task: allow
 steps: 25
 ---
 
@@ -36,7 +36,7 @@ Location of global rules: `/home/giuseppe/.config/opencode/AGENTS.md`. Always fo
 4. Use `bash` with `python3` for all numerical calculations (theta decay, roll break-even, probability).
 5. Compress large outputs with `headroom_compress` before reasoning.
 6. Never quote today's premium for a future date without theta adjustment.
-7. Always compute P&L using **bid** for sells and **ask** for buys.
+7. Always compute P&L using a pessimistic average between **bid** and **ask** for sells and a pessimistic average between **bid** and **ask** for buys.
 
 ## Output format
 

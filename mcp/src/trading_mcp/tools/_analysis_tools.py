@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -11,13 +12,16 @@ from fastmcp import FastMCP
 
 from trading_mcp.analysis.scanner import (
     apply_macro_regime,
+    compute_dynamic_thresholds,
     load_universe,
     parse_custom_tickers,
     process_crypto_ticker,
     process_ticker,
-    set_fetch_news,
+    recompute_patterns,
 )
 from trading_mcp.analysis.options_calc import analyze_options_position
+
+logger = logging.getLogger(__name__)
 
 
 def register_analysis_tools(
@@ -63,16 +67,14 @@ def register_analysis_tools(
         failures = 0
         t0 = time.time()
 
-        set_fetch_news(fetch_news)
-
         with ThreadPoolExecutor(max_workers=workers) as executor:
             future_map = {}
             for t_dict in universe_list:
                 symbol = t_dict["symbol"]
                 if t_dict.get("market") == "CRYPTO":
-                    future = executor.submit(_safe_process, process_crypto_ticker, t_dict, symbol)
+                    future = executor.submit(_safe_process, process_crypto_ticker, t_dict, symbol, fetch_news)
                 else:
-                    future = executor.submit(_safe_process, process_ticker, t_dict, symbol)
+                    future = executor.submit(_safe_process, process_ticker, t_dict, symbol, fetch_news)
                 future_map[future] = symbol
 
             completed = 0
@@ -81,7 +83,9 @@ def register_analysis_tools(
                 symbol = future_map[future]
                 try:
                     result = future.result(timeout=30)
-                except Exception:
+                except Exception as e:
+                    logger.warning("Future timeout/error for %s: %s: %s",
+                                   symbol, type(e).__name__, e)
                     result = None
 
                 if result:
@@ -92,6 +96,13 @@ def register_analysis_tools(
         results.sort(key=lambda r: r["final_score"], reverse=True)
         results = apply_macro_regime(results, regime)
         results.sort(key=lambda r: r["final_score"], reverse=True)
+
+        # ── Recompute pattern labels with dynamic thresholds ──
+        dyn_thresholds = compute_dynamic_thresholds(results)
+        logger.info("Dynamic thresholds for %s: %s", universe_name,
+                     {k: v for k, v in sorted(dyn_thresholds.items())})
+        recompute_patterns(results, dyn_thresholds)
+
         filtered = [r for r in results if r["final_score"] >= min_score]
 
         elapsed = time.time() - t0
@@ -155,10 +166,8 @@ def register_analysis_tools(
         Returns:
             Dictionary with composite_score, verdict, confidence, dimensions.
         """
-        set_fetch_news(fetch_news)
-
         t_dict = {"symbol": ticker, "name": ticker, "market": "US"}
-        result = process_ticker(t_dict)
+        result = process_ticker(t_dict, fetch_news=fetch_news)
         if result is None:
             return {"error": f"Could not analyze ticker '{ticker}'. Check symbol or try later."}
 
@@ -227,10 +236,12 @@ def register_analysis_tools(
         return analyze_options_position(ticker, legs, expiry)
 
 
-def _safe_process(fn, t_dict, symbol):
+def _safe_process(fn, t_dict, symbol, fetch_news=True):
     try:
-        return fn(t_dict)
-    except Exception:
+        return fn(t_dict, fetch_news=fetch_news)
+    except Exception as e:
+        logger.error("_safe_process failed for %s via %s: %s: %s",
+                     symbol, fn.__name__, type(e).__name__, e)
         return None
 
 

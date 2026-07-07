@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from datetime import datetime
 from typing import Any
@@ -12,6 +13,82 @@ from fastmcp import FastMCP
 
 from trading_mcp.analysis.macro import detect_regime, get_dynamic_weights
 from trading_mcp.knowledge.skill_bridge import SkillBridge
+
+logger = logging.getLogger(__name__)
+
+# ── Macro Context TTL Cache ──────────────────────────────────
+_macro_cache: dict[str, Any] | None = None
+_macro_cache_time: float = 0.0
+MACRO_CACHE_TTL: float = 60.0  # seconds
+
+
+def _fetch_macro_context() -> dict[str, Any]:
+    """Fetch macro context from yfinance (no caching)."""
+    vix_val = None
+    dxy_val = None
+    dxy_trend = "neutral"
+    fear_greed = None
+    btc_dominance = None
+    fed_rate = 4.75
+
+    try:
+        vix_t = yf.Ticker("^VIX")
+        hist = vix_t.history(period="5d")
+        if not hist.empty:
+            vix_val = round(float(hist["Close"].iloc[-1]), 2)
+    except Exception:
+        logger.warning("Failed to fetch VIX", exc_info=True)
+
+    try:
+        dxy_t = yf.Ticker("DX-Y.NYB")
+        hist = dxy_t.history(period="1mo")
+        if not hist.empty and len(hist) >= 5:
+            dxy_val = round(float(hist["Close"].iloc[-1]), 2)
+            dxy_prev = float(hist["Close"].iloc[-min(len(hist), 22)])
+            if dxy_val > dxy_prev * 1.02:
+                dxy_trend = "rising"
+            elif dxy_val < dxy_prev * 0.98:
+                dxy_trend = "falling"
+    except Exception:
+        logger.warning("Failed to fetch DXY", exc_info=True)
+
+    try:
+        btc_t = yf.Ticker("BTC-USD")
+        btc_hist = btc_t.history(period="5d")
+        if not btc_hist.empty:
+            btc_dominance = round(float(btc_hist["Close"].iloc[-1]), 0)
+    except Exception:
+        logger.warning("Failed to fetch BTC dominance", exc_info=True)
+
+    regime = detect_regime(vix=vix_val, dxy_trend=dxy_trend, fear_greed=fear_greed)
+    weights_stock = get_dynamic_weights(regime, is_crypto=False)
+    weights_crypto = get_dynamic_weights(regime, is_crypto=True)
+
+    if vix_val is not None:
+        if vix_val < 15:
+            macro_window = "FULL"
+        elif vix_val < 25:
+            macro_window = "NORMAL"
+        elif vix_val < 35:
+            macro_window = "SELECTIVE"
+        else:
+            macro_window = "DEFENSIVE"
+    else:
+        macro_window = "NORMAL"
+
+    return {
+        "timestamp": datetime.utcnow().isoformat(),
+        "vix": vix_val,
+        "dxy": dxy_val,
+        "dxy_trend": dxy_trend,
+        "fed_rate": fed_rate,
+        "btc_dominance": btc_dominance,
+        "fear_greed_index": fear_greed,
+        "detected_regime": regime.value,
+        "macro_window": macro_window,
+        "dynamic_weights_stock": weights_stock,
+        "dynamic_weights_crypto": weights_crypto,
+    }
 
 
 def register_knowledge_tools(mcp_server: FastMCP, skills_dir: str) -> None:
@@ -26,72 +103,29 @@ def register_knowledge_tools(mcp_server: FastMCP, skills_dir: str) -> None:
         Fetches real-time macro indicators from yfinance and detects the
         current market regime (CRISIS, HIGH_VOLATILITY, RANGE_BOUND,
         TRENDING_BULL, TRENDING_BEAR) with dynamic weight recommendations.
+
+        Results are cached for 60 seconds to prevent yfinance rate limiting.
+        Use clear_macro_cache() to force a refresh.
         """
-        vix_val = None
-        dxy_val = None
-        dxy_trend = "neutral"
-        fear_greed = None
-        btc_dominance = None
-        fed_rate = 4.75
-
-        try:
-            vix_t = yf.Ticker("^VIX")
-            hist = vix_t.history(period="5d")
-            if not hist.empty:
-                vix_val = round(float(hist["Close"].iloc[-1]), 2)
-        except Exception:
-            pass
-
-        try:
-            dxy_t = yf.Ticker("DX-Y.NYB")
-            hist = dxy_t.history(period="1mo")
-            if not hist.empty and len(hist) >= 5:
-                dxy_val = round(float(hist["Close"].iloc[-1]), 2)
-                dxy_prev = float(hist["Close"].iloc[-min(len(hist), 22)])
-                if dxy_val > dxy_prev * 1.02:
-                    dxy_trend = "rising"
-                elif dxy_val < dxy_prev * 0.98:
-                    dxy_trend = "falling"
-        except Exception:
-            pass
-
-        try:
-            btc_t = yf.Ticker("BTC-USD")
-            btc_hist = btc_t.history(period="5d")
-            if not btc_hist.empty:
-                btc_dominance = round(float(btc_hist["Close"].iloc[-1]), 0)
-        except Exception:
-            pass
-
-        regime = detect_regime(vix=vix_val, dxy_trend=dxy_trend, fear_greed=fear_greed)
-        weights_stock = get_dynamic_weights(regime, is_crypto=False)
-        weights_crypto = get_dynamic_weights(regime, is_crypto=True)
-
-        if vix_val is not None:
-            if vix_val < 15:
-                macro_window = "FULL"
-            elif vix_val < 25:
-                macro_window = "NORMAL"
-            elif vix_val < 35:
-                macro_window = "SELECTIVE"
-            else:
-                macro_window = "DEFENSIVE"
+        global _macro_cache, _macro_cache_time
+        now = time.time()
+        if _macro_cache is None or (now - _macro_cache_time) > MACRO_CACHE_TTL:
+            _macro_cache = _fetch_macro_context()
+            _macro_cache_time = now
+            logger.info("Macro context refreshed (TTL=%.1fs)", MACRO_CACHE_TTL)
         else:
-            macro_window = "NORMAL"
+            age = now - _macro_cache_time
+            logger.debug("Macro context cache hit (%.1fs old)", age)
+        return dict(_macro_cache)  # return a copy to prevent mutation
 
-        return {
-            "timestamp": datetime.utcnow().isoformat(),
-            "vix": vix_val,
-            "dxy": dxy_val,
-            "dxy_trend": dxy_trend,
-            "fed_rate": fed_rate,
-            "btc_dominance": btc_dominance,
-            "fear_greed_index": fear_greed,
-            "detected_regime": regime.value,
-            "macro_window": macro_window,
-            "dynamic_weights_stock": weights_stock,
-            "dynamic_weights_crypto": weights_crypto,
-        }
+    @mcp_server.tool()
+    def clear_macro_cache() -> dict[str, str]:
+        """Force clear the macro context cache. Next call will re-fetch fresh data."""
+        global _macro_cache, _macro_cache_time
+        _macro_cache = None
+        _macro_cache_time = 0.0
+        logger.info("Macro cache cleared by user request")
+        return {"status": "ok", "message": "Macro cache cleared"}
 
     @mcp_server.tool()
     def get_skill_knowledge(
