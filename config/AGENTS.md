@@ -5,10 +5,11 @@ This OpenCode instance uses automatic model routing to save tokens:
 - **Router (build agent)**: deepseek-v4-flash — receives all requests, classifies, delegates
 - **@trade**: glm-5.2 — trading, options, market analysis 
 - **@coder**: glm-5.2 — complex coding, refactoring, multi-file changes 
+- **@graphify_helper**: deepseek-v4-flash — smart graphify orchestrator, builds/updates/queries knowledge graphs
 - **@skill_updater**: deepseek-v4-flash — updates skills that depend on -src submodules
 - **@explore / @scout**: deepseek-v4-flash — code search / web research
 
-The router delegates based on keywords. Trading requests go to @trade, complex coding to @coder, skill updates to @skill_updater.
+The router delegates based on keywords. Trading requests go to @trade, complex coding to @coder, skill updates to @skill_updater, graphify requests to @graphify_helper.
 All agents read these AGENTS.md rules. See opencode.json for full agent configuration.
 
 ## Python Virtual Environment Mandatory
