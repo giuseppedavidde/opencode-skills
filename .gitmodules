@@ -1,9 +1,9 @@
 [submodule "skills/graphify-src"]
 	path = skills/graphify-src
 	url = https://github.com/Graphify-Labs/graphify.git
-[submodule "skills/book-to-skill"]
-	path = skills/book-to-skill
-	url = https://github.com/virgiliojr94/book-to-skill.git
 [submodule "skills/karpathy-llm-wiki-src"]
 	path = skills/karpathy-llm-wiki-src
 	url = https://github.com/alfadur7/llm-wiki-newsroom.git
+[submodule "skills/book-to-skill-src"]
+	path = skills/book-to-skill-src
+	url = https://github.com/virgiliojr94/book-to-skill.git
