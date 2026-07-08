@@ -1,3 +1,0 @@
-[console_scripts]
-trading-cli = trading_mcp.trading_cli:main
-trading-mcp = trading_mcp.main:run_app
