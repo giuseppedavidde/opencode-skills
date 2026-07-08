@@ -17,13 +17,24 @@ from trading_mcp.config import RISK_FREE_RATE
 class OptionLeg:
     """A single options leg in a multi-leg position."""
 
-    def __init__(self, opt_type: str, strike: float, qty: int, entry: float):
+    def __init__(
+        self,
+        opt_type: str,
+        strike: float,
+        qty: int,
+        entry: float,
+        expiry: str | None = None,
+    ):
         if opt_type.lower() not in ("call", "put"):
             raise ValueError(f"type must be 'call' or 'put', got '{opt_type}'")
         self.opt_type = opt_type.lower()
         self.strike = strike
         self.qty = qty
         self.entry = entry
+        # Per-leg expiry (YYYY-MM-DD). None = fall back to the global expiry
+        # passed to analyze_options_position. Enables multi-expiry positions
+        # such as calendar spreads and diagonal spreads.
+        self.expiry = expiry
 
     def side_label(self) -> str:
         side = "Long" if self.qty > 0 else "Short"
@@ -37,10 +48,18 @@ def analyze_options_position(
 ) -> dict[str, Any]:
     """Analyze a multi-leg options position.
 
+    Supports multi-expiry positions (calendar spreads, diagonals): each leg
+    may carry its own optional ``expiry`` (YYYY-MM-DD). Per-leg expiry takes
+    precedence over the global ``expiry`` parameter.
+
     Args:
         ticker: Stock ticker symbol.
         legs: List of leg dicts with keys: type, strike, qty, entry_premium.
-        expiry: Optional target expiry (YYYY-MM-DD).
+              Each leg can optionally include "expiry" (YYYY-MM-DD) for
+              multi-expiry positions (calendar spreads, diagonals). Falls
+              back to the global expiry when omitted.
+        expiry: Optional global target expiry (YYYY-MM-DD). Used for legs
+                without per-leg expiry and as the payoff reference date.
     """
     t = yf.Ticker(ticker)
     info = t.info or {}
@@ -58,22 +77,53 @@ def analyze_options_position(
     if not expirations:
         return {"ticker": ticker, "error": "No options available"}
 
-    selected_expiry = _select_expiry_opt(expirations, expiry)
-    tte = _time_to_expiry_opt(selected_expiry)
-
+    # Parse legs, reading the optional per-leg "expiry" key.
     parsed_legs: list[OptionLeg] = []
     for leg_data in legs:
+        leg_expiry = leg_data.get("expiry")
+        if isinstance(leg_expiry, str) and leg_expiry.lower() in ("", "null", "none"):
+            leg_expiry = None
+        if leg_expiry is not None:
+            leg_expiry = str(leg_expiry).strip()
         parsed_legs.append(OptionLeg(
             str(leg_data["type"]),
             float(leg_data["strike"]),
             int(leg_data["qty"]),
             float(leg_data["entry_premium"]),
+            expiry=leg_expiry,
         ))
 
-    try:
-        chain = t.option_chain(selected_expiry)
-    except Exception:
-        return {"ticker": ticker, "error": f"Cannot fetch chain for {selected_expiry}"}
+    # Track whether global expiry was user-provided or auto-selected.
+    was_provided = expiry is not None and str(expiry).lower() not in ("null", "none", "")
+
+    # If any leg lacks both per-leg and global expiry, resolve an auto-selected
+    # global fallback (nearest expiry >30 DTE) to feed those legs.
+    global_resolved = expiry
+    if global_resolved is None and any(l.expiry is None for l in parsed_legs):
+        global_resolved = _select_expiry_opt(expirations, None)
+
+    # Effective expiry per leg, snapped to an available chain expiration.
+    eff_expiries: list[str] = []
+    for leg in parsed_legs:
+        eff = leg.expiry if leg.expiry else global_resolved
+        eff_expiries.append(_select_expiry_opt(expirations, eff))
+
+    # Group legs by effective expiry and fetch one chain per unique expiry.
+    unique_expiries = sorted(set(eff_expiries))
+    chains: dict[str, Any] = {}
+    for exp in unique_expiries:
+        try:
+            chains[exp] = t.option_chain(exp)
+        except Exception:
+            return {"ticker": ticker, "error": f"Cannot fetch chain for {exp}"}
+
+    # Payoff reference date: the global expiry if provided (it is the horizon
+    # the caller cares about), otherwise the farthest leg expiry.
+    if expiry is not None:
+        payoff_expiry = _select_expiry_opt(expirations, expiry)
+    else:
+        payoff_expiry = unique_expiries[-1]
+    payoff_tte = _time_to_expiry_opt(payoff_expiry)
 
     leg_results = []
     total_delta = 0.0
@@ -82,10 +132,14 @@ def analyze_options_position(
     total_vega = 0.0
     cost_basis = 0.0
     current_value = 0.0
+    # Per-leg IV, indexed by leg position, reused by the multi-expiry payoff.
+    leg_iv: dict[int, float] = {}
 
     r = RISK_FREE_RATE
 
-    for leg in parsed_legs:
+    for i, leg in enumerate(parsed_legs):
+        eff = eff_expiries[i]
+        chain = chains[eff]
         df = chain.calls if leg.opt_type == "call" else chain.puts
         row = df[df["strike"] == leg.strike]
         if row.empty:
@@ -97,8 +151,11 @@ def analyze_options_position(
         mid = (bid + ask) / 2 if (bid + ask) > 0 else float(row_data.get("lastPrice", 0) or 0)
         iv = row_data.get("impliedVolatility", 0.3) or 0.3
         iv = float(iv)
+        leg_iv[i] = iv
 
-        greeks_result = _bs_greeks(spot, leg.strike, tte, r, iv, leg.opt_type)
+        # Greeks use THIS leg's own DTE (today -> leg effective expiry).
+        leg_tte = _time_to_expiry_opt(eff)
+        greeks_result = _bs_greeks(spot, leg.strike, leg_tte, r, iv, leg.opt_type)
 
         pnl_per = (mid - leg.entry) * abs(leg.qty) * 100
         cost_leg = leg.entry * abs(leg.qty) * 100
@@ -113,6 +170,8 @@ def analyze_options_position(
             "strike": leg.strike,
             "qty": leg.qty,
             "entry_premium": leg.entry,
+            "expiry": eff,
+            "dte": int(leg_tte * 365),
             "current_premium": round(mid, 4),
             "pnl_per_unit": round(mid - leg.entry, 2),
             "pnl": round(pnl_per, 2),
@@ -129,8 +188,12 @@ def analyze_options_position(
 
     total_pnl = current_value - cost_basis
 
-    payoff, breakevens = _compute_payoff(parsed_legs, spot, tte, r)
-    probabilities = _compute_probabilities(parsed_legs, spot, tte, r)
+    payoff, breakevens = _compute_payoff(
+        parsed_legs, spot, r, payoff_expiry, eff_expiries, leg_iv
+    )
+    probabilities = _compute_probabilities(
+        parsed_legs, spot, r, payoff_expiry, eff_expiries, leg_iv
+    )
 
     strategy_name = _classify_strategy(parsed_legs)
 
@@ -138,11 +201,12 @@ def analyze_options_position(
         parsed_legs, total_pnl, spot, payoff, strategy_name
     )
 
-    return {
+    result: dict[str, Any] = {
         "ticker": ticker,
         "underlying_price": round(spot, 2),
-        "expiry": selected_expiry,
-        "dte": int(tte * 365),
+        "expiry": payoff_expiry,
+        "dte": int(payoff_tte * 365),
+        "leg_expiries": unique_expiries,
         "strategy_classification": strategy_name,
         "legs": leg_results,
         "position_greeks": {
@@ -162,6 +226,25 @@ def analyze_options_position(
         "probabilities": probabilities,
         "recommendations": recommendations,
     }
+
+    # Warning: global expiry auto-selected and actually used by at least one leg
+    used_auto = not was_provided and any(l.expiry is None for l in parsed_legs)
+    if used_auto:
+        result["warning"] = (
+            f"Global expiry auto-selected: {payoff_expiry} ({payoff_tte*365:.0f} DTE). "
+            "Pass expiry='YYYY-MM-DD' for accurate Greeks. "
+            "Legs without per-leg expiry use this global value."
+        )
+    elif len(unique_expiries) > 1:
+        result["warning"] = (
+            f"Multi-expiry position: {len(unique_expiries)} distinct expiries "
+            f"({', '.join(unique_expiries)}). Greeks are computed per-leg using "
+            "each leg's own DTE. Payoff is evaluated at the global/farthest "
+            f"expiry ({payoff_expiry}): expired legs use intrinsic value, "
+            "live legs use the Black-Scholes theoretical price."
+        )
+
+    return result
 
 
 def _bs_greeks(
@@ -190,20 +273,63 @@ def _bs_greeks(
     return {"delta": delta, "gamma": gamma, "theta": theta, "vega": vega}
 
 
+def _bs_price(
+    spot: float, strike: float, tte: float, r: float, sigma: float, opt_type: str
+) -> float:
+    """Black-Scholes theoretical option price."""
+    if tte <= 0 or sigma <= 0:
+        return max(0.0, (spot - strike) if opt_type == "call" else (strike - spot))
+    sqrt_t = math.sqrt(tte)
+    d1 = (math.log(spot / strike) + (r + 0.5 * sigma ** 2) * tte) / (sigma * sqrt_t)
+    d2 = d1 - sigma * sqrt_t
+    if opt_type == "call":
+        return spot * norm.cdf(d1) - strike * math.exp(-r * tte) * norm.cdf(d2)
+    return strike * math.exp(-r * tte) * norm.cdf(-d2) - spot * norm.cdf(-d1)
+
+
+def _leg_value_at(
+    price: float,
+    leg: OptionLeg,
+    leg_eff_expiry: str,
+    payoff_date: date,
+    iv: float,
+    r: float,
+) -> float:
+    """Value of a single leg at ``price`` on the payoff date.
+
+    Legs that have already expired by the payoff date settle to intrinsic
+    value. Legs that are still alive are valued with the Black-Scholes
+    theoretical price using the remaining time to the leg's own expiry.
+    """
+    leg_exp_date = datetime.strptime(leg_eff_expiry, "%Y-%m-%d").date()
+    if leg_exp_date <= payoff_date:
+        return max(0.0, (price - leg.strike)
+                   if leg.opt_type == "call" else (leg.strike - price))
+    remaining_days = max((leg_exp_date - payoff_date).days, 1)
+    remaining_tte = remaining_days / 365.0
+    return _bs_price(price, leg.strike, remaining_tte, r, iv, leg.opt_type)
+
+
 def _compute_payoff(
-    legs: list[OptionLeg], spot: float, tte: float, r: float
+    legs: list[OptionLeg],
+    spot: float,
+    r: float,
+    payoff_expiry: str,
+    eff_expiries: list[str],
+    leg_iv: dict[int, float],
 ) -> tuple[list[dict], list[float]]:
     points = np.linspace(spot * 0.5, spot * 1.5, 100)
     breakevens: list[float] = []
+    payoff_date = datetime.strptime(payoff_expiry, "%Y-%m-%d").date()
 
     payoffs = []
-    prev_pnl: float | None = None
 
     for price in points:
         pnl = 0.0
-        for leg in legs:
-            intrinsic = max(0.0, (price - leg.strike) if leg.opt_type == "call" else (leg.strike - price))
-            pnl += (intrinsic - leg.entry) * leg.qty * 100
+        for i, leg in enumerate(legs):
+            iv = leg_iv.get(i, 0.3)
+            value = _leg_value_at(float(price), leg, eff_expiries[i], payoff_date, iv, r)
+            pnl += (value - leg.entry) * leg.qty * 100
 
         payoff_type = "normal"
         if abs(pnl) < 0.01 * spot * 100:
@@ -216,17 +342,22 @@ def _compute_payoff(
             "type": payoff_type,
         })
 
-        prev_pnl = pnl
-
     return payoffs, sorted(set(breakevens))[:10]
 
 
 def _compute_probabilities(
-    legs: list[OptionLeg], spot: float, tte: float, r: float
+    legs: list[OptionLeg],
+    spot: float,
+    r: float,
+    payoff_expiry: str,
+    eff_expiries: list[str],
+    leg_iv: dict[int, float],
 ) -> dict[str, float]:
     sigma = 0.30
+    tte = _time_to_expiry_opt(payoff_expiry)
     dr = (r - 0.5 * sigma ** 2) * tte
     vol = sigma * math.sqrt(tte)
+    payoff_date = datetime.strptime(payoff_expiry, "%Y-%m-%d").date()
 
     profit_count = 0
     max_profit_count = 0
@@ -237,9 +368,10 @@ def _compute_probabilities(
         z = float(np.random.normal(0, 1))
         price = spot * math.exp(dr + vol * z)
         pnl = 0.0
-        for leg in legs:
-            intrinsic = max(0.0, (price - leg.strike) if leg.opt_type == "call" else (leg.strike - price))
-            pnl += (intrinsic - leg.entry) * leg.qty * 100
+        for i, leg in enumerate(legs):
+            iv = leg_iv.get(i, 0.3)
+            value = _leg_value_at(price, leg, eff_expiries[i], payoff_date, iv, r)
+            pnl += (value - leg.entry) * leg.qty * 100
 
         if pnl > 0:
             profit_count += 1

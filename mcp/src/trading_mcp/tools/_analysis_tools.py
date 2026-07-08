@@ -220,7 +220,7 @@ def register_analysis_tools(
     def analyze_options(
         ticker: str,
         legs: list[dict[str, Any]],
-        expiry: str | None = None,
+        expiry: str,
     ) -> dict[str, Any]:
         """Analyze a multi-leg options position.
 
@@ -228,11 +228,20 @@ def register_analysis_tools(
         break-even points, probabilities (ITM/OTM, profit), and strategy classification
         using the Options Playbook framework.
 
+        Supports multi-expiry positions (calendar spreads, diagonal spreads): each
+        leg dict may carry an optional ``expiry`` key (YYYY-MM-DD). Per-leg expiry
+        takes precedence over the global ``expiry`` parameter.
+
         Args:
             ticker: Stock ticker symbol.
             legs: List of leg dicts with type, strike, qty, entry_premium.
-            expiry: Optional target expiry (YYYY-MM-DD).
+                  Each leg can optionally include "expiry" (YYYY-MM-DD) for
+                  multi-expiry positions (calendar spreads, diagonals).
+            expiry: Global target expiry (YYYY-MM-DD). Used for legs without
+                    per-leg expiry. REQUIRED — the tool rejects calls without it.
         """
+        if not expiry or str(expiry).lower() in ("null", "none", ""):
+            return {"ticker": ticker, "error": "expiry is REQUIRED. Pass expiry='YYYY-MM-DD'."}
         return analyze_options_position(ticker, legs, expiry)
 
 

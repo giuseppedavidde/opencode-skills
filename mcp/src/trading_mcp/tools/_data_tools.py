@@ -97,15 +97,19 @@ def register_data_tools(mcp_server: FastMCP) -> None:
 
     @mcp_server.tool()
     def fetch_options_chain(
-        ticker: str, expiry: str | None = None
+        ticker: str, expiry: str
     ) -> dict[str, Any]:
         """Fetch options chain with Greeks and IV metrics.
 
         Args:
             ticker: Stock ticker symbol.
-            expiry: Optional target expiry date (YYYY-MM-DD). Auto-selects nearest >30 DTE.
+            expiry: Target expiry date (YYYY-MM-DD). REQUIRED — the tool rejects calls
+                    without it. If the exact date is unavailable, snaps to the nearest
+                    available expiry.
 
         Returns:
             Dictionary with calls/puts lists including Greeks, and IV metrics.
         """
+        if not expiry or str(expiry).lower() in ("null", "none", ""):
+            return {"ticker": ticker, "error": "expiry is REQUIRED. Pass expiry='YYYY-MM-DD'."}
         return _fetch_options_chain(ticker, expiry)

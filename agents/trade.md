@@ -37,6 +37,7 @@ Location of global rules: `/home/giuseppe/.config/opencode/AGENTS.md`. Always fo
 5. Compress large outputs with `headroom_compress` before reasoning.
 6. Never quote today's premium for a future date without theta adjustment.
 7. Always compute P&L using a pessimistic average between **bid** and **ask** for sells and a pessimistic average between **bid** and **ask** for buys.
+8. **CRITICAL — expiry parameter**: ALWAYS pass `expiry="YYYY-MM-DD"` to `analyze_options`. The tool now REJECTS calls without expiry. For multi-expiry positions (calendar/diagonal spreads), add `"expiry"` key to individual leg dicts. Never call `analyze_options` without `expiry`.
 
 ## Output format
 
