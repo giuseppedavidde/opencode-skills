@@ -85,10 +85,22 @@ def analyze_options_position(
             leg_expiry = None
         if leg_expiry is not None:
             leg_expiry = str(leg_expiry).strip()
+        # Normalize compound type names: "long_call"/"short_put"/"Long Put" → "call"/"put"
+        raw_type = str(leg_data["type"]).lower().replace(" ", "_")
+        type_clean = raw_type.replace("long_", "").replace("short_", "")
+        if type_clean in ("call", "put"):
+            leg_type = type_clean
+            leg_qty = int(leg_data["qty"])
+            if raw_type.startswith("short_"):
+                leg_qty = -abs(leg_qty)
+            elif raw_type.startswith("long_"):
+                leg_qty = abs(leg_qty)
+        else:
+            leg_type, leg_qty = raw_type, int(leg_data["qty"])
         parsed_legs.append(OptionLeg(
-            str(leg_data["type"]),
+            leg_type,
             float(leg_data["strike"]),
-            int(leg_data["qty"]),
+            leg_qty,
             float(leg_data["entry_premium"]),
             expiry=leg_expiry,
         ))
