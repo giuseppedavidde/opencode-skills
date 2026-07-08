@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import math
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime
 from typing import Any
 
@@ -12,6 +15,96 @@ import yfinance as yf
 from scipy.stats import norm
 
 from trading_mcp.config import RISK_FREE_RATE
+
+# ── Caches for yfinance data (avoid redundant network calls) ──────────
+# TTL in seconds; chain data is stale-tolerant for analysis purposes.
+_CHAIN_CACHE_TTL = 60.0
+_INFO_CACHE_TTL = 60.0
+
+_chain_cache: dict[tuple[str, str], tuple[float, Any]] = {}  # (ticker,expiry) -> (ts, chain)
+_info_cache: dict[str, tuple[float, Any]] = {}               # ticker -> (ts, info)
+_options_cache: dict[str, tuple[float, list[str]]] = {}       # ticker -> (ts, expirations)
+_cache_lock = threading.Lock()
+
+
+def _cached_ticker_info(ticker: str) -> tuple[Any, list[str]]:
+    """Return (info, expirations) with cache. Avoids redundant yf.Ticker creation."""
+    now = time.time()
+    with _cache_lock:
+        # Info
+        if ticker in _info_cache:
+            ts, info = _info_cache[ticker]
+            if now - ts < _INFO_CACHE_TTL:
+                cached_info = info
+            else:
+                del _info_cache[ticker]
+                cached_info = None
+        else:
+            cached_info = None
+        # Expirations
+        if ticker in _options_cache:
+            ts, exps = _options_cache[ticker]
+            if now - ts < _INFO_CACHE_TTL:
+                cached_exps = exps
+            else:
+                del _options_cache[ticker]
+                cached_exps = None
+        else:
+            cached_exps = None
+
+    if cached_info is not None and cached_exps is not None:
+        return cached_info, cached_exps
+
+    t = yf.Ticker(ticker)
+    fresh_info = t.info or {}
+    try:
+        fresh_exps = list(t.options)
+    except Exception:
+        fresh_exps = []
+
+    with _cache_lock:
+        if cached_info is None:
+            _info_cache[ticker] = (now, fresh_info)
+        if cached_exps is None:
+            _options_cache[ticker] = (now, fresh_exps)
+
+    return fresh_info, fresh_exps
+
+
+def _fetch_chains_parallel(ticker: str, expiries: list[str]) -> dict[str, Any]:
+    """Fetch multiple option chains in parallel, using cache where possible."""
+    chains: dict[str, Any] = {}
+    remaining: list[str] = []
+
+    # First, grab from cache
+    now = time.time()
+    with _cache_lock:
+        for exp in expiries:
+            key = (ticker, exp)
+            if key in _chain_cache and now - _chain_cache[key][0] < _CHAIN_CACHE_TTL:
+                chains[exp] = _chain_cache[key][1]
+            else:
+                remaining.append(exp)
+
+    if not remaining:
+        return chains
+
+    # Fetch remaining in parallel (max 4 workers to avoid rate limiting)
+    with ThreadPoolExecutor(max_workers=min(4, len(remaining))) as pool:
+        future_map = {
+            pool.submit(yf.Ticker(ticker).option_chain, exp): exp
+            for exp in remaining
+        }
+        for future in as_completed(future_map):
+            exp = future_map[future]
+            try:
+                chains[exp] = future.result(timeout=30)
+                with _cache_lock:
+                    _chain_cache[(ticker, exp)] = (time.time(), chains[exp])
+            except Exception:
+                raise  # let caller handle
+
+    return chains
 
 
 class OptionLeg:
@@ -61,17 +154,17 @@ def analyze_options_position(
         expiry: Optional global target expiry (YYYY-MM-DD). Used for legs
                 without per-leg expiry and as the payoff reference date.
     """
-    t = yf.Ticker(ticker)
-    info = t.info or {}
-    spot = info.get("currentPrice", 0.0)
+    info, expirations = _cached_ticker_info(ticker)
+    spot = info.get("currentPrice", 0.0) if info else 0.0
     if spot == 0.0:
-        hist = t.history(period="5d")
-        if not hist.empty:
-            spot = float(hist["Close"].iloc[-1])
+        try:
+            hist = yf.Ticker(ticker).history(period="5d")
+            if not hist.empty:
+                spot = float(hist["Close"].iloc[-1])
+        except Exception:
+            pass
 
-    try:
-        expirations = list(t.options)
-    except Exception:
+    if not expirations:
         return {"ticker": ticker, "error": "No options available"}
 
     if not expirations:
@@ -120,14 +213,12 @@ def analyze_options_position(
         eff = leg.expiry if leg.expiry else global_resolved
         eff_expiries.append(_select_expiry_opt(expirations, eff))
 
-    # Group legs by effective expiry and fetch one chain per unique expiry.
+    # Group legs by effective expiry and fetch chains (parallel + cached).
     unique_expiries = sorted(set(eff_expiries))
-    chains: dict[str, Any] = {}
-    for exp in unique_expiries:
-        try:
-            chains[exp] = t.option_chain(exp)
-        except Exception:
-            return {"ticker": ticker, "error": f"Cannot fetch chain for {exp}"}
+    try:
+        chains = _fetch_chains_parallel(ticker, unique_expiries)
+    except Exception:
+        return {"ticker": ticker, "error": f"Cannot fetch chain(s) for {ticker} expiry(s) {unique_expiries}"}
 
     # Payoff reference date: the global expiry if provided (it is the horizon
     # the caller cares about), otherwise the farthest leg expiry.
