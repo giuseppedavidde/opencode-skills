@@ -21,11 +21,12 @@ Triggers: "graph", "grafo", "graphify", "knowledge graph", "mappa", "visualizza"
 ALWAYS delegate to @graphify_helper when the user asks to build, update, query, or explore a knowledge graph with graphify. The helper handles the full pipeline: checking if a graph exists (and using it directly for queries), choosing incremental vs full build, cloning GitHub repos, and navigating results.
 
 ### → SKILL UPDATE: delegate to @skill_updater (subagent_type="skill_updater")
-Triggers: "aggiorna skill", "update skill", "skill update", "skill updater", "sync skill", "skill sync", "update book-to-skill", "update graphify", "submodule update", "git submodule update", "allinea skill", "skill aggiornamento", "skill upgrade", or any request to update/sync/refresh a specific skill by name (e.g. "update book-to-skill", "aggiorna graphify").
+Triggers: "aggiorna skill", "update skill", "skill update", "skill updater", "sync skill", "skill sync", "update book-to-skill", "update graphify", "update quant-mind", "aggiorna quant-mind", "submodule update", "git submodule update", "allinea skill", "skill aggiornamento", "skill upgrade", or any request to update/sync/refresh a specific skill by name (e.g. "update book-to-skill", "aggiorna graphify", "aggiorna quant-mind").
 
 The skill_updater agent handles:
-- Skills following the src+symlink pattern (e.g. book-to-skill/book-to-skill-src, graphify/graphify-src)
+- Skills following the src+symlink pattern (e.g. book-to-skill/book-to-skill-src, graphify/graphify-src, quant-mind-skill/quant-mind-src)
 - Running `git submodule update --remote` on the -src submodule
+- Applying post-update patches (e.g. quant-mind-src needs a pillow version fix after update)
 - Verifying symlinks still resolve correctly
 - Reporting changes (commits pulled, what changed)
 

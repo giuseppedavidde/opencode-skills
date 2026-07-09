@@ -6,7 +6,7 @@ This OpenCode instance uses automatic model routing to save tokens:
 - **@trade**: glm-5.2 — trading, options, market analysis 
 - **@coder**: glm-5.2 — complex coding, refactoring, multi-file changes 
 - **@graphify_helper**: deepseek-v4-flash — smart graphify orchestrator, builds/updates/queries knowledge graphs
-- **@skill_updater**: deepseek-v4-flash — updates skills that depend on -src submodules
+- **@skill_updater**: deepseek-v4-flash — updates skills that depend on -src submodules (graphify, book-to-skill, quant-mind, karpathy)
 - **@explore / @scout**: deepseek-v4-flash — code search / web research
 
 The router delegates based on keywords. Trading requests go to @trade, complex coding to @coder, skill updates to @skill_updater, graphify requests to @graphify_helper.
@@ -36,8 +36,42 @@ For ALL market analysis tasks, load the relevant @skills directly. The skills ar
 - Options strategy → @skills/options-strategy-suggestions
 - Market data → @skills/market-data-fetch
 - Framework knowledge → use `get_skill_knowledge` for on-demand Wyckoff, VPA, VP concepts
+- **Bali volatility signals** → dopo analyze_stock, carica @skills/quant-mind-skill e lancia:
+  `bash python3 .../bali_signals.py <TICKER> --json`
 
 Always run `get_macro_context` FIRST before any analysis.
+
+### Bakshi & Kapadia (2003) — Volatility Risk Premium Foundation
+Paper fondante che dimostra che il volatility risk premium (VRP) ESISTE ed è NEGATIVO.
+Si collega direttamente a Bali & Hovakimian: Bakshi mostra CHE il premio esiste (time-series),
+Bali mostra COME varia tra azioni (cross-section).
+
+Key findings da applicare:
+1. **Delta-hedged call portfolios underperformano zero**: ATM S&P 500 calls perdono ~$0.43
+   (8% del valore), 68% delle osservazioni negative. Il VRP è strutturalmente negativo.
+2. **La perdita è massima per opzioni ATM** (vega massimo) e diminuisce per OTM/ITM.
+   → Le strategie di vendita opzioni sono più redditizie su strikes ATM.
+3. **La perdita aumenta con la volatilità**: a vol bassa (8%) il premio è −3.6% del valore,
+   a vol alta (16%) arriva a −19.6%. → Timing: vendere opzioni quando IV è alta.
+
+Implicazioni per il trading:
+- **Short options strutturalmente profittevoli** nel lungo periodo, MA con jump risk
+- **Dispersion trading**: vendere index options, comprare single-stock options
+- **Variance swap analogy**: il delta-hedged portfolio replica un variance swap
+- Il VRP è distinto dal jump risk (robustezza anche controllando per skew/kurtosi)
+
+### Bali & Hovakimian (2009) Signals
+Two cross-sectional volatility spread signals che traducono Bakshi & Kapadia in segnali stock-specifici:
+1. **RVol–IVol spread** (Volatility Risk Premium): RV30gg - ATM straddle IV.
+   - Score 0-100 (100 = bearish: RV >> IV → volatility risk premium esaurito)
+   - Negative spread → expected returns positive (Bali Table 2: −0.63%/−0.73%/month)
+   - Positive spread → expected returns negative
+   - Bakshi conferma: RV < IV = VRP pagato → vendita opzioni profittevole
+2. **CVol–PVol spread** (Jump Risk): Call ATM IV - Put ATM IV.
+   - Score 0-100 (100 = bullish: Call IV >> Put IV → jump risk up)
+   - Positive spread → expected returns positive (Bali Table 3: +1.05%/+1.49%/month)
+   - Negative spread → expected returns negative
+3. **Composite Bali**: 60% RVol-bullish + 40% CVol-PVol (merged into analyze_stock verdict at 30% weight)
 
 ### Position Repair Mandatory (CRITICAL)
 When a user presents an EXISTING options position and asks what to do / how to fix it:

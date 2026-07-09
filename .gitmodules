@@ -7,3 +7,6 @@
 [submodule "skills/book-to-skill-src"]
 	path = skills/book-to-skill-src
 	url = https://github.com/virgiliojr94/book-to-skill.git
+[submodule "skills/quant-mind-src"]
+	path = skills/quant-mind-src
+	url = https://github.com/LLMQuant/quant-mind.git

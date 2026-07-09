@@ -95,6 +95,19 @@ git -C skills/<name>-src log --oneline @{1}..@{0} 2>/dev/null || echo "Already u
 3. **No `-src` submodule for a skill**: Report that this skill doesn't follow the src+symlink pattern
 4. **Broken symlinks after update**: The source repo may have restructured files — report the broken symlinks to the user
 
+### Post-update patch: quant-mind-src
+
+After updating `skills/quant-mind-src`, apply the Pillow compatibility patch:
+
+```bash
+cd /home/giuseppe/Progetti/Github/opencode-skills/skills/quant-mind-src
+sed -i 's/pillow>=10.1.0,<11.0.0/pillow>=10.1.0/' pyproject.toml
+source /tmp/opencode/.venv-quantmind/bin/activate
+pip install --quiet -e .
+```
+
+Report this patch as a note after the update summary.
+
 ## Output format
 
 Report concisely. For each updated skill show:
