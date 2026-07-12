@@ -40,6 +40,8 @@ For ALL market analysis tasks, load the relevant @skills directly. The skills ar
   `bash python3 .../bali_signals.py <TICKER> --json`
 - **Bakshi VRP signals** → durante analisi opzioni, carica @skills/quant-mind-skill e lancia:
   `bash python3 .../bakshi_kapadia_signals.py <TICKER> --json`
+- **TS-MOM signal** → dopo analyze_stock, carica @skills/quant-mind-skill e lancia:
+  `bash python3 .../tsmom_signals.py <TICKER> --lookback 12 --json`
 
 Always run `get_macro_context` FIRST before any analysis.
 
@@ -73,7 +75,25 @@ Two cross-sectional volatility spread signals che traducono Bakshi & Kapadia in 
    - Score 0-100 (100 = bullish: Call IV >> Put IV → jump risk up)
    - Positive spread → expected returns positive (Bali Table 3: +1.05%/+1.49%/month)
    - Negative spread → expected returns negative
-3. **Composite Bali**: 60% RVol-bullish + 40% CVol-PVol (merged into analyze_stock verdict at 30% weight)
+3. **Composite Bali**: 60% RVol-bullish + 40% CVol-PVol (merged into analyze_stock verdict at 20% weight)
+
+### Moskowitz, Ooi & Pedersen (2012) — Time Series Momentum
+Paper fondante del trend-following sistematico. Aggiunge una dimensione oggettiva di trend
+alla stock analysis, indipendente dai fattori cross-sectional.
+
+Key findings da applicare:
+1. **Universale**: 58/58 futures mostrano TS-MOM positivo, in 4 asset class (equity, valute,
+   commodity, bonds). Sharpe ratio > 1.0 su portafoglio diversificato.
+2. **Signal**: sign(return_{t-12:t-1}) — segno del rendimento cumulato degli ultimi 12 mesi
+   (escludendo l'ultimo mese). Holding period: 1 mese.
+3. **Volatility scaling**: posizione = signal × (target_vol / σ_EWMA). Target: 40% annuo.
+   Riduce posizioni quando la vol è alta (TSLA 0.74x) e le aumenta quando è bassa (SPY 2.83x).
+4. **TS-MOM ≠ XSMOM**: il time series momentum è guidato dall'auto-covarianza dei rendimenti,
+   non dal ranking relativo. Spiega interamente il cross-sectional momentum (UMD alpha non significativo).
+5. **Payoff straddle-like**: performa meglio nei mercati estremi (up E down) — hedge per crash risk.
+   Non correlato a VIX, TED spread, sentiment.
+
+Score 0-100: 0=forte bearish, 100=forte bullish (merged into analyze_stock verdict at 20% weight)
 
 ### Position Repair Mandatory (CRITICAL)
 When a user presents an EXISTING options position and asks what to do / how to fix it:

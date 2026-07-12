@@ -50,15 +50,34 @@ Questo calcola:
 
 Output JSON con scores 0-100 e direzione combinata.
 
-### Step 3 — Synthesize verdict (con Bali signals)
-Fondi il `composite_score` di analyze_stock con il `composite_bali_score`:
+### Step 2c — Time Series Momentum (Moskowitz, Ooi & Pedersen 2012)
+Dopo `analyze_stock`, arricchisci con il TS-MOM signal:
+
+```bash
+source /tmp/opencode/.venv-quantmind/bin/activate
+python3 ~/.config/opencode/skills/quant-mind-skill/tsmom_signals.py <TICKER> --lookback 12 --json
+```
+
+Questo calcola:
+- **TS-MOM signal**: sign(return_{t-12:t-1}) — segno del rendimento cumulato degli ultimi 12 mesi (escluso ultimo mese).
+  Metodologia: Moskowitz, Ooi & Pedersen (2012), JFE.
+- **Score 0-100**: 0 = massimo bearish (forte trend down), 100 = massimo bullish (forte trend up).
+- **Position sizing**: volatility scaling con target 40% annuo (EWMA vol 60gg).
+- **Sharpe lookback**: Sharpe ratio del trend negli ultimi 12 mesi.
+
+Risultato empirico del paper: Sharpe ratio > 1.0 su portafoglio diversificato cross-asset,
+universale in 58 futures su 4 asset class.
+
+### Step 3 — Synthesize verdict (con Bali + TS-MOM signals)
+Fondi il `composite_score` di analyze_stock con i segnali Bali e TS-MOM:
 
 ```
 Pesi aggiornati:
-  analyze_stock score: 70%
-  Bali composite:      30%
+  analyze_stock score:    60%
+  Bali composite:         20%
+  TS-MOM score:           20%
   
-  final_score = composite_score × 0.70 + composite_bali_score × 0.30
+  final_score = composite_score × 0.60 + bali_composite × 0.20 + mom_score × 0.20
 ```
 
 - final_score ≥ 70 → **Long-Term Investment**
