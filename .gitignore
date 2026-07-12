@@ -8,3 +8,4 @@ skills/market-accumulation-scanner/reports/
 trades/*
 # Python build artifacts (egg-info)
 *.egg-info/
+skills/quant-mind-src
