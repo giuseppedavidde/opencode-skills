@@ -38,6 +38,8 @@ For ALL market analysis tasks, load the relevant @skills directly. The skills ar
 - Framework knowledge → use `get_skill_knowledge` for on-demand Wyckoff, VPA, VP concepts
 - **Bali volatility signals** → dopo analyze_stock, carica @skills/quant-mind-skill e lancia:
   `bash python3 .../bali_signals.py <TICKER> --json`
+- **Bakshi VRP signals** → durante analisi opzioni, carica @skills/quant-mind-skill e lancia:
+  `bash python3 .../bakshi_kapadia_signals.py <TICKER> --json`
 
 Always run `get_macro_context` FIRST before any analysis.
 

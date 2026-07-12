@@ -31,13 +31,65 @@ Location of global rules: `/home/giuseppe/.config/opencode/AGENTS.md`. Always fo
 ## Workflow for every trading request
 
 1. Run `get_macro_context()` FIRST, always.
-2. Load relevant skills: `stock-crypto-analysis`, `options-analysis`, `options-strategy-suggestions`.
+2. Load relevant skills: `stock-crypto-analysis`, `options-analysis`, `options-strategy-suggestions`, `quant-mind-skill`.
 3. For existing positions: `analyze_stock` → `analyze_options` → risk audit → comparison table.
 4. Use `bash` with `python3` for all numerical calculations (theta decay, roll break-even, probability).
 5. Compress large outputs with `headroom_compress` before reasoning.
 6. Never quote today's premium for a future date without theta adjustment.
-7. Always compute P&L using a pessimistic average between **bid** and **ask** for sells and a pessimistic average between **bid** and **ask** for buys.
+7. Always compute P&L using the **bid** for sells and the **ask** for buys.
 8. **CRITICAL — expiry parameter**: ALWAYS pass `expiry="YYYY-MM-DD"` to `analyze_options`. The tool now REJECTS calls without expiry. For multi-expiry positions (calendar/diagonal spreads), add `"expiry"` key to individual leg dicts. Never call `analyze_options` without `expiry`.
+
+## Bali & Bakshi Signals Integration (OBBLIGATORIO)
+
+After `analyze_stock(ticker, include_options_context=true)` e PRIMA di suggerire strategie,
+arricchisci l'analisi con i 2 segnali da opzioni usando la skill quant-mind:
+
+### Step A — Bali signals (cross-sectional stock selection)
+```bash
+source /tmp/opencode/.venv-quantmind/bin/activate
+python3 ~/.config/opencode/skills/quant-mind-skill/bali_signals.py <TICKER> --json
+```
+Questo produce:
+- **RVol–IVol spread**: RV30gg - ATM straddle IV. Negativo → RV < IV → VRP positivo → bullish.
+  Premium atteso: −0.63%/−0.73% mese (Bali Table 2).
+- **CVol–PVol spread**: Call IV - Put IV. Positivo → jump risk up → bullish.
+  Premium atteso: +1.05%/+1.49% mese (Bali Table 3).
+- **Bali composite score**: 60% RVol-bullish + 40% CVol-PVol, scala 0-100.
+
+**Decisione**: fondi il composite_score di analyze_stock con Bali composite:
+```
+final_score = analyze_stock_score × 0.70 + bali_composite × 0.30
+```
+
+### Step B — Bakshi signals (options execution VRP)
+```bash
+source /tmp/opencode/.venv-quantmind/bin/activate
+python3 ~/.config/opencode/skills/quant-mind-skill/bakshi_kapadia_signals.py <TICKER> --json
+```
+Questo produce:
+- **VRP magnitude**: % del premio dovuta a volatility risk premium (Bakshi dimostra che esiste)
+  - A vol normale (12%): VRP ~11% del premio → vendita opzioni profittevole
+  - A vol alta (16%): VRP ~20% → vendita FORTEMENTE agevolata
+  - A vol bassa (8%): VRP ~4% → vendita meno interessante
+- **Expected P&L per strike**: profitto atteso del venditore per strike ATM/OTM/ITM
+- **Optimal strike suggestion**: strike con miglior rapporto VRP/rischio
+
+**Decisione**: usa Bakshi per:
+1. Scegliere lo strike ottimale per strategie di vendita opzioni (ATM = max VRP, OTM = min rischio)
+2. Decidere SE vendere opzioni (VRP alto = sì) o comprare (VRP basso = meglio)
+3. Calibrare il timing: vendere quando IV è alta, comprare quando IV è bassa
+
+### Step C — Sintesi finale
+Componi i 3 segnali in una raccomandazione:
+```
+analyze_stock:    verdict direzionale (Long/Short/Avoid)
+Bali signals:     volatility spread (quali stock hanno VRP alto)
+Bakshi signals:   VRP magnitude e strike (come eseguire le opzioni)
+```
+
+Se analyze_stock dice BUY e Bali/Bakshi confermano → strategia con VRP a favore (credit spread, short puts).
+Se analyze_stock dice BUY ma Bakshi mostra VRP basso → strategia direzionale (call spread, non vendita premium).
+Se analyze_stock dice AVOID ma Bali segnala VRP estremo → strategia di hedging / dispersion.
 
 ## Output format
 

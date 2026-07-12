@@ -72,11 +72,26 @@ Pesi aggiornati:
 Call: suggest_options_strategy(ticker="<TICKER>", composite_score=<FINAL_SCORE>, verdict="<FINAL_VERDICT>")
 ```
 
-Se il Bali segnale è estremo (score > 80 o < 20), considera strategie
-specifiche per volatility risk premium:
-- **RVol << IVol** (Bali bullish): short puts / put credit spread per catturare il premium
-- **RVol >> IVol** (Bali bearish): long puts / call credit spread
+Prima di suggerire la strategia, arricchisci con Bakshi & Kapadia VRP signals:
+
+```bash
+source /tmp/opencode/.venv-quantmind/bin/activate
+python3 ~/.config/opencode/skills/quant-mind-skill/bakshi_kapadia_signals.py <TICKER> --json
+```
+
+Questo calcola:
+- **VRP magnitude**: percentuale del premio attribuibile a volatility risk premium
+- **Expected P&L per strike**: profitto atteso del venditore per ogni strike ATM/OTM/ITM
+- **Optimal strike selection**: qual è lo strike migliore per vendita premium
+- **Timing**: se l'IV corrente favorisce la vendita o l'acquisto di opzioni
+- **Dispersion trading**: suggerimenti per dispersion strategies
+
+Se il segnale Bali è estremo (score > 80 o < 20) o Bakshi mostra VRP alto, considera:
+- **RVol << IVol** (Bali bullish) + **VRP alto** (Bakshi): short puts / put credit spread
+- **RVol >> IVol** (Bali bearish) + **VRP basso**: long puts / call credit spread
 - **CVol >> PVol** (jump risk up): bullish strategies con gestione dello skew
+- **ATM strike** (da Bakshi): vega massimo = massimo VRP catturabile, massimo rischio
+- **OTM 15-20%** (da Bakshi): vega ridotto = VRP minore ma rischio controllato
 
 ### Step 5 — Risk sizing (optional, if user wants entry plan)
 ```bash
