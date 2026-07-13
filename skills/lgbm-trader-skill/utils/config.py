@@ -78,6 +78,10 @@ class TradingConfig(BaseModel):
     commission_bps: int = 3
     min_score_threshold: int = 55
     position_size_pct: float = 0.20
+    max_position_pct: float = 0.20
+    sizing_mode: str = "binary"
+    target_vol_pct: float = 0.15
+    neutral_zone: float = 0.05
 
 
 class StackingConfig(BaseModel):

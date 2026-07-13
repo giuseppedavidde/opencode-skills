@@ -67,6 +67,15 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Run live prediction after training (calls scripts/predict_live.py)",
     )
+    p.add_argument(
+        "--oof-only",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Backtest only on out-of-fold bars (default True). "
+            "Use --no-oof-only to enable legacy behaviour on the full frame."
+        ),
+    )
     return p.parse_args()
 
 
@@ -74,10 +83,25 @@ def _backtest_scores(
     cfg_dict: dict,
     df: pd.DataFrame,
     score: pd.Series,
+    oof_mask: pd.Series | None = None,
 ) -> dict:
-    """Run backtest on a 0-100 score series and return its metrics."""
+    """Run backtest on a 0-100 score series and return its metrics.
+
+    When ``oof_mask`` (boolean Series aligned to ``df.index``) is provided,
+    only bars where it is ``True`` are fed to the engine. Otherwise every
+    bar is used (legacy behaviour).
+    """
     engine = BacktestEngine(cfg_dict)
-    bt = engine.run(df["close"], score, timestamps=df.index)
+    if oof_mask is not None:
+        mask = oof_mask.reindex(df.index).fillna(False).astype(bool)
+        df_bt = df.loc[mask]
+        score_bt = score.reindex(df_bt.index)
+        timestamps = df_bt.index
+    else:
+        df_bt = df
+        score_bt = score
+        timestamps = df.index
+    bt = engine.run(df_bt["close"], score_bt, timestamps=timestamps)
     return engine.metrics(bt)
 
 
@@ -154,20 +178,37 @@ def main() -> int:
         bt_score = _sigmoid(bt_score.fillna(0.0).to_numpy()) * 100.0
         bt_score = pd.Series(bt_score, index=df.index)
 
-    ensemble_metrics = _backtest_scores(cfg_dict, df, bt_score)
+    oof_mask = ensemble.oof_mask(df) if args.oof_only else None
+    if args.oof_only:
+        n_oof = int(oof_mask.sum()) if oof_mask is not None else 0
+        logger.info("OOF-only mode: %d / %d bars used for ensemble backtest", n_oof, len(df))
+
+    ensemble_metrics = _backtest_scores(cfg_dict, df, bt_score, oof_mask=oof_mask)
     logger.info("Ensemble backtest metrics:\n%s", json.dumps(ensemble_metrics, indent=2, default=float))
+
+    # Ensemble metrics on the WHOLE frame too — for in-sample reference.
+    if args.oof_only:
+        full_ensemble_metrics = _backtest_scores(cfg_dict, df, bt_score, oof_mask=None)
+        ens_sharpe = float(ensemble_metrics.get("sharpe", 0.0) or 0.0)
+        full_sharpe = float(full_ensemble_metrics.get("sharpe", 0.0) or 0.0)
+        logger.info("In-sample (full-frame) Sharpe: %.3f", full_sharpe)
+        logger.info("OOF Sharpe: %.3f", ens_sharpe)
+        max_dd = float(ensemble_metrics.get("max_drawdown", 0.0) or 0.0)
+        logger.info("OOF Max DD: %.2f%%", max_dd * 100.0)
 
     # ---------- baseline single full-model for comparison ------------- #
     try:
         baseline_trainer = LGBMTrainer(cfg_dict)
         baseline_trainer.train(df[feature_cols], df["target"], df.index)
         if baseline_trainer.models:
-            base_preds = baseline_trainer.predict(df[feature_cols].fillna(0.0))
-            base_score = _sigmoid(base_preds) * 100.0
-            base_score = pd.Series(base_score, index=df.index)
-            base_metrics = _backtest_scores(cfg_dict, df, base_score)
+            base_oof = baseline_trainer.predict_oof(df[feature_cols])
+            base_oof_score = _sigmoid(base_oof.fillna(0.0).to_numpy()) * 100.0
+            base_oof_score = pd.Series(base_oof_score, index=df.index)
+            base_oof_score.loc[base_oof.isna()] = np.nan
+            base_mask = base_oof_score.notna() if args.oof_only else None
+            base_metrics = _backtest_scores(cfg_dict, df, base_oof_score, oof_mask=base_mask)
             logger.info(
-                "Baseline (single full model) backtest metrics:\n%s",
+                "Baseline (single full model, OOF) backtest metrics:\n%s",
                 json.dumps(base_metrics, indent=2, default=float),
             )
             ens_sharpe = float(ensemble_metrics.get("sharpe", 0.0) or 0.0)

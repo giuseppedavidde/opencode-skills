@@ -50,6 +50,10 @@ trading:
   commission_bps: 3
   min_score_threshold: 55
   position_size_pct: 0.20
+  max_position_pct: 0.20      # cap per sizing continuo (vol-target)
+  sizing_mode: "binary"       # "binary" o "continuous"
+  target_vol_pct: 0.15       # volatilità target annua (per vol-target)
+  neutral_zone: 0.05         # zona neutra attorno a score 50 (±5%)
 
 stacking:
   enabled: false

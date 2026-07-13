@@ -122,16 +122,74 @@ def main() -> int:
         return 1
 
     # ---------- predictions ------------------------------------------ #
-    preds = trainer.predict(X.fillna(0.0))
+    # In-sample (full-ensemble) predictions — kept for Sharpe comparison only;
+    # these include bars the model already saw during training and therefore
+    # *overstate* performance.
+    in_sample_preds = trainer.predict(X.fillna(0.0))
     df = df.copy()
-    df["raw_pred"] = preds
-    df["score"] = _sigmoid(preds) * 100.0
+    df["raw_pred"] = in_sample_preds
+    df["score_in_sample"] = _sigmoid(in_sample_preds) * 100.0
+
+    # OOF predictions — the honest measure: every bar is scored by the fold
+    # whose validation window contained that bar (never trained on it).
+    oof_frame = trainer.predict_oof_with_atr(X, df)
+    df["raw_pred_oof"] = oof_frame["score"].astype(float)
+    # ``score`` carries the OOF score (NaN where no OOF prediction exists).
+    df["score"] = oof_frame["score"]
+    if "vol_annualized" in oof_frame.columns:
+        df["vol_annualized"] = oof_frame["vol_annualized"]
+    if "atr_pct" in oof_frame.columns:
+        df["atr_pct"] = oof_frame["atr_pct"]
 
     # ---------- backtest --------------------------------------------- #
     engine = BacktestEngine(cfg.model_dump(by_alias=True))
-    bt = engine.run(df["close"], df["score"], timestamps=df.index)
-    metrics = engine.metrics(bt)
-    logger.info("Backtest metrics:\n%s", json.dumps(metrics, indent=2, default=float))
+
+    # In-sample Sharpe (legacy / upper bound) — computed on the FULL frame.
+    bt_is = engine.run(df["close"], df["score_in_sample"], timestamps=df.index)
+    is_metrics = engine.metrics(bt_is)
+
+    # OOF-only backtest: drop bars with no OOF prediction (the warm-up period
+    # at the start where each fold was still inside its training window).
+    oof_mask = df["score"].notna()
+    n_oof = int(oof_mask.sum())
+    if n_oof == 0:
+        logger.error("No OOF predictions available — cannot compute honest metrics.")
+        return 1
+    logger.info("OOF coverage: %d / %d bars used for backtest", n_oof, len(df))
+
+    sizing_mode = engine.sizing_mode
+    if sizing_mode == "continuous":
+        atr_series = df.get("vol_annualized")
+        if atr_series is None or atr_series.dropna().empty:
+            logger.info("sizing_mode=continuous but no ATR available — falling back to binary sizing")
+            atr_series = None
+        bt = engine.run_continuous(
+            df.loc[oof_mask, "close"],
+            df.loc[oof_mask, "score"],
+            atr=atr_series.loc[oof_mask] if atr_series is not None else None,
+            timestamps=df.loc[oof_mask].index,
+        )
+        logger.info("Backtest mode: continuous (vol-target=%s)", engine.target_vol_pct)
+    else:
+        bt = engine.run(
+            df.loc[oof_mask, "close"],
+            df.loc[oof_mask, "score"],
+            timestamps=df.loc[oof_mask].index,
+        )
+        logger.info("Backtest mode: binary (threshold=%s)", engine.min_score)
+
+    oof_metrics = engine.metrics(bt)
+    is_sharpe = float(is_metrics.get("sharpe", 0.0) or 0.0)
+    oof_sharpe = float(oof_metrics.get("sharpe", 0.0) or 0.0)
+    oof_max_dd = float(oof_metrics.get("max_drawdown", 0.0) or 0.0)
+    logger.info("In-sample Sharpe: %.3f", is_sharpe)
+    logger.info("OOF Sharpe: %.3f", oof_sharpe)
+    logger.info("OOF Max DD: %.2f%%", oof_max_dd * 100.0)
+    logger.info(
+        "Degradation: in-sample=%.2f%% higher than OOF Sharpe",
+        100.0 * (is_sharpe - oof_sharpe) / max(1e-9, abs(is_sharpe)),
+    )
+    logger.info("Full OOF metrics:\n%s", json.dumps(oof_metrics, indent=2, default=float))
 
     # ---------- feature importance ----------------------------------- #
     importance = trainer.feature_importance_df()
@@ -140,7 +198,10 @@ def main() -> int:
         logger.info("Top 15 features:\n%s", top.to_string())
 
     # ---------- signal example (last bar) --------------------------- #
-    last_score = float(df["score"].iloc[-1])
+    oof_score = df["score"].dropna()
+    last_score = float(oof_score.iloc[-1]) if not oof_score.empty else float(
+        df["score_in_sample"].iloc[-1]
+    )
     sig = generate_signal(last_score, threshold=cfg.trading.min_score_threshold)
     logger.info("Latest bar signal for %s: %s (score=%.2f)", args.ticker, sig["direction"], last_score)
 

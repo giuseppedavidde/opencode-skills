@@ -94,6 +94,7 @@ class StackingEnsemble:
             "decorr": [],
         }
         self.oof_preds: Optional[dict[str, np.ndarray]] = None
+        self.oof_index: Optional[pd.Index] = None
         self.result: Optional[StackingResult] = None
 
     # ------------------------------------------------------------------ #
@@ -159,6 +160,30 @@ class StackingEnsemble:
     # ------------------------------------------------------------------ #
     # Training
     # ------------------------------------------------------------------ #
+    def oof_mask(self, df: pd.DataFrame) -> pd.Series:
+        """Boolean Series marking bars covered by out-of-fold predictions.
+
+        A bar is ``True`` when every base model has an OOF prediction for it
+        — equivalently, when the meta-model's training matrix (`meta_X`)
+        contained that row. Bars that were inside the training window of all
+        base models (and thus never in any validation window) are ``False``.
+
+        Parameters
+        ----------
+        df:
+            Reference frame (only its index is used to align the output).
+
+        Returns
+        -------
+        pandas.Series
+            Boolean series aligned to ``df.index``.
+        """
+        if self.oof_index is None:
+            logger.warning("oof_mask: no stored OOF index — returning all-True mask (legacy behaviour)")
+            return pd.Series(True, index=df.index)
+        mask = pd.Series(False, index=df.index)
+        mask.loc[mask.index.isin(self.oof_index)] = True
+        return mask
     def train(
         self,
         df: pd.DataFrame,
@@ -237,6 +262,7 @@ class StackingEnsemble:
         # --- Livello 2: meta-modello ----------------------------------- #
         meta_X = oof_matrix.dropna()
         meta_y = df.loc[meta_X.index, "target"]
+        self.oof_index = meta_X.index
         logger.info("Meta-model training data: %d rows", len(meta_X))
 
         self.meta_model = self._train_meta_model(meta_X, meta_y)

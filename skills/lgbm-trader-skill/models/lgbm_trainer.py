@@ -23,6 +23,11 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+def _sigmoid_np(x: np.ndarray) -> np.ndarray:
+    """Numerically stable sigmoid (used to map raw preds → 0-100 score)."""
+    return 1.0 / (1.0 + np.exp(-np.clip(x, -50.0, 50.0)))
+
+
 @dataclass
 class FoldResult:
     """Container for a single walk-forward fold."""
@@ -273,6 +278,111 @@ class LGBMTrainer:
             return self.models[fold_idx].model.predict(X)
         preds = np.column_stack([m.model.predict(X) for m in self.models])
         return preds.mean(axis=1)
+
+    def predict_oof(self, X: pd.DataFrame) -> pd.Series:
+        """Generate out-of-fold predictions for the whole frame.
+
+        For every fold, the model trained on that fold predicts ONLY on the
+        validation window it was never trained on. Each bar therefore
+        receives *at most* one prediction — the one made by the model whose
+        validation window contained that bar. Bars never assigned to any
+        validation set stay ``NaN`` (typically the first ``train_months``
+        of history).
+
+        Parameters
+        ----------
+        X:
+            Full feature frame indexed by trading date (same index used
+            for :meth:`train`).
+
+        Returns
+        -------
+        pandas.Series
+            Indexed by ``X.index``; OOF raw predictions where available,
+            ``NaN`` everywhere else.
+        """
+        if X is None or X.empty:
+            return pd.Series(dtype=float)
+        oof = pd.Series(np.nan, index=X.index, dtype=float, name="oof_pred")
+        for fr in self.models:
+            val_idx = fr.val_idx
+            if val_idx is None or len(val_idx) == 0:
+                continue
+            mask = X.index.isin(val_idx)
+            if not mask.any():
+                continue
+            X_val = X.loc[mask]
+            if X_val.empty:
+                continue
+            preds = fr.model.predict(X_val.fillna(0.0))
+            oof.loc[mask] = preds
+        n_oof = int(oof.notna().sum())
+        logger.info(
+            "OOF predictions: %d/%d bars covered (%.1f%%)",
+            n_oof,
+            len(oof),
+            100.0 * n_oof / max(1, len(oof)),
+        )
+        return oof
+
+    def predict_oof_with_atr(
+        self, X: pd.DataFrame, df_full: pd.DataFrame
+    ) -> pd.DataFrame:
+        """Return OOF predictions enriched with ATR for vol-target sizing.
+
+        Like :meth:`predict_oof` but returns a DataFrame that also carries
+        the percentage ATR and its annualised version so the backtest
+        engine can scale positions by current volatility (Moskowitz-style
+        vol-targeting).
+
+        Parameters
+        ----------
+        X:
+            Full feature frame (same as :meth:`predict_oof`).
+        df_full:
+            Original DataFrame containing at least a ``close`` column
+            and (optionally) an ``atr`` column. When ``atr`` is missing
+            we fall back to a 14-day Wilder ATR computed on the fly.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Columns: ``score`` (0-100, NaN where no OOF pred available),
+            ``atr_pct`` (atr / close), ``vol_annualized``.
+        """
+        oof = self.predict_oof(X)
+        out = pd.DataFrame(index=X.index)
+        out["score"] = _sigmoid_np(oof.fillna(0.0).to_numpy()) * 100.0
+        # Restore NaN where OOF was unavailable so downstream code can mask
+        out.loc[oof.isna(), "score"] = np.nan
+
+        if "close" not in df_full.columns:
+            logger.warning("predict_oof_with_atr: 'close' not in df_full, skipping ATR")
+            return out
+
+        close = df_full["close"].reindex(X.index)
+        if "atr" in df_full.columns:
+            atr = df_full["atr"].reindex(X.index)
+        else:
+            logger.info("predict_oof_with_atr: 'atr' column missing, computing Wilder ATR(14)")
+            atr = self._compute_atr(df_full, window=14).reindex(X.index)
+        atr = atr.replace(0.0, np.nan)
+        out["atr_pct"] = atr / close
+        out["vol_annualized"] = out["atr_pct"] * np.sqrt(252)
+        return out
+
+    @staticmethod
+    def _compute_atr(
+        df_full: pd.DataFrame, window: int = 14
+    ) -> pd.Series:
+        """Wilder-style ATR helper (re-uses data.preprocessor.compute_atr)."""
+        from data.preprocessor import compute_atr  # local import to avoid cycle
+
+        if "high" not in df_full.columns or "low" not in df_full.columns:
+            return pd.Series(np.nan, index=df_full.index)
+        return compute_atr(
+            df_full["high"], df_full["low"], df_full["close"], window=window
+        )
 
     # ------------------------------------------------------------------ #
     # Persistence
