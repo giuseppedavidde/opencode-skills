@@ -17,7 +17,7 @@ permission:
   task: allow
   external_directory: allow
   todowrite: allow
-steps: 25
+steps: 50
 ---
 
 # Graphify Helper Agent
@@ -35,18 +35,18 @@ You are the smart graphify orchestrator. Your job is to make building, updating,
 
 ## Quick Reference: graphify CLI flags
 
-| Situation | Command |
-|---|---|
-| First time on a path | `graphify <path>` (or `graphify .` for current dir) |
-| Graph exists, need refresh | `graphify <path> --update --no-viz` |
-| Just recluster existing graph | `graphify <path> --cluster-only` |
-| Ask a question on existing graph | `graphify query "<question>"` (or inline NetworkX fallback) |
-| Shortest path between two concepts | `graphify path "A" "B"` |
-| Explain a specific node | `graphify explain "NodeName"` |
-| GitHub repo | `graphify https://github.com/owner/repo` |
-| Deep analysis needed | Add `--mode deep` |
-| Want HTML viz | Add `--html` (default, but omit if using `--no-viz`) |
-| Want Obsidian vault | Add `--obsidian` |
+| Situation                          | Command                                                     |
+| ---------------------------------- | ----------------------------------------------------------- |
+| First time on a path               | `graphify <path>` (or `graphify .` for current dir)         |
+| Graph exists, need refresh         | `graphify <path> --update --no-viz`                         |
+| Just recluster existing graph      | `graphify <path> --cluster-only`                            |
+| Ask a question on existing graph   | `graphify query "<question>"` (or inline NetworkX fallback) |
+| Shortest path between two concepts | `graphify path "A" "B"`                                     |
+| Explain a specific node            | `graphify explain "NodeName"`                               |
+| GitHub repo                        | `graphify https://github.com/owner/repo`                    |
+| Deep analysis needed               | Add `--mode deep`                                           |
+| Want HTML viz                      | Add `--html` (default, but omit if using `--no-viz`)        |
+| Want Obsidian vault                | Add `--obsidian`                                            |
 
 ---
 
@@ -77,15 +77,15 @@ Also check for `graphify-out/.graphify_python` (interpreter path).
 
 ### Step 3 — Route based on intent + state
 
-| Intent | State | Action |
-|---|---|---|
-| QUERY | Graph exists | Run `graphify query "<question>"` immediately. No rebuild. |
-| QUERY | No graph | Build first, then query. |
-| UPDATE | Graph exists | Run `graphify <path> --update --no-viz`. Fastest path. |
-| BUILD | No graph | Full build: load graphify skill and run Steps 1-9. |
-| BUILD | Graph exists | Ask user: "Graph already exists (X nodes). Full rebuild or --update?" Default to --update. |
-| EXPLORE | Graph exists | Use `graphify path` / `graphify explain` / `graphify query` as appropriate. |
-| EXPLORE | No graph | "No graph exists yet. Build one first?" |
+| Intent  | State        | Action                                                                                     |
+| ------- | ------------ | ------------------------------------------------------------------------------------------ |
+| QUERY   | Graph exists | Run `graphify query "<question>"` immediately. No rebuild.                                 |
+| QUERY   | No graph     | Build first, then query.                                                                   |
+| UPDATE  | Graph exists | Run `graphify <path> --update --no-viz`. Fastest path.                                     |
+| BUILD   | No graph     | Full build: load graphify skill and run Steps 1-9.                                         |
+| BUILD   | Graph exists | Ask user: "Graph already exists (X nodes). Full rebuild or --update?" Default to --update. |
+| EXPLORE | Graph exists | Use `graphify path` / `graphify explain` / `graphify query` as appropriate.                |
+| EXPLORE | No graph     | "No graph exists yet. Build one first?"                                                    |
 
 ### Step 4 — Full build flow (when needed)
 

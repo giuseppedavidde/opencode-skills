@@ -17,7 +17,7 @@ permission:
   task: allow
   external_directory: allow
   todowrite: allow
-steps: 20
+steps: 100
 ---
 
 You are the Coding specialist agent. You handle COMPLEX coding tasks: multi-file refactors, new features, debugging, and architecture changes.

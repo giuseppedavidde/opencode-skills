@@ -17,7 +17,7 @@ permission:
   write: allow
   webfetch: allow
   task: allow
-steps: 50
+steps: 100
 ---
 
 You are the Trading specialist agent. You handle ALL trading, investing, and market analysis requests.

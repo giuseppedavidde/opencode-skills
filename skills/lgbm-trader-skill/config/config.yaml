@@ -1,0 +1,55 @@
+data:
+  start_date: "2018-01-01"
+  end_date: null
+  tickers:
+    us_large: ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "JPM", "V", "SPY"]
+    focus: ["DRAM", "VYX"]
+  macro_tickers: ["^VIX", "DX-Y.NYB", "^TNX", "^IXIC", "SHY"]
+
+features:
+  lookback_days: 252
+  remove_low_volume: false
+
+model:
+  type: "lightgbm"
+  params:
+    objective: "regression"
+    metric: "rmse"
+    boosting_type: "gbdt"
+    num_leaves: 31
+    learning_rate: 0.05
+    n_estimators: 500
+    min_data_in_leaf: 50
+    feature_fraction: 0.8
+    bagging_fraction: 0.8
+    bagging_freq: 5
+    lambda_l1: 0.1
+    lambda_l2: 0.3
+    early_stopping_rounds: 50
+    verbose: -1
+  walk_forward:
+    n_splits: 5
+    train_months: 24
+    val_months: 6
+    embargo_days: 5
+  options:
+    enabled: true
+    iv_lookback: 252
+    vrp_lookback: 63
+    iv_premium_mult: 1.2
+    iv_premium_add: 0.05
+
+target:
+  horizon: 5
+  type: "meta_label"
+  atr_multiplier: 2.0
+  pt_sl: [0.05, 0.05]
+
+trading:
+  slippage_bps: 2
+  commission_bps: 3
+  min_score_threshold: 55
+  position_size_pct: 0.20
+
+stacking:
+  enabled: false

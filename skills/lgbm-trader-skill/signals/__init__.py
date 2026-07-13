@@ -1,0 +1,1 @@
+"""Signal generation from model scores."""

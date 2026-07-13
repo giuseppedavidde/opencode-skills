@@ -9,3 +9,7 @@ trades/*
 # Python build artifacts (egg-info)
 *.egg-info/
 *skills/quant-mind-src*
+
+# LightGBM trading — modelli salvati (binari grandi)
+skills/lgbm-trader-skill/models/saved/
+skills/lgbm-trader-skill/**/__pycache__/
