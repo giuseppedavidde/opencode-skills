@@ -1,18 +1,15 @@
 ---
+
+
 name: quant-mind-skill
-version: "1.1"
 description: >
   Integrazione con QuantMind — knowledge extraction e retrieval per
   finanza quantitativa. Preprocessa paper arXiv, news, PDF in markdown
   (senza API key) e delega l'estrazione strutturata a un subagent
   OpenCode che usa i modelli opencode-go.
-allowed-tools:
-  - read
-  - bash
-  - task
-  - glob
-  - grep
-argument-hint: [arxiv_id, URL, "extract paper", "batch papers"]
+
+metadata:
+  argument-hint: "[arxiv_id, URL, "extract paper", "batch papers"]"
 ---
 
 # QuantMind Skill

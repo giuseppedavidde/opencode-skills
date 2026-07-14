@@ -1,4 +1,12 @@
-# Skill: lgbm-trader-skill
+---
+
+name: lgbm-trader-skill
+description: >
+  LightGBM Trading System — 98 features in 5 decorrelated groups,
+  stacking ensemble of 5 specialized LightGBM models + meta-model,
+  producing a 0-100 score. Use for ML-based trade signal generation.
+  Integrates with analyze_stock, Bali signals, and TS-MOM.
+---
 
 LightGBM Trading System — feature engineering, stacking ensemble, signal generation.
 

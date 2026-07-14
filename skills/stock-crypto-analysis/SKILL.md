@@ -1,16 +1,14 @@
 ---
+
+
 name: stock-crypto-analysis
-version: "2.1"
 description: >
   Deep single-stock/crypto analysis via trading MCP, arricchita con i segnali
   di volatility spread da Bali & Hovakimian (2009): RVol–IVol (volatility risk
   premium) e CVol–PVol (jump risk).
-allowed-tools:
-  - read
-  - bash
-  - task
-  - websearch
-argument-hint: [ticker or crypto name]
+
+metadata:
+  argument-hint: "[ticker or crypto name]"
 ---
 
 # Stock & Crypto Analysis

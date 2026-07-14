@@ -1,13 +1,10 @@
 ---
+
+
 name: options-playbook
 description: "Knowledge base from 'The Options Playbook' by Brian Overby. 40+ option strategies reference for all market outlooks."
-allowed-tools:
-  - read
-  - grep
-argument-hint: [strategy name, Greek, or outlook]
-orchestrator:
-  parallel: false
-  type: kb
+metadata:
+  argument-hint: "[strategy name, Greek, or outlook]"
 ---
 
 # The Options Playbook, Expanded 2nd Edition

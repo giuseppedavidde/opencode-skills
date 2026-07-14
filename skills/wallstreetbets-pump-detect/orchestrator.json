@@ -1,0 +1,8 @@
+{
+  "parallel": true,
+  "split_by": "ticker",
+  "chunk_size": 1,
+  "merge": "rank",
+  "merge_key": "hype_score",
+  "top_n": 15
+}

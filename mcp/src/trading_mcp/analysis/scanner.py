@@ -469,7 +469,10 @@ def process_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict
         wyckoff_score, wyckoff_d = compute_wyckoff(hist, info)
         volprof_score, volprof_d = compute_volume_profile(hist)
         pa_score, pa_d = compute_price_action(hist)
-        fundamentals_score, fundamentals_d = compute_fundamentals(info)
+        # Try FMP enrichment (graceful fallback to yfinance-only)
+        from trading_mcp.analysis.fundamentals import compute_fundamentals_enriched
+        enriched_info = compute_fundamentals_enriched(info)
+        fundamentals_score, fundamentals_d = compute_fundamentals(enriched_info)
         competitive_score, competitive_d = compute_competitive_positioning(info)
 
         mtf_score, mtf_d = compute_multiframe_trend(hist)

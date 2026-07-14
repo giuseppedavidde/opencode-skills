@@ -1,14 +1,14 @@
 ---
+
+
 name: options-strategy-suggestions
 description: >
   Suggests options strategy from stock analysis verdict + IV regime.
   Use when user asks "what options strategy", "strategia opzioni",
   "how to trade [ticker] with options", or after stock analysis.
-allowed-tools:
-  - read
-  - bash
-  - task
-argument-hint: [ticker with analysis context]
+
+metadata:
+  argument-hint: "[ticker with analysis context]"
 ---
 
 # Options Strategy Suggestions

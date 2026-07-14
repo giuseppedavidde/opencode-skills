@@ -1,11 +1,10 @@
 ---
+
+
 name: italy-tax-declaration-instructions
 description: "Knowledge base from 'Redditi Derivati - Istruzioni 2026' by Agenzia delle Entrate. Italian tax rules for financial income, capital gains, derivatives, foreign investments, and tax return instructions for the 2025 tax year."
-allowed-tools: [read, grep]
-argument-hint: [quadro, articolo, argomento]
-orchestrator:
-  parallel: false
-  type: kb
+metadata:
+  argument-hint: "[quadro, articolo, argomento]"
 ---
 
 # Italy Tax Declaration Instructions 2026

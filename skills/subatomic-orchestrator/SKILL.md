@@ -1,4 +1,6 @@
 ---
+
+
 name: subatomic-orchestrator
 description: >
   Meta-skill that decomposes any workload into independent sub-tasks, dispatches
@@ -6,14 +8,9 @@ description: >
   that declares orchestrator frontmatter. Use when: scanning multiple markets,
   analyzing multiple tickers, processing multiple files, or any embarrassingly
   parallel task across existing skills.
-allowed-tools:
-  - read
-  - grep
-  - bash
-  - task
-  - glob
-  - write
-argument-hint: /orchestrate --skills <skill1,skill2> --items <item1,item2,...> [--split-by ticker|market|file|chapter|query] [--top N] [--pipeline]
+
+metadata:
+  argument-hint: "/orchestrate --skills <skill1,skill2> --items <item1,item2,...> [--split-by ticker|market|file|chapter|query] [--top N] [--pipeline]"
 ---
 
 # Subatomic Orchestrator

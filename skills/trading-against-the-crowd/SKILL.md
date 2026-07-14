@@ -1,13 +1,10 @@
 ---
+
+
 name: trading-against-the-crowd
 description: "Knowledge base from 'Trading Against the Crowd' by John F. Summa. Contrarian trading frameworks for options, futures, and stock markets using sentiment analysis."
-allowed-tools:
-  - read
-  - grep
-argument-hint: [topic, framework, or chapter number]
-orchestrator:
-  parallel: false
-  type: kb
+metadata:
+  argument-hint: "[topic, framework, or chapter number]"
 ---
 
 # Trading Against the Crowd: Profiting from Fear and Greed

@@ -1,17 +1,12 @@
 ---
+
+
 name: system-info
 description: >
   Use when asked to report OS/hardware details, compile binaries, set up build
   environments, or diagnose architecture-specific issues. Triggers: 'system info',
   'what hardware', 'compile for this machine', 'build for arch', 'dettagli macchina',
   'hardware report', 'specifica sistema', 'check OS', 'uname'.
-allowed-tools:
-  - read
-  - bash
-  - grep
-orchestrator:
-  parallel: false
-  type: kb
 ---
 
 # System Info

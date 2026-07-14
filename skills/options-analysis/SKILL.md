@@ -1,13 +1,13 @@
 ---
+
+
 name: options-analysis
 description: >
   Analyzes multi-leg options positions via trading MCP. Use when user asks
   "analyze my options", "check position", "option Greeks", "payoff".
-allowed-tools:
-  - read
-  - bash
-  - task
-argument-hint: [ticker with leg details]
+
+metadata:
+  argument-hint: "[ticker with leg details]"
 ---
 
 # Options Position Analyzer

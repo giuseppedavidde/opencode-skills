@@ -1,18 +1,12 @@
 ---
+
+
 name: opencode-skills-installer
 description: >
   Use when adding, creating, installing, or syncing opencode skills. Manages
   the opencode-skills GitHub repo where all skills live. Triggers: 'add a skill',
   'install skill', 'create skill', 'new skill', 'sync skills', 'update skills',
   'installare una skill', 'nuova skill', 'aggiungi skill', 'crea skill'.
-allowed-tools:
-  - read
-  - write
-  - bash
-  - glob
-  - grep
-orchestrator:
-  parallel: false
 ---
 
 # Opencode Skills Installer

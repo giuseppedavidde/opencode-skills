@@ -13,3 +13,14 @@ trades/*
 # LightGBM trading — modelli salvati (binari grandi)
 skills/lgbm-trader-skill/models/saved/
 skills/lgbm-trader-skill/**/__pycache__/
+
+# API keys (non committare)
+skills/lgbm-trader-skill/.env
+skills/lgbm-trader-skill/config/fmp_api_key.txt
+*.env
+# FMP API key (reale) — NON committare, solo il .example
+skills/lgbm-trader-skill/config/fmp_api_key.txt
+# ── Encrypted secrets: the .enc file IS committed, the plaintext IS NOT ──
+config/secrets.env
+skills/lgbm-trader-skill/.env
+*.env.dec

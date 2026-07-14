@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def compute_fundamentals(info: dict[str, Any]) -> tuple[int, str]:
@@ -142,6 +145,27 @@ def compute_fundamentals(info: dict[str, Any]) -> tuple[int, str]:
             details.append(f"Price ${float(current):.2f} < mean target (+5)")
 
     return min(max(score, 0), 100), " | ".join(details)
+
+
+def compute_fundamentals_enriched(info: dict[str, Any]) -> dict[str, Any]:
+    """Enrich yfinance info dict with FMP data when available.
+
+    Returns the enriched info dict (mutates in place). Always safe to call —
+    gracefully degrades to yfinance-only when FMP is unavailable.
+    """
+    try:
+        from trading_mcp.data.fmp_fetcher import fetch_fmp_fundamentals
+        symbol = info.get("symbol", "")
+        if not symbol:
+            return info
+        fmp_data = fetch_fmp_fundamentals(symbol)
+        if fmp_data:
+            # FMP data takes priority over yfinance (it's usually more accurate)
+            info.update(fmp_data)
+            info["_fundamentals_source"] = "fmp"
+    except Exception:
+        logger.debug("FMP enrichment skipped — using yfinance only", exc_info=True)
+    return info
 
 
 def compute_competitive_positioning(info: dict[str, Any]) -> tuple[int, str]:

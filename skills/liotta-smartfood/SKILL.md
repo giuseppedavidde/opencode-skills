@@ -1,13 +1,10 @@
 ---
+
+
 name: liotta-smartfood
 description: "Knowledge base from \"Le Ricette Smartfood\" by Eliana Liotta & Lucilla Titta. Use when applying nutrigenomics-based nutrition, Smartfood recipes, or fasting-mimicking protocols."
-allowed-tools:
-  - read
-  - grep
-argument-hint: [topic, recipe name, or chapter number]
-orchestrator:
-  parallel: false
-  type: kb
+metadata:
+  argument-hint: "[topic, recipe name, or chapter number]"
 ---
 
 # Le Ricette Smartfood

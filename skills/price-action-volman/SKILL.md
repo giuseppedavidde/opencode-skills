@@ -1,13 +1,10 @@
 ---
+
+
 name: price-action-volman
 description: "Knowledge base from 'Understanding Price Action' by Bob Volman. 5-minute timeframe price action frameworks for scalping and day trading."
-allowed-tools:
-  - read
-  - grep
-argument-hint: [topic, framework, or chapter number]
-orchestrator:
-  parallel: false
-  type: kb
+metadata:
+  argument-hint: "[topic, framework, or chapter number]"
 ---
 
 # Understanding Price Action: Practical Analysis of the 5-minute time frame

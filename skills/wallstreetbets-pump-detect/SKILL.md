@@ -1,25 +1,14 @@
 ---
+
+
 name: wallstreetbets-pump-detect
 description: >
   Scrapes r/wallstreetbets public JSON to find stocks/ETFs being pumped, scores
   hype level and squeeze potential, detects FOMO phase, then feeds into
   stock-crypto-analysis and options-strategy-suggestions for full entry
   evaluation (buy underlying or options strategy).
-allowed-tools:
-  - websearch
-  - webfetch
-  - bash
-  - read
-  - grep
-  - task
-argument-hint: [scan, "cosa pompano su WSB", "wsb radar", "meme stock scan", "pump detect"]
-orchestrator:
-  parallel: true
-  split_by: ticker
-  chunk_size: 1
-  merge: rank
-  merge_key: hype_score
-  top_n: 15
+metadata:
+  argument-hint: "[scan, "cosa pompano su WSB", "wsb radar", "meme stock scan", "pump detect"]"
 ---
 
 # WallStreetBets Pump Detect

@@ -1,12 +1,10 @@
 ---
+
+
 name: market-data-fetch
 description: >
   Fetches market data via trading MCP. Use when user asks for
   "fetch data", "get price", "option chain", "stock data", "crypto price".
-allowed-tools:
-  - read
-  - bash
-  - task
 ---
 
 # Market Data Fetch

@@ -1,20 +1,12 @@
 ---
+
+
 name: market-accumulation-scanner
 description: >
   Scans stock/crypto markets for accumulation patterns via trading MCP.
   Use when the user asks "scan", "scanner", "market scan", "find stocks".
-allowed-tools:
-  - read
-  - bash
-  - task
-argument-hint: [universe or ticker list]
-orchestrator:
-  parallel: true
-  split_by: ticker
-  chunk_size: 15
-  merge: rank
-  merge_key: final_score
-  top_n: 15
+metadata:
+  argument-hint: "[universe or ticker list]"
 ---
 
 # Market Scanner

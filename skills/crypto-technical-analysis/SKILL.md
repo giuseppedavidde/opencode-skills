@@ -1,13 +1,10 @@
 ---
+
+
 name: crypto-technical-analysis
 description: "Knowledge base from 'Crypto Technical Analysis' by Alan John & Jon Law. Technical analysis frameworks adapted for cryptocurrency markets with on-chain and 24/7 volatility considerations."
-allowed-tools:
-  - read
-  - grep
-argument-hint: [topic, indicator, or chapter number]
-orchestrator:
-  parallel: false
-  type: kb
+metadata:
+  argument-hint: "[topic, indicator, or chapter number]"
 ---
 
 # Crypto Technical Analysis

@@ -24,3 +24,6 @@ RISK_FREE_RATE: float = 0.045
 from trading_mcp.weights_config import load_weights, get_weights
 
 WEIGHTS_CONFIG = load_weights()
+
+# FMP API key (optional — fundamentals still work via yfinance without it)
+FMP_API_KEY: str | None = os.environ.get("TRADING_FMP_API_KEY") or os.environ.get("FMP_API_KEY") or None

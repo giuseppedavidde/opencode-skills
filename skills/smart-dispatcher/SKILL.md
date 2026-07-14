@@ -2,24 +2,11 @@
 name: smart-dispatcher
 description: >
   Auto-dispatcher that translates natural language requests into parallel
-  orchestration via subatomic-orchestrator. You write "scan Europe" or "what
-  to do with AAPL and MSFT" — it classifies intent, extracts parameters, and
-  runs the optimal parallel pipeline. Zero CLI arguments needed.
-allowed-tools:
-  - read
-  - grep
-  - bash
-  - task
-  - glob
-  - write
-  - websearch
-triggers:
-  - scan*, screening, scansion*, mercat*, market scan, cerca ticker
-  - analizz*, deep dive, cosa far*, cosa fare, verdict, unified analysis
-  - opzioni su, options on, strategia opzioni su, suggerisci opzioni
-  - wsb, wallstreetbets, pump, pompano, meme stock
-  - fetch, prendi, dati di, quotazione, price, prezzo di
-  - "cosa fare con", "cosa fare di", "cosa fare su"
+  orchestration via subatomic-orchestrator. Triggers: scan*, screening, scansion*,
+  mercat*, market scan, cerca ticker, analizz*, deep dive, cosa far*, verdict,
+  opzioni su, options on, strategia opzioni, wsb, wallstreetbets, pump, pompano,
+  meme stock, fetch, prendi, dati di, quotazione, price, prezzo di.
+  Zero CLI arguments needed.
 ---
 
 # Smart Dispatcher

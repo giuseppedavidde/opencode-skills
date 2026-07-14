@@ -1,13 +1,10 @@
 ---
+
+
 name: trades-about-to-happen
 description: "Knowledge base from 'Trades About to Happen' by David Weis. Tape reading, clusters, displacement, and order flow frameworks for anticipating institutional moves."
-allowed-tools:
-  - read
-  - grep
-argument-hint: [topic, framework, or chapter number]
-orchestrator:
-  parallel: false
-  type: kb
+metadata:
+  argument-hint: "[topic, framework, or chapter number]"
 ---
 
 # Trades About to Happen

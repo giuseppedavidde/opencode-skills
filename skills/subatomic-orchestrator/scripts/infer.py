@@ -260,23 +260,36 @@ def infer(skill_path: str) -> dict:
     """
     Main entry point.
     Returns orchestrator metadata dict for the given skill path.
+    
+    Priority: orchestrator.json > SKILL.md frontmatter > inference.
     """
     path = Path(skill_path).expanduser().resolve()
+    skill_dir = path.parent if path.is_file() and path.suffix == ".md" else path
     if path.is_dir():
         path = path / "SKILL.md"
     if not path.exists():
         return {"error": f"File not found: {path}", "parallel": False}
 
+    # ── Priority 1: orchestrator.json (new format, OpenCode-compliant) ──
+    orch_json = skill_dir / "orchestrator.json"
+    if orch_json.exists():
+        try:
+            result = json.loads(orch_json.read_text(encoding="utf-8"))
+            result["_source"] = "orchestrator.json"
+            return result
+        except (json.JSONDecodeError, OSError):
+            pass  # Fall through to next priority
+
     text = path.read_text(encoding="utf-8")
     frontmatter, body = parse_frontmatter(text)
 
-    # If orchestrator already in frontmatter, return it
+    # ── Priority 2: orchestrator in frontmatter (legacy format) ──
     if "orchestrator" in frontmatter:
         result = frontmatter["orchestrator"]
         result["_source"] = "frontmatter"
         return result
 
-    # Infer from body
+    # ── Priority 3: Infer from body ──
     inferred = infer_from_body(body, path.parent)
     inferred["_source"] = "inference"
     return inferred

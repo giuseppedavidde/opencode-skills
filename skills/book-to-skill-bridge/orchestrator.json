@@ -1,0 +1,5 @@
+{
+  "parallel": true,
+  "delegated": true,
+  "split_by": "book"
+}

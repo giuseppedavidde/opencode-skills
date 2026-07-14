@@ -1,13 +1,10 @@
 ---
+
+
 name: volume-profile
 description: "Knowledge base from 'VOLUME PROFILE' by Trader Dale. Volume Profile frameworks for institutional trading, value area analysis, and market structure."
-allowed-tools:
-  - read
-  - grep
-argument-hint: [topic, framework, or chapter number]
-orchestrator:
-  parallel: false
-  type: kb
+metadata:
+  argument-hint: "[topic, framework, or chapter number]"
 ---
 
 # VOLUME PROFILE: The insiders guide to trading
