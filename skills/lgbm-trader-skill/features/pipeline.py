@@ -14,6 +14,10 @@ from features.microstructural import (
     add_microstructure,
     FEATURE_DESCRIPTIONS as _MS,
 )
+from features.fractionally_differentiated import (
+    add_fractional_diff_features,
+    FEATURE_DESCRIPTIONS as _FD,
+)
 from features.options import add_options_features, FEATURE_DESCRIPTIONS as _OPT
 from features.relative_strength import (
     build_relative_strength_features,
@@ -45,6 +49,7 @@ FEATURE_DESCRIPTIONS.update(_OPT)
 FEATURE_DESCRIPTIONS.update(_SI)
 FEATURE_DESCRIPTIONS.update(_RS)
 FEATURE_DESCRIPTIONS.update(_VAL)
+FEATURE_DESCRIPTIONS.update(_FD)
 
 
 def compute_all_features(
@@ -89,6 +94,14 @@ def compute_all_features(
     out = add_macro_features(out, macro_df)
     out = add_options_features(out, options_df=options_df)
 
+    # Fractionally differentiated features (dopo technical, prima di dropna) ---------- #
+    # Preserva memoria dei prezzi rendendo la serie stazionaria (Lopez de Prado, AFML Ch.5).
+    logger.info("Adding fractionally differentiated features")
+    out = add_fractional_diff_features(
+        out, close_col="close", volume_col="volume"
+    )
+    FEATURE_DESCRIPTIONS.update(_FD)
+
     # Valutation (point-in-time) features ------------------------------------
     # Dopo options, PRIMA di rel_strength: usa FMP storico reale per evitare
     # il look-ahead bias del P/E / ROE / market cap propagato all'indietro.
@@ -124,11 +137,13 @@ def compute_all_features(
         before = len(out)
         # Forward-fill tutte le feature (point-in-time incluse)
         out = out.ffill()
-        # Droppa SOLO righe dove feature CORE (tecniche) sono NaN
-        core_cols = [c for c in out.columns if not c.startswith(("val_", "si_"))]
+        # Droppa SOLO righe dove feature CORE (tecniche) sono NaN.
+        # Le FD hanno un warm-up lungo (centinaia di pesi per d piccolo);
+        # lasciamo che LightGBM gestisca i NaN rimanenti nativamente.
+        core_cols = [c for c in out.columns if not c.startswith(("val_", "si_", "fd_"))]
         if core_cols:
             out = out.dropna(subset=core_cols)
-        # Per feature point-in-time (val_, si_) — lascia stare, sono già ffillate
+        # Per feature point-in-time (val_, si_) e FD (fd_) — lascia stare, sono già ffillate
         logger.info(
             "Feature frame ready: %d rows kept (dropped %d for NaNs)",
             len(out),

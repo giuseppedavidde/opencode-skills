@@ -77,6 +77,7 @@ class StackingEnsemble:
         "vol_",
         "prc_",
         "ms_",
+        "fd_",
     ]
     MACRO_PREFIXES: list[str] = ["macro_"]
     OPTIONS_PREFIXES: list[str] = ["opt_"]
