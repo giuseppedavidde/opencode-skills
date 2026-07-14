@@ -1,0 +1,9 @@
+# Inserisci qui la tua FinancialModelingPrep API key gratuita.
+# Registrati su https://financialmodelingprep.com/ (free tier basta).
+#
+# Poi copia questo file in fmp_api_key.txt (stessa directory) e sostituisci
+# la riga qui sotto con la tua chiave reale.
+#
+# Oppure imposta la variabile d'ambiente:
+#   export FMP_API_KEY=your_key_here
+Fmq6xZYyz28ofcsStgs7ko9OZcmwNkve

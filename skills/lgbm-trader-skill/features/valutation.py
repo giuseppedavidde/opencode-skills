@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 import yfinance as yf
 
@@ -50,16 +49,24 @@ def fetch_valutation(ticker: str) -> dict:
 
 
 def build_historical_valutation(ticker: str, ohlcv: pd.DataFrame) -> pd.DataFrame:
-    """Costruisce feature di valutazione. Snapshot propagato all'indietro."""
-    df = pd.DataFrame(index=ohlcv.index)
-    val = fetch_valutation(ticker)
-    if val:
-        for col, v in val.items():
-            df[col] = v if v is not None else np.nan
-    df = df.ffill().bfill()
-    # Drop entirely-NaN columns (yfinance may return None for many keys)
-    df = df.loc[:, df.notna().any()]
-    return df
+    """Costruisce feature di valutazione POINT-IN-TIME.
+
+    Usa FMP per dati storici reali (trimestrali), con fallback yfinance
+    snapshot. I dati sono allineati correttamente: ogni barra vede SOLO i
+    fondamentali pubblicati fino a quella data (nessun look-ahead bias).
+
+    Parameters:
+        ticker: Simbolo.
+        ohlcv: DataFrame OHLCV indicizzato per data.
+
+    Returns:
+        DataFrame indicizzato come ``ohlcv`` con colonne ``val_*``.
+    """
+    from data.fundamentals_fetcher import (  # noqa: C0415
+        build_point_in_time_fundamentals,
+    )
+
+    return build_point_in_time_fundamentals(ticker, ohlcv)
 
 
 def get_valutation_feature_columns(df: pd.DataFrame) -> list[str]:

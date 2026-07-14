@@ -20,7 +20,7 @@ from features.relative_strength import (
     FEATURE_DESCRIPTIONS as _RS,
 )
 from features.short_interest import (
-    build_historical_short_interest,
+    build_point_in_time_short_interest,
     FEATURE_DESCRIPTIONS as _SI,
 )
 from features.technical import (
@@ -89,12 +89,29 @@ def compute_all_features(
     out = add_macro_features(out, macro_df)
     out = add_options_features(out, options_df=options_df)
 
-    # Short interest features -------------------------------------------------
+    # Valutation (point-in-time) features ------------------------------------
+    # Dopo options, PRIMA di rel_strength: usa FMP storico reale per evitare
+    # il look-ahead bias del P/E / ROE / market cap propagato all'indietro.
     if ticker:
-        logger.info("Building short interest features for %s", ticker)
-        si_df = build_historical_short_interest(ticker, out)
-        for col in si_df.columns:
-            out[col] = si_df[col]
+        logger.info("Building point-in-time valutation features for %s", ticker)
+        try:
+            val_df = build_historical_valutation(ticker, out)
+            for col in val_df.columns:
+                if col.startswith("val_") and col not in out.columns:
+                    out[col] = val_df[col]
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Valutation point-in-time failed: %s", e)
+
+    # Short interest (point-in-time) features --------------------------------
+    if ticker:
+        logger.info("Building point-in-time short interest features for %s", ticker)
+        try:
+            si_df = build_point_in_time_short_interest(ticker, out)
+            for col in si_df.columns:
+                if col.startswith("si_") and col not in out.columns:
+                    out[col] = si_df[col]
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Short interest point-in-time failed: %s", e)
 
     # Relative strength features ---------------------------------------------
     if ticker:
@@ -103,17 +120,15 @@ def compute_all_features(
         for col in rs_df.columns:
             out[col] = rs_df[col]
 
-    # Valutation features -----------------------------------------------------
-    if ticker:
-        logger.info("Building valutation features for %s", ticker)
-        val_df = build_historical_valutation(ticker, out)
-        for col in val_df.columns:
-            out[col] = val_df[col]
-
     if drop_na:
         before = len(out)
-        # ffill then drop residual NaNs (warm-up windows, lookahead-safe)
-        out = out.ffill().dropna()
+        # Forward-fill tutte le feature (point-in-time incluse)
+        out = out.ffill()
+        # Droppa SOLO righe dove feature CORE (tecniche) sono NaN
+        core_cols = [c for c in out.columns if not c.startswith(("val_", "si_"))]
+        if core_cols:
+            out = out.dropna(subset=core_cols)
+        # Per feature point-in-time (val_, si_) — lascia stare, sono già ffillate
         logger.info(
             "Feature frame ready: %d rows kept (dropped %d for NaNs)",
             len(out),

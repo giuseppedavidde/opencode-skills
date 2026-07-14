@@ -66,6 +66,19 @@ def parse_args() -> argparse.Namespace:
         help="Path to JSON with best params from tune_model.py",
     )
     p.add_argument("--save-dir", default=str(MODEL_DIR), help="Where to save models")
+    # run_pipeline.py è intrinsecamente OOF-only (backtest honest su OOF).
+    # Il flag è accettato per mantenere la CLI coerente con run_stacking.py
+    # (che usa --oof-only / --no-oof-only), ma qui è un no-op: le metriche
+    # oneste sono sempre quelle OOF.
+    p.add_argument(
+        "--oof-only",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Backtest solo su out-of-fold bars (default True, no-op qui). "
+            "Usa --no-oof-only per compatibilità CLI (nessun effetto in run_pipeline)."
+        ),
+    )
     return p.parse_args()
 
 
@@ -85,7 +98,7 @@ def main() -> int:
         macro = fetch_macro(start=cfg.data.start_date if not args.start else args.start, end=args.end)
 
     # ---------- features --------------------------------------------- #
-    df = compute_all_features(ohlcv, macro_df=macro)
+    df = compute_all_features(ohlcv, macro_df=macro, ticker=args.ticker)
     if df.empty:
         logger.error("Feature frame empty after dropna — aborting")
         return 1
