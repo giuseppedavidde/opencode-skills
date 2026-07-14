@@ -42,8 +42,29 @@ For ALL market analysis tasks, load the relevant @skills directly. The skills ar
   `bash python3 .../bakshi_kapadia_signals.py <TICKER> --json`
 - **TS-MOM signal** → dopo analyze_stock, carica @skills/quant-mind-skill e lancia:
   `bash python3 .../tsmom_signals.py <TICKER> --lookback 12 --json`
+- **LGBM Ensemble Signal** → usa `predict_or_train.py` (invece di predict_live.py) per garantire sempre un modello allenato. Script in `@skills/lgbm-trader-skill/scripts/predict_or_train.py`. Controlla SEMPRE il campo `model` nel JSON: se null, LGBM non contribuisce.
 
 Always run `get_macro_context` FIRST before any analysis.
+
+### LGBM Trading System — Integrazione Obbligatoria
+
+L'agente trade DEVE integrare il segnale LGBM nello stesso blocco degli altri segnali (Bali, TS-MOM).
+
+**Regole**:
+1. **Sempre `predict_or_train.py`** — mai chiamare `predict_live.py` direttamente.
+   `predict_or_train.py` allena automaticamente il modello se il ticker è nuovo.
+2. **Verifica `model` nel JSON** — se `model` è `null`, il modello non è disponibile.
+   In tal caso, NON includere LGBM nel weighted average.
+3. **Ridistribuzione pesi** quando LGBM non disponibile:
+   ```python
+   SE modello esiste:
+       final = 0.40*stock + 0.20*bali + 0.20*tsmom + 0.20*lgbm
+   ALTRIMENTI:
+       final = 0.50*stock + 0.25*bali + 0.25*tsmom
+   ```
+4. **Path script**: `/home/giuseppe/.config/opencode/skills/lgbm-trader-skill/scripts/predict_or_train.py`
+5. **Training automatico**: se il ticker non ha modello, lo script allena lo stacking
+   ensemble (30-60s). È un costo una tantum per ticker — dopo la prima volta va in fast path.
 
 ### Bakshi & Kapadia (2003) — Volatility Risk Premium Foundation
 Paper fondante che dimostra che il volatility risk premium (VRP) ESISTE ed è NEGATIVO.

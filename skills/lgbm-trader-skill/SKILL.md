@@ -16,18 +16,29 @@ LightGBM Trading System — feature engineering, stacking ensemble, signal gener
 
 ## Utilizzo
 
-### Predizione live
+### Predizione live (con auto-training)
 
 ```bash
 source /tmp/opencode/.venv/bin/activate
-cd /home/giuseppe/Progetti/Github/opencode-skills/skills/lgbm-trader-skill
+cd /home/giuseppe/.config/opencode/skills/lgbm-trader-skill
 
-# Output human-readable
+# Uso diretto (fallisce se nessun modello)
 python scripts/predict_live.py --ticker GME
 
+# Uso consigliato: auto-allena se necessario
+python scripts/predict_or_train.py --ticker NVDA
+
 # Output JSON (per trade agent)
-python scripts/predict_live.py --ticker AAPL --json
+python scripts/predict_or_train.py --ticker AAPL --json
+
+# Specifica data di training (solo se nessun modello)
+python scripts/predict_or_train.py --ticker TSLA --json --start 2021-01-01
 ```
+
+Se non c'è un modello per il ticker, `predict_or_train.py` allena automaticamente
+lo stacking ensemble prima di predire (30-60s). Non restituisce mai score=50
+silenziosamente — o restituisce una predizione reale (con `model` popolato)
+oppure un errore esplicito (con `score=50` e `error` descrittivo).
 
 ### Training
 
@@ -56,10 +67,29 @@ python scripts/tune_model.py --ticker AAPL --trials 50
 
 ## Integrazione con trade agent
 
-Il trade agent chiama `predict_live.py --ticker X --json` e combina lo score con analyze_stock, Bali, TS-MOM:
+Il trade agent DEVE chiamare `predict_or_train.py --ticker X --json` invece di
+`predict_live.py`. Questo garantisce che ogni ticker abbia un modello allenato
+prima di contribuire al verdict.
 
-```python
-final = 0.40 * analyze_stock + 0.20 * bali + 0.20 * tsmom + 0.20 * lgbm_ensemble
+Dopo la chiamata, il trade agent DEVE controllare il campo `model`:
+- Se `model` è presente → usare `score` nel weighted average (20%).
+- Se `model` è `null`/assente → NON usare LGBM, ridistribuire i pesi:
+  ```python
+  SE modello esiste:
+      final = 0.40*stock + 0.20*bali + 0.20*tsmom + 0.20*lgbm
+  ALTRIMENTI:
+      final = 0.50*stock + 0.25*bali + 0.25*tsmom
+      log("⚠️ LGBM saltato per {ticker}: {error}")
+  ```
+
+### Esempio di parsing dal trade agent (bash + python)
+
+```bash
+result=$(source /tmp/opencode/.venv/bin/activate && \
+         python /home/giuseppe/.config/opencode/skills/lgbm-trader-skill/scripts/predict_or_train.py \
+               --ticker GME --json)
+has_model=$(echo "$result" | python3 -c "import sys, json; d=json.load(sys.stdin); print(str(d.get('model') is not None).lower())")
+ensemble_score=$(echo "$result" | python3 -c "import sys, json; print(json.load(sys.stdin).get('score', 50))")
 ```
 
 ## Dipendenze
