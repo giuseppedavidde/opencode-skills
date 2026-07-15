@@ -31,7 +31,7 @@ Location of global rules: `/home/giuseppe/.config/opencode/AGENTS.md`. Always fo
 ## Workflow for every trading request
 
 1. Run `get_macro_context()` FIRST, always.
-2. Load relevant skills: `stock-crypto-analysis`, `options-analysis`, `options-strategy-suggestions`, `quant-mind-skill`.
+2. Load relevant skills: `stock-crypto-analysis`, `options-analysis`, `options-strategy-suggestions`, `quant-mind-skill`, `lgbm-trader-skill`.
 3. For existing positions: `analyze_stock` → `analyze_options` → risk audit → comparison table.
 4. Use `bash` with `python3` for all numerical calculations (theta decay, roll break-even, probability).
 5. Compress large outputs with `headroom_compress` before reasoning.
@@ -49,7 +49,7 @@ arricchisci l'analisi con i 2 segnali da opzioni usando la skill quant-mind:
 Prima di Bali signals, calcola il Time Series Momentum:
 
 ```bash
-source /tmp/opencode/.venv-quantmind/bin/activate
+source /tmp/opencode/.venv/bin/activate
 python3 ~/.config/opencode/skills/quant-mind-skill/tsmom_signals.py <TICKER> --lookback 12 --json
 ```
 
@@ -64,7 +64,7 @@ Il TS-MOM spiega interamente il cross-sectional momentum (UMD).
 
 ### Step A — Bali signals (cross-sectional stock selection)
 ```bash
-source /tmp/opencode/.venv-quantmind/bin/activate
+source /tmp/opencode/.venv/bin/activate
 python3 ~/.config/opencode/skills/quant-mind-skill/bali_signals.py <TICKER> --json
 ```
 Questo produce:
@@ -74,14 +74,28 @@ Questo produce:
   Premium atteso: +1.05%/+1.49% mese (Bali Table 3).
 - **Bali composite score**: 60% RVol-bullish + 40% CVol-PVol, scala 0-100.
 
-**Decisione**: fondi il composite_score di analyze_stock con Bali composite e TS-MOM:
+### Step A3 — LGBM Ensemble Signal (OBBLIGATORIO)
+
+Dopo Bali signals e PRIMA di Bakshi, integra il segnale ML:
+
+```bash
+source /tmp/opencode/.venv/bin/activate
+python3 /home/giuseppe/.config/opencode/skills/lgbm-trader-skill/scripts/predict_or_train.py <TICKER> --json
 ```
-final_score = analyze_stock_score × 0.60 + bali_composite × 0.20 + mom_score × 0.20
-```
+
+Questo produce:
+- **`model`**: nome del modello (se `null`, LGBM non disponibile)
+- **`score`**: 0-100 da stacking ensemble (5 modelli LightGBM + meta-modello, 98 features)
+- **`signal`**: strong_long / long / neutral / short / strong_short
+
+**Regole** (da AGENTS.md):
+1. Controlla SEMPRE `model` nel JSON. Se `null`, NON usare LGBM.
+2. Se modello esiste → contribuisce al 20%.
+3. Se modello non disponibile → ridistribuisci i pesi.
 
 ### Step B — Bakshi signals (options execution VRP)
 ```bash
-source /tmp/opencode/.venv-quantmind/bin/activate
+source /tmp/opencode/.venv/bin/activate
 python3 ~/.config/opencode/skills/quant-mind-skill/bakshi_kapadia_signals.py <TICKER> --json
 ```
 Questo produce:
@@ -98,15 +112,27 @@ Questo produce:
 3. Calibrare il timing: vendere quando IV è alta, comprare quando IV è bassa
 
 ### Step C — Sintesi finale
-Componi i 4 segnali in una raccomandazione:
+Componi i 5 segnali in una raccomandazione:
+
+SE LGBM modello esiste:
 ```
-analyze_stock:    verdict direzionale (Long/Short/Avoid)      60%
+analyze_stock:    verdict direzionale (Long/Short/Avoid)      40%  ← ridotto
 TS-MOM:          time series momentum (trend 12mesi)          20%
 Bali signals:    volatility spread (quali stock hanno VRP)    20%
+LGBM ensemble:   ML stacking score (5 modelli + meta)         20%
 Bakshi signals:  VRP magnitude e strike (come eseguire opzioni)
+```
+ALTRIMENTI (LGBM non disponibile):
+```
+analyze_stock:    verdict direzionale                          50%
+TS-MOM:          time series momentum                          25%
+Bali signals:    volatility spread                             25%
+Bakshi signals:  VRP magnitude e strike
 ```
 
 Se analyze_stock e TS-MOM sono allineati → conviction alta. In conflitto → sizing ridotto.
+Se LGBM score è allineato con analyze_stock → conviction ulteriore.
+Se LGBM score contraddice analyze_stock → il segnale ML sta vedendo pattern che l'analisi umana non coglie — investiga prima di entrare.
 Se TS-MOM dice BUY e Bali conferma → strategia con VRP a favore (credit spread, short puts).
 Se TS-MOM dice BUY ma Bakshi mostra VRP basso → strategia direzionale (call spread, non vendita premium).
 Se TS-MOM dice AVOID ma Bali segnala VRP estremo → strategia di hedging / dispersion.
