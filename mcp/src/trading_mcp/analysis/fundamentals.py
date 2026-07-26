@@ -148,23 +148,46 @@ def compute_fundamentals(info: dict[str, Any]) -> tuple[int, str]:
 
 
 def compute_fundamentals_enriched(info: dict[str, Any]) -> dict[str, Any]:
-    """Enrich yfinance info dict with FMP data when available.
+    """Enrich yfinance info dict with external data sources.
 
-    Returns the enriched info dict (mutates in place). Always safe to call —
-    gracefully degrades to yfinance-only when FMP is unavailable.
+    Ordine di tentativo:
+    1. Alpha Vantage (free tier, 25/giorno — il più ricco, dati point-in-time)
+    2. FMP (se disponibile)
+    3. yfinance (sempre disponibile, fallback finale)
+
+    Returns the enriched info dict (mutates in place).
     """
+    symbol = info.get("symbol", "")
+    if not symbol:
+        info["_fundamentals_source"] = "yfinance"
+        return info
+
+    # 1. Alpha Vantage (prioritario)
+    try:
+        from trading_mcp.data.alpha_vantage_fetcher import fetch_av_fundamentals
+        av_data = fetch_av_fundamentals(symbol)
+        if av_data:
+            info.update(av_data)
+            info["_fundamentals_source"] = "alpha_vantage"
+            logger.info("AV enriched %s", symbol)
+            return info
+    except Exception:
+        logger.debug("AV enrichment skipped", exc_info=True)
+
+    # 2. FMP (fallback)
     try:
         from trading_mcp.data.fmp_fetcher import fetch_fmp_fundamentals
-        symbol = info.get("symbol", "")
-        if not symbol:
-            return info
         fmp_data = fetch_fmp_fundamentals(symbol)
         if fmp_data:
-            # FMP data takes priority over yfinance (it's usually more accurate)
             info.update(fmp_data)
             info["_fundamentals_source"] = "fmp"
+            logger.info("FMP enriched %s", symbol)
+            return info
     except Exception:
-        logger.debug("FMP enrichment skipped — using yfinance only", exc_info=True)
+        logger.debug("FMP enrichment skipped", exc_info=True)
+
+    # 3. yfinance (fallback finale)
+    info["_fundamentals_source"] = "yfinance"
     return info
 
 

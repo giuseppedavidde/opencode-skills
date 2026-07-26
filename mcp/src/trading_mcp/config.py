@@ -27,3 +27,10 @@ WEIGHTS_CONFIG = load_weights()
 
 # FMP API key (optional — fundamentals still work via yfinance without it)
 FMP_API_KEY: str | None = os.environ.get("TRADING_FMP_API_KEY") or os.environ.get("FMP_API_KEY") or None
+
+# Alpha Vantage API key (optional — free tier: 25 calls/day, sufficient for enrichment)
+ALPHA_VANTAGE_API_KEY: str | None = (
+    os.environ.get("TRADING_AV_API_KEY")
+    or os.environ.get("ALPHA_VANTAGE_API_KEY")
+    or None
+)

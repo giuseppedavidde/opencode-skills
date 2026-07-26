@@ -155,7 +155,8 @@ def compute_signals(ticker: str, period: str = "1y", verbose: bool = False):
             opt = stock.option_chain()
         calls = opt.calls
         puts = opt.puts
-        spot = stock.history(period="5d")["Close"].iloc[-1]
+        close_prices = stock.history(period="5d")["Close"].dropna()
+        spot = float(close_prices.iloc[-1]) if not close_prices.empty else None
     except Exception as e:
         if verbose:
             print(f"   ⚠️  Opzioni non disponibili: {e}")

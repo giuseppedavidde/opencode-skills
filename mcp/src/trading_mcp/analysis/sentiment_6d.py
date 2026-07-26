@@ -76,9 +76,12 @@ def compute_sentiment_6d(
         detail_parts.append(f"Inst {inst_val:.0%}")
 
     if not hist.empty and len(hist) >= 50 and spx_hist is not None and not spx_hist.empty:
-        stock_ret = float(hist["Close"].iloc[-1]) / float(hist["Close"].iloc[-50]) - 1
-        spx_ret = float(spx_hist["Close"].iloc[-1]) / float(spx_hist["Close"].iloc[-50]) - 1
-        rel_momentum = stock_ret - spx_ret
+        close_hist = hist["Close"].dropna()
+        close_spx = spx_hist["Close"].dropna()
+        if len(close_hist) >= 50 and len(close_spx) >= 50:
+            stock_ret = float(close_hist.iloc[-1]) / float(close_hist.iloc[-50]) - 1
+            spx_ret = float(close_spx.iloc[-1]) / float(close_spx.iloc[-50]) - 1
+            rel_momentum = stock_ret - spx_ret
         if rel_momentum > 0.10:
             subs["momentum"] = 80.0
         elif rel_momentum > 0.0:

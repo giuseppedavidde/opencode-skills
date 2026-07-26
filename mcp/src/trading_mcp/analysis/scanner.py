@@ -9,6 +9,7 @@ import os
 import random
 import threading
 import time
+
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -20,8 +21,8 @@ logger = logging.getLogger(__name__)
 class CircuitBreaker:
     """Simple circuit breaker for yfinance rate limiting protection."""
     failure_count: int = 0
-    failure_threshold: int = 10
-    reset_timeout: float = 60.0
+    failure_threshold: int = 100
+    reset_timeout: float = 15.0
     last_failure_time: float = 0.0
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
@@ -49,8 +50,8 @@ _yfinance_breaker = CircuitBreaker()
 
 import numpy as np
 import pandas as pd
-import yfinance as yf
 
+from trading_mcp.data.provider import data_provider
 from trading_mcp.analysis.wyckoff import compute_wyckoff, compute_6clue_test
 from trading_mcp.analysis.volume_profile import compute_volume_profile
 from trading_mcp.analysis.price_action import compute_price_action, compute_multiframe_trend
@@ -75,10 +76,6 @@ from trading_mcp.analysis.indicators import (
 from trading_mcp.analysis.sentiment_6d import compute_sentiment_6d, earnings_proximity_adjustment
 from trading_mcp.weights_config import get_weights
 
-
-_SPX_HIST: pd.DataFrame | None = None
-_SPX_HIST_TIME: float = 0.0
-_SPX_HIST_TTL: float = 3600.0  # 1 hour
 
 _WSB_HOTLIST: dict | None = None
 _WSB_HOTLIST_TIME: float = 0.0
@@ -172,22 +169,12 @@ def parse_custom_tickers(ticker_str: str) -> list[dict[str, str]]:
 
 
 def _get_spx_hist() -> pd.DataFrame:
-    """Get S&P 500 history with 1-hour TTL cache."""
-    global _SPX_HIST, _SPX_HIST_TIME
-    now = time.time()
-    if _SPX_HIST is None or (now - _SPX_HIST_TIME) > _SPX_HIST_TTL:
-        try:
-            spx = yf.Ticker("^GSPC")
-            _SPX_HIST = spx.history(period="1y")
-            _SPX_HIST_TIME = now
-            logger.debug("SPX history refreshed")
-        except Exception as e:
-            logger.warning("Failed to fetch SPX history: %s: %s", type(e).__name__, e)
-            if _SPX_HIST is None:
-                _SPX_HIST = pd.DataFrame()
-    if _SPX_HIST is not None and not _SPX_HIST.empty:
-        return _SPX_HIST.copy()
-    return pd.DataFrame()
+    """Get S&P 500 history via centralized DataProvider cache."""
+    try:
+        return data_provider.get_hist("^GSPC", period="1y")
+    except Exception as e:
+        logger.warning("Failed to fetch SPX history: %s: %s", type(e).__name__, e)
+        return pd.DataFrame()
 
 
 def _get_wsb_hotlist() -> dict | None:
@@ -420,37 +407,28 @@ def apply_macro_regime(results: list[dict], regime: str = "NORMAL") -> list[dict
 
 
 def _fetch_with_retry(symbol: str, max_retries: int = 2) -> tuple:
-    """Fetch ticker data with retry, circuit breaker, and jittered backoff."""
+    """Fetch ticker data with circuit breaker protection.
+
+    Delegates to centralized DataProvider for TTL-cached fetching.
+    The DataProvider handles retries internally and serves stale data
+    on yfinance rate-limit failures.
+    """
     if _yfinance_breaker.is_open():
         logger.warning("Circuit breaker OPEN for %s — skipping fetch (rate limit protection)", symbol)
         return None, {}, None
 
-    last_err = None
-    for attempt in range(max_retries + 1):
-        try:
-            t = yf.Ticker(symbol)
-            info = t.info or {}
-            hist = t.history(period="1y")
-            if hist is not None and not hist.empty:
-                _yfinance_breaker.record_success()
-                return t, info, hist
-            if attempt < max_retries:
-                jitter = random.uniform(0, 1)
-                time.sleep((2 ** attempt) + jitter)
-        except Exception as e:
-            last_err = e
-            _yfinance_breaker.record_failure()
-            logger.warning("Fetch failed for %s (attempt %d/%d): %s: %s",
-                           symbol, attempt + 1, max_retries + 1,
-                           type(e).__name__, e)
-            if attempt < max_retries:
-                jitter = random.uniform(0, 1)
-                time.sleep((3 ** attempt) + jitter)
-    logger.error("All %d retries exhausted for %s. Last error: %s: %s",
-                 max_retries + 1, symbol,
-                 type(last_err).__name__ if last_err else "None",
-                 last_err or "No data returned")
-    return None, {}, None
+    try:
+        t, info, hist = data_provider.get_ticker(symbol, period="1y")
+        if hist is not None and not hist.empty:
+            _yfinance_breaker.record_success()
+            return t, info, hist
+        _yfinance_breaker.record_failure()
+        return None, {}, None
+    except Exception as e:
+        _yfinance_breaker.record_failure()
+        logger.warning("Fetch failed for %s: %s: %s",
+                       symbol, type(e).__name__, e)
+        return None, {}, None
 
 
 def process_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict[str, Any] | None:
@@ -461,7 +439,10 @@ def process_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict
         if hist is None or (hasattr(hist, 'empty') and hist.empty):
             return None
 
-        price = info.get("currentPrice") or (float(hist["Close"].iloc[-1]) if not hist.empty else None)
+        price = info.get("currentPrice")
+        if price is None:
+            last_close = hist["Close"].dropna()
+            price = float(last_close.iloc[-1]) if not last_close.empty else None
         if price is None or float(price) < 1.0:
             return None
         price = float(price)
@@ -607,14 +588,13 @@ def process_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict
             "earnings_proximity": earnings_adj,
         }
     except Exception as e:
-        logger.error("process_ticker failed for %s: %s: %s", symbol, type(e).__name__, e)
+        logger.error("process_ticker failed for %s: %s", symbol, e)
         return None
 def process_crypto_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict[str, Any] | None:
     """Process a single crypto ticker through analysis dimensions."""
     symbol = ticker_dict["symbol"]
     try:
-        t = yf.Ticker(symbol)
-        hist = t.history(period="1y")
+        t, _, hist = data_provider.get_ticker(symbol, period="1y")
         if hist.empty or len(hist) < 20:
             return None
 

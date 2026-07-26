@@ -7,11 +7,10 @@ import time
 from datetime import datetime
 from typing import Any
 
-import yfinance as yf
-
 from fastmcp import FastMCP
 
 from trading_mcp.analysis.macro import detect_regime, get_dynamic_weights
+from trading_mcp.data.provider import data_provider
 from trading_mcp.knowledge.skill_bridge import SkillBridge
 
 logger = logging.getLogger(__name__)
@@ -23,42 +22,21 @@ MACRO_CACHE_TTL: float = 60.0  # seconds
 
 
 def _fetch_macro_context() -> dict[str, Any]:
-    """Fetch macro context from yfinance (no caching)."""
-    vix_val = None
-    dxy_val = None
-    dxy_trend = "neutral"
+    """Fetch macro context via DataProvider (no local yfinance calls)."""
+    raw = data_provider.get_macro_context()
+    vix_val = raw["vix"]
+    dxy_val = raw["dxy"]
+    dxy_prev = raw["dxy_prev"]
+    btc_dominance = raw["btc_dominance"]
     fear_greed = None
-    btc_dominance = None
     fed_rate = 4.75
 
-    try:
-        vix_t = yf.Ticker("^VIX")
-        hist = vix_t.history(period="5d")
-        if not hist.empty:
-            vix_val = round(float(hist["Close"].iloc[-1]), 2)
-    except Exception:
-        logger.warning("Failed to fetch VIX", exc_info=True)
-
-    try:
-        dxy_t = yf.Ticker("DX-Y.NYB")
-        hist = dxy_t.history(period="1mo")
-        if not hist.empty and len(hist) >= 5:
-            dxy_val = round(float(hist["Close"].iloc[-1]), 2)
-            dxy_prev = float(hist["Close"].iloc[-min(len(hist), 22)])
-            if dxy_val > dxy_prev * 1.02:
-                dxy_trend = "rising"
-            elif dxy_val < dxy_prev * 0.98:
-                dxy_trend = "falling"
-    except Exception:
-        logger.warning("Failed to fetch DXY", exc_info=True)
-
-    try:
-        btc_t = yf.Ticker("BTC-USD")
-        btc_hist = btc_t.history(period="5d")
-        if not btc_hist.empty:
-            btc_dominance = round(float(btc_hist["Close"].iloc[-1]), 0)
-    except Exception:
-        logger.warning("Failed to fetch BTC dominance", exc_info=True)
+    dxy_trend = "neutral"
+    if dxy_val is not None and dxy_prev is not None:
+        if dxy_val > dxy_prev * 1.02:
+            dxy_trend = "rising"
+        elif dxy_val < dxy_prev * 0.98:
+            dxy_trend = "falling"
 
     regime = detect_regime(vix=vix_val, dxy_trend=dxy_trend, fear_greed=fear_greed)
     weights_stock = get_dynamic_weights(regime, is_crypto=False)

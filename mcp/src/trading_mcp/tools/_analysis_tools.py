@@ -36,7 +36,7 @@ def register_analysis_tools(
         min_score: float = 50.0,
         top_n: int = 15,
         regime: str = "NORMAL",
-        max_workers: int = 20,
+        max_workers: int = 8,
         fetch_news: bool = True,
         verbose: bool = True,
     ) -> dict[str, Any]:

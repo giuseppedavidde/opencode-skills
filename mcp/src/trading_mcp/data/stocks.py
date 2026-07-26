@@ -1,15 +1,18 @@
-"""Stock data fetching via yfinance."""
+"""Stock data fetching via yfinance — backed by centralized DataProvider."""
 
 from __future__ import annotations
 
 from typing import Any
 
 import pandas as pd
-import yfinance as yf
+
+from trading_mcp.data.provider import data_provider
 
 
 def fetch_stock(ticker: str, period: str = "1y", interval: str = "1d") -> pd.DataFrame:
     """Fetch OHLCV history for a stock ticker.
+
+    Uses the centralized DataProvider with 1-hour TTL cache.
 
     Args:
         ticker: Stock ticker symbol (e.g. 'AAPL', 'ENI.MI').
@@ -19,12 +22,13 @@ def fetch_stock(ticker: str, period: str = "1y", interval: str = "1d") -> pd.Dat
     Returns:
         DataFrame with OHLCV data, empty if no data.
     """
-    t = yf.Ticker(ticker)
-    return t.history(period=period, interval=interval)
+    return data_provider.get_hist(ticker, period=period, interval=interval)
 
 
 def fetch_stock_info(ticker: str) -> dict[str, Any]:
     """Fetch fundamental info for a stock ticker.
+
+    Uses the centralized DataProvider with 6-hour TTL cache.
 
     Args:
         ticker: Stock ticker symbol.
@@ -32,18 +36,15 @@ def fetch_stock_info(ticker: str) -> dict[str, Any]:
     Returns:
         Dictionary of info fields, empty dict if unavailable.
     """
-    t = yf.Ticker(ticker)
-    try:
-        info = t.info
-        return info if info else {}
-    except Exception:
-        return {}
+    return data_provider.get_info(ticker)
 
 
 def fetch_stock_full(
     ticker: str, period: str = "1y", interval: str = "1d"
 ) -> dict[str, Any]:
     """Fetch complete stock data: OHLCV history + fundamentals.
+
+    Uses the centralized DataProvider cache.
 
     Args:
         ticker: Stock ticker symbol.
@@ -54,9 +55,7 @@ def fetch_stock_full(
         Dictionary with 'ticker', 'current_price', 'hist' (DataFrame),
         'info' (dict), and computed 'indicators'.
     """
-    t = yf.Ticker(ticker)
-    hist = t.history(period=period, interval=interval)
-    info = t.info or {}
+    _, info, hist = data_provider.get_ticker(ticker, period=period, interval=interval)
 
     price = info.get("currentPrice")
     if price is None and not hist.empty:

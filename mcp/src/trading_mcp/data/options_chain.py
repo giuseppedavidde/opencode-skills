@@ -1,4 +1,4 @@
-"""Options chain data fetching via yfinance with weekend fallback."""
+"""Options chain data fetching via DataProvider with weekend fallback."""
 
 from __future__ import annotations
 
@@ -12,10 +12,10 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-import yfinance as yf
 from scipy.stats import norm
 
 from trading_mcp.config import RISK_FREE_RATE
+from trading_mcp.data.provider import data_provider
 
 logger = logging.getLogger(__name__)
 
@@ -95,23 +95,21 @@ def fetch_options_chain(
     else:
         cached = None
 
-    t = yf.Ticker(ticker)
-    info: dict[str, Any] = {}
+    # Use DataProvider for info (6h TTL) and spot price
+    info = data_provider.get_info(ticker)
     spot = 0.0
-    try:
-        info = t.info or {}
+    if info:
         spot = info.get("currentPrice", 0.0)
-        if spot == 0.0:
-            hist = t.history(period="5d")
-            if not hist.empty:
-                spot = float(hist["Close"].iloc[-1])
-    except Exception:
-        pass
+    if spot == 0.0:
+        hist = data_provider.get_hist(ticker, period="5d")
+        if not hist.empty:
+            spot = float(hist["Close"].iloc[-1])
 
     live_iv = info.get("impliedVolatility") if info else None
 
+    # Use DataProvider for expirations (1h TTL)
     try:
-        expirations = list(t.options)
+        expirations = data_provider.get_options_expirations(ticker)
     except Exception as e:
         if cached:
             cached.setdefault("_source", "cache")
@@ -128,9 +126,8 @@ def fetch_options_chain(
 
     selected_expiry = _select_expiry(expirations, expiry)
 
-    try:
-        chain = t.option_chain(selected_expiry)
-    except Exception:
+    chain = data_provider.get_options_chain(ticker, selected_expiry)
+    if chain is None:
         if cached:
             cached.setdefault("_source", "cache")
             cached.setdefault("_fallback_note", f"Chain fetch failed for {selected_expiry}, showing cached data")

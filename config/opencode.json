@@ -2,11 +2,12 @@
   "$schema": "https://opencode.ai/config.json",
   "model": "opencode-go/deepseek-v4-flash",
   "small_model": "opencode-go/deepseek-v4-flash",
+  "subagent_depth": 2,
   "agent": {
     "build": {
       "mode": "primary",
       "model": "opencode-go/deepseek-v4-flash",
-      "prompt": "{file:/home/giuseppe/.config/opencode/agents/router.md}",
+      "prompt": "{file:~/.config/opencode/agents/router.md}",
       "permission": {
         "edit": "deny",
         "write": "deny",
@@ -107,22 +108,21 @@
     }
   },
   "mcp": {
-    "headroom": {
-      "type": "local",
-      "command": [
-        "/home/giuseppe/.local/share/opencode/headroom-venv/bin/headroom",
-        "mcp",
-        "serve"
-      ],
-      "enabled": true
-    },
-    "trading": {
-      "type": "local",
-      "command": [
-        "/home/giuseppe/.local/share/opencode/trading-mcp-venv/bin/trading-mcp"
-      ],
-      "enabled": true
-    }
+  "headroom": {
+    "type": "local",
+    "command": ["bash", "-c", "exec \"$HOME/.local/share/opencode/headroom-venv/bin/headroom\" mcp serve"],
+    "enabled": true
+  },
+  "trading": {
+    "type": "local",
+    "command": ["bash", "-c", "exec \"$HOME/.local/share/opencode/trading-mcp-venv/bin/trading-mcp\""],
+    "enabled": true
+  },
+  "alphavantage": {
+    "type": "local",
+    "command": ["bash", "-c", "exec \"$HOME/.local/bin/alphavantage-mcp.sh\""],
+    "enabled": true
+  }
   },
   "shell": "/bin/zsh"
 }

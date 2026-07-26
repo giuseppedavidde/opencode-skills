@@ -1,4 +1,4 @@
-"""Crypto data fetching via CoinGecko and yfinance."""
+"""Crypto data fetching via CoinGecko and DataProvider."""
 
 from __future__ import annotations
 
@@ -6,7 +6,8 @@ import os
 from typing import Any
 
 import pandas as pd
-import yfinance as yf
+
+from trading_mcp.data.provider import data_provider
 
 
 def _coingecko_api_key() -> str | None:
@@ -14,23 +15,18 @@ def _coingecko_api_key() -> str | None:
 
 
 def fetch_crypto_yfinance(symbol: str, period: str = "1y") -> pd.DataFrame:
-    """Fetch crypto OHLCV via yfinance.
+    """Fetch crypto OHLCV via DataProvider.
 
     Args:
         symbol: Crypto symbol (e.g. 'BTC-USD', 'ETH-USD').
         period: Data period.
     """
-    t = yf.Ticker(symbol)
-    return t.history(period=period)
+    return data_provider.get_crypto_hist(symbol, period=period)
 
 
 def fetch_crypto_info_yfinance(symbol: str) -> dict[str, Any]:
-    """Fetch crypto info via yfinance."""
-    t = yf.Ticker(symbol)
-    try:
-        return t.info or {}
-    except Exception:
-        return {}
+    """Fetch crypto info via DataProvider."""
+    return data_provider.get_info(symbol)
 
 
 def fetch_crypto_full(

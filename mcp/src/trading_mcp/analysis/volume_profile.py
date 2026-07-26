@@ -16,11 +16,13 @@ def compute_volume_profile(hist: pd.DataFrame) -> tuple[int, str]:
 
     score = 10
     details = []
-    price = float(hist["Close"].iloc[-1])
+    price = float(hist["Close"].dropna().iloc[-1]) if not hist["Close"].dropna().empty else 0.0
     hist_range = float(hist["High"].max()) - float(hist["Low"].min())
     n_bins = 20
     bin_w = hist_range / n_bins if hist_range > 0 else 1
-    hist_copy = hist.copy()
+    hist_copy = hist.dropna(subset=["Close"]).copy()
+    if hist_copy.empty:
+        return 10, "No valid price data"
     hist_copy["bin"] = ((hist_copy["Close"] - hist_copy["Low"].min()) / bin_w).astype(int).clip(0, n_bins - 1)
     vol_by_bin = hist_copy.groupby("bin")["Volume"].sum()
     if vol_by_bin.empty:

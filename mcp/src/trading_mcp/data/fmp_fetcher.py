@@ -67,6 +67,9 @@ def _fmp_get(endpoint: str, symbol: str) -> list[dict[str, Any]]:
         if isinstance(data, dict) and "Error Message" in str(data):
             logger.warning("FMP API error for %s: %s", symbol, data)
             return []
+        if isinstance(data, dict) and "Limit Reach" in str(data):
+            logger.warning("FMP rate limit reached for %s — fundamentals fallback to yfinance", symbol)
+            return []
         return data if isinstance(data, list) else []
     except Exception as e:
         logger.warning("FMP request failed for %s: %s", symbol, e)

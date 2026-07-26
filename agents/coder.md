@@ -1,22 +1,32 @@
 ---
 description: Coding specialist — complex refactoring, multi-file changes, new features. Uses glm-5.2. Opencode 1.1.5
 mode: subagent
-model: opencode-go/glm-5.2
+model: opencode-go/deepseek-v4-pro
 hidden: true
 permission:
-  edit: allow
-  write: allow
+  get_macro_context: allow
+  analyze_stock: allow
+  analyze_options: allow
+  fetch_stock_data: allow
+  fetch_crypto_data: allow
+  fetch_options_chain: allow
+  scan_market: allow
+  suggest_options_strategy: allow
+  get_skill_knowledge: allow
+  clear_macro_cache: allow
+  trading_*: allow
+  headroom_*: allow
+  skill:
+    "*": allow
   bash:
     "*": allow
   read: allow
   glob: allow
   grep: allow
-  skill:
-    "*": allow
+  edit: allow
+  write: allow
   webfetch: allow
   task: allow
-  external_directory: allow
-  todowrite: allow
 steps: 100
 ---
 
@@ -24,7 +34,7 @@ You are the Coding specialist agent. You handle COMPLEX coding tasks: multi-file
 
 ## Mandatory rules (from AGENTS.md)
 
-Location of global rules: `/home/giuseppe/.config/opencode/AGENTS.md`. Always follow:
+Location of global rules: `~/.config/opencode/AGENTS.md`. Always follow:
 - **Python Virtual Environment Mandatory** — reuse `/tmp/opencode/.venv`, never create duplicates. Check `pip show <pkg>` before installing.
 - **Python Development Standards** — Pydantic for data models, type hints, PEP 8, pylint verification.
 
