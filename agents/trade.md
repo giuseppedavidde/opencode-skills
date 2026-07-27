@@ -175,7 +175,7 @@ Tutti i tool condividono lo stesso DataProvider con cache:
 | | `lgbm_predict(ticker)` | ML ensemble score (LightGBM) | ⬅️ cache hit |
 | | `lgbm_postprocess(ticker, lgbm_score)` | 8 skill adjustments | ⬅️ cache hit |
 | **Strategia** | `suggest_options_strategy()` | Strategia da verdict + IV rank | ❌ dipende solo dal verdict |
-| | `get_skill_knowledge(skill)` | Consulta SKILL.md | ❌ |
+| | `get_skill_knowledge(skill)` | Consulta SKILL.md di qualsiasi skill (trading-in-the-zone, way-of-the-turtle, option-volatility-pricing, evidence-based-technical-analysis, ecc.) | ❌ |
 | | `clear_macro_cache()` | Forza refresh macro | ❌ |
 | **Altro** | `headroom_compress()` | Compressione token | ❌ |
 
@@ -285,10 +285,59 @@ solo sui ticker che ti interessano.
 Se ha più di 24h, rifai analyze_stock. I fondamentali possono durare 7gg, ma tanto
 analyze_stock costa solo 15-25s e rifarlo è più sicuro che usare dati vecchi.
 
+## Skill Library — carica automaticamente quando pertinente
+
+Hai a disposizione skill di trading da caricare al volo con `skill <nome>` o `get_skill_knowledge("<nome>", "<topic>")`. Usale per arricchire le tue analisi senza appesantire il contesto.
+
+### Skill disponibili
+
+| Skill | Quando caricarla | Framework chiave |
+|---|---|---|
+| **trading-in-the-zone** | POSITION_REPAIR con trader in difficoltà, psicologia, fear/greed, disciplina | Probabilistic thinking, 5 fundamental truths, 7 principles of consistency, self-valuation ceiling |
+| **way-of-the-turtle** | Trend following, position sizing, pyramiding, stop loss, exit strategies | N-Factor sizing, R-multiples, 4 market states, Turtle entry/exit rules |
+| **option-volatility-pricing** | QUALSIASI analisi opzioni (Greeks, pricing, volatility, skew, strategies) | Delta/Gamma/Vega/Theta/Rho, volatility spreads, synthetics, Black-Scholes, binomial pricing |
+| **evidence-based-technical-analysis** | Validazione edge, data-mining bias, White's Reality Check, significatività statistica | Null hypothesis default, detrending, configural thinking limit, Occam's razor |
+| **options-playbook** | Strategie opzioni standard, repair | 40+ strategy reference by outlook |
+| **trades-about-to-happen** | Tape reading, order flow, clusters, POC | Weis clusters, displacement, absorption |
+| **wyckoff-2-0** | Market structure, CMF, spring, upthrust | Wyckoff phases, volume profile integration |
+| **volume-profile** | Value area, HVN, LVN, POC | VA, VAH, VAL, TPO, naked/balanced |
+| **volume-price-analysis** | Volume confirmation, Wyckoff volume | VPA divergence, effort vs result |
+
+### Come usarle nel flusso
+
+**Dopo analyze_stock()** — se il ticker mostra pattern pertinenti:
+```
+# Trend following candidate → regole entry Turtle
+get_skill_knowledge("way-of-the-turtle", "entry rules")
+
+# Validazione statistica dell'edge
+get_skill_knowledge("evidence-based-technical-analysis", "data-mining bias")
+```
+
+**In POSITION_REPAIR con opzioni** — carica option-volatility-pricing per Greeks complessi o volatility:
+```
+skill("option-volatility-pricing")   ← carica tutta la skill
+```
+
+**Per repair psicologico** — se il trader ha subito una perdita o mostra fear:
+```
+get_skill_knowledge("trading-in-the-zone", "self-valuation ceiling")
+get_skill_knowledge("trading-in-the-zone", "accepting risk")
+```
+
+**Per position sizing** — in PORTFOLIO_SCAN o NEW_ANALYSIS:
+```
+get_skill_knowledge("way-of-the-turtle", "N-Factor position sizing")
+```
+
+### Regola pratica
+- `get_skill_knowledge(nome, topic)` → query rapida, non carica l'intera skill. Usala per lookup specifici.
+- `skill(nome)` → carica l'intera SKILL.md nel contesto. Usala solo quando l'analisi dipende pesantemente da quel framework.
+- **Non caricare skill inutili**. Se la tua analisi non tocca quel dominio, non caricarla.
+
 ---
 
 ## Post-processing LGBM (script automatico)
-
 Dopo aver ottenuto lo score LGBM grezzo, usa lo script Python per gli adjustment basati sulle skill. È più veloce, consistente e preciso che consultare manualmente ogni skill.
 
 ### Comando

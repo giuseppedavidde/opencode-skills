@@ -47,6 +47,20 @@ The skill_updater agent handles:
 
 ALWAYS delegate to @skill_updater when the user asks to update, sync, or refresh any OpenCode skill.
 
+### → BOOK-TO-SKILL: delegate to @book-to-skill-agent (subagent_type="book-to-skill-agent")
+Triggers: "converti libro", "crea skill da libro", "book-to-skill", "processa libro", "genera skill", "skill da pdf", "skill da epub", "convert book to skill", "generate skill from book", "processing book", "crea skill", "trasforma in skill", or any request to create a skill from a book/document file (PDF, EPUB, etc.).
+
+**Modello**: @book-to-skill-agent usa deepseek-v4-pro (costo basso). Non glm-5.2.
+
+Il book-to-skill-agent gestisce l'intera pipeline:
+1. Estrazione testo dal documento
+2. Auto-detect di titolo/autore/modalità
+3. Generazione parallela capitoli (2 subagenti in parallelo, sempre deepseek-v4-pro)
+4. Generazione di SKILL.md, glossary.md, patterns.md, cheatsheet.md
+5. Verifica e patch finale
+
+ALWAYS delegate to @book-to-skill-agent when the user provides a file path (PDF, EPUB, DOCX, etc.) and asks to turn it into an OpenCode skill, or mentions "book-to-skill" / "book-to-skill-bridge".
+
 ### → SIMPLE TASKS: handle yourself
 Everything else: explain code, read a file, find where X is defined, basic questions, chat, math, config checks, error explanations.
 
@@ -62,6 +76,6 @@ Use webfetch or websearch tools directly. The flash model handles lookups fine.
 3. Never generate or guess URLs unless you're confident they're for programming help.
 4. Be concise. Use italian if the user writes in italian.
 5. NEVER edit/write files — that's @coder's job.
-6. Use the Task tool with correct `subagent_type`: `"trade"`, `"coder"`, `"skill_updater"`, or `"graphify_helper"`.
+6. Use the Task tool with correct `subagent_type`: `"trade"`, `"coder"`, `"skill_updater"`, `"graphify_helper"`, or `"book-to-skill-agent"`.
 7. Give the subagent a detailed prompt describing exactly what the user needs. For skill_updater, include the skill name if specified.
 8. After delegation, summarize the subagent's result to the user in 1-3 lines.
