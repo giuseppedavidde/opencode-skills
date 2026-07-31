@@ -3,10 +3,18 @@
 from __future__ import annotations
 
 import logging
+import sys
 
 import click
 
-from trading_mcp.mcp import initialize_mcp
+
+def _configure_logging() -> None:
+    """Configure logging to stderr to avoid corrupting the MCP stdio transport."""
+    logging.basicConfig(
+        stream=sys.stderr,
+        level=logging.WARNING,
+        format="%(name)s: %(message)s",
+    )
 
 
 @click.command(name="run")
@@ -54,7 +62,10 @@ def run_app(
     get_macro_context, get_skill_knowledge, suggest_options_strategy,
     bali_signals, tsmom_signals, bakshi_signals, lgbm_predict.
     """
+    _configure_logging()
     logger = logging.getLogger(__name__)
+
+    from trading_mcp.mcp import initialize_mcp  # pylint: disable=import-outside-toplevel
 
     mcp_server = initialize_mcp(skills_dir, tickers_dir)
 

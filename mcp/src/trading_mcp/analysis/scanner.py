@@ -74,6 +74,11 @@ from trading_mcp.analysis.indicators import (
     compute_support_resistance,
 )
 from trading_mcp.analysis.sentiment_6d import compute_sentiment_6d, earnings_proximity_adjustment
+from trading_mcp.analysis.market_structure import compute_market_structure, get_structure_levels
+from trading_mcp.analysis.volatility_hawkes import compute_volatility_hawkes, get_vol_regime
+from trading_mcp.analysis.meta_label import compute_meta_label, get_meta_label_setup
+from trading_mcp.analysis.taa_patterns import compute_taa_patterns, get_taa_patterns
+from trading_mcp.analysis.vsa import compute_vsa, get_vsa_signals
 from trading_mcp.weights_config import get_weights
 
 
@@ -464,6 +469,15 @@ def process_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict
         earnings_surprise_d = es_tuple[1] if es_tuple else "N/A"
         clue6_score, clue6_d = compute_6clue_test(hist, info)
 
+        ms_score, ms_d = compute_market_structure(hist)
+        structure_levels = get_structure_levels(hist)
+
+        vh_score, vh_d = compute_volatility_hawkes(hist)
+        vol_regime = get_vol_regime(hist)
+
+        vsa_score, vsa_d = compute_vsa(hist)
+        vsa_signals = get_vsa_signals(hist)
+
         candle_score, candle_d = compute_candlestick_patterns(hist)
         fib_score, fib_d = compute_fibonacci(hist)
         bb_score, bb_d = compute_bollinger(hist)
@@ -500,6 +514,13 @@ def process_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict
             except Exception:
                 pass
 
+        hist.attrs["ticker"] = symbol
+        ml_score, ml_d = compute_meta_label(hist)
+        ml_setup = get_meta_label_setup(hist)
+
+        taa_score, taa_d = compute_taa_patterns(hist)
+        taa_patterns = get_taa_patterns(hist)
+
         wcfg = get_weights()
         ms = wcfg.modifier_scale
         mtf_mod = (mtf_score - 50) * ms.multi_timeframe
@@ -507,9 +528,29 @@ def process_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict
         squeeze_mod = (squeeze_score - 50) * ms.squeeze_play
         es_mod = (earnings_surprise_score - 50) * ms.earnings_surprise if earnings_surprise_score is not None else 0
         clue6_mod = (clue6_score - 50) * ms.clue6_test
+        ms_mod = (ms_score - 50) * ms.market_structure
 
-        wyckoff_adj = min(100.0, max(0.0, wyckoff_score + sot_mod + clue6_mod))
-        pa_adj = min(100.0, max(0.0, pa_score + mtf_mod))
+        ms_trend = structure_levels.get("trend", "range")
+        ms_bonus = 0.0
+        ms_penalty = 0.0
+        if ms_score > 70 and ms_trend == "uptrend":
+            ms_bonus = (ms_score - 70) * ms.market_structure * 0.5
+        if ms_score > 70 and ms_trend == "downtrend":
+            ms_penalty = (ms_score - 70) * ms.market_structure * 0.5
+
+        wyckoff_adj = min(100.0, max(0.0, wyckoff_score + sot_mod + clue6_mod + ms_bonus))
+
+        # VSA climax signals boost/penalize Wyckoff phase assessment
+        if vsa_signals["recent_signals"]:
+            for sig in vsa_signals["recent_signals"]:
+                if sig["signal"] == "selling_climax" and sig["bar"] >= len(hist) - 2:
+                    wyckoff_adj = min(100.0, wyckoff_adj + 15)
+                    vsa_d += " | VSA climax boosts Wyckoff"
+                elif sig["signal"] == "buying_climax" and sig["bar"] >= len(hist) - 2:
+                    wyckoff_adj = max(0.0, wyckoff_adj - 15)
+                    vsa_d += " | VSA climax penalizes Wyckoff"
+
+        pa_adj = min(100.0, max(0.0, pa_score + mtf_mod - ms_penalty))
         sentiment_adj = min(100.0, max(0.0, sentiment_score + squeeze_mod))
         fundamentals_adj = min(100.0, max(0.0, fundamentals_score + es_mod))
 
@@ -538,6 +579,32 @@ def process_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict
             + new_mod
         )
         final = min(100.0, max(0.0, round(final, 1)))
+
+        # Volatility Hawkes post-adjustment
+        vol_adj = 0
+        if vol_regime["regime"] == "high_vol_cluster":
+            vol_adj = -5
+        elif vol_regime["regime"] == "vol_spike":
+            vol_adj = 10 if vol_regime["signal"] == "long" else -10
+        elif vol_regime["regime"] == "low_vol_silence":
+            vol_adj = 5
+        final = min(100.0, max(0.0, final + vol_adj))
+
+        # Meta-label breakout filter
+        if ml_setup.get("breakout"):
+            if ml_setup.get("ml_probability", 0.5) > 0.6:
+                final = min(100.0, final + 10)
+            elif ml_setup.get("ml_probability", 0.5) < 0.3:
+                final = max(0.0, final - 10)
+
+        # TAA patterns post-adjustment
+        if taa_patterns["support_resistance"]["signal"] == "bullish":
+            final = min(100.0, final + 5)
+        elif taa_patterns["support_resistance"]["signal"] == "bearish":
+            final = max(0.0, final - 5)
+        # Confluence bonus: TAA + Market Structure aligned
+        if taa_score > 60 and ms_score > 60:
+            final = min(100.0, final + 5)
 
         pattern = identify_pattern(
             int(wyckoff_score), int(volprof_score), int(pa_score),
@@ -572,6 +639,16 @@ def process_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict
                 "squeeze_play": {"score": squeeze_score, "detail": squeeze_d},
                 "earnings_surprise": {"score": earnings_surprise_score, "detail": earnings_surprise_d},
                 "clue6_test": {"score": clue6_score, "detail": clue6_d},
+                "market_structure": {"score": ms_score, "detail": ms_d},
+                "structure_levels": structure_levels,
+                "volatility_hawkes": {"score": vh_score, "detail": vh_d},
+                "vol_regime": vol_regime,
+                "vsa": {"score": vsa_score, "detail": vsa_d},
+                "vsa_signals": vsa_signals,
+                "meta_label": {"score": ml_score, "detail": ml_d},
+                "meta_label_setup": ml_setup,
+                "taa_patterns": {"score": taa_score, "detail": taa_d},
+                "taa_detailed": taa_patterns,
             },
             "indicators": {
                 "candlestick": candle_score, "fibonacci": fib_score,

@@ -34,7 +34,13 @@ class StockWeights(BaseModel):
 
     @model_validator(mode="after")
     def validate_sum(self) -> "StockWeights":
-        total = self.wyckoff + self.volume_profile + self.price_action + self.sentiment + self.fundamentals
+        total = (
+            self.wyckoff
+            + self.volume_profile
+            + self.price_action
+            + self.sentiment
+            + self.fundamentals
+        )
         if abs(total - 1.0) > 0.01:
             logger.warning("Stock weights sum to %.4f (expected 1.0), normalizing", total)
             if total > 0:
@@ -79,7 +85,7 @@ class CryptoWeights(BaseModel):
             "wyckoff": self.wyckoff,
             "volume_profile": self.volume_profile,
             "price_action": self.price_action,
-            "sentiment": self.crypto_apc,
+            "crypto_apc": self.crypto_apc,
         }
 
 
@@ -99,12 +105,17 @@ class IndicatorWeights(BaseModel):
 
 
 class ModifierScale(BaseModel):
-    """Scale factors for modifier adjustments (mtf, sot, squeeze, earnings, clue6)."""
+    """Scale factors for modifier adjustments.
+
+    Covers: multi_timeframe, sot_weis_wave, squeeze_play,
+    earnings_surprise, clue6_test, market_structure.
+    """
     multi_timeframe: float = Field(default=0.2, ge=0.0, le=1.0)
     sot_weis_wave: float = Field(default=0.2, ge=0.0, le=1.0)
     squeeze_play: float = Field(default=0.2, ge=0.0, le=1.0)
     earnings_surprise: float = Field(default=0.2, ge=0.0, le=1.0)
     clue6_test: float = Field(default=0.2, ge=0.0, le=1.0)
+    market_structure: float = Field(default=0.10, ge=0.0, le=1.0)
 
 
 class WeightsConfig(BaseModel):
