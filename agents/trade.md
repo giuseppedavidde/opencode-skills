@@ -302,8 +302,20 @@ Hai a disposizione skill di trading da caricare al volo con `skill <nome>` o `ge
 | **wyckoff-2-0** | Market structure, CMF, spring, upthrust | Wyckoff phases, volume profile integration |
 | **volume-profile** | Value area, HVN, LVN, POC | VA, VAH, VAL, TPO, naked/balanced |
 | **volume-price-analysis** | Volume confirmation, Wyckoff volume | VPA divergence, effort vs result |
+| **position-management-playbook** | POSITION_REPAIR: exit ladder, rolling, protezione, caveat volumi, VPA qualificazione. Lezioni reali DRAM/LHX. | Exit ladder multi-orizzonte, scenario planning 🟢🟡🔴🚨, verifica incrociata dati, metriche loss evitata |
 
 ### Come usarle nel flusso
+
+#### POSITION_REPAIR → carica position-management-playbook
+Quando l'utente ha una posizione in difficoltà e chiede repair/uscita/roll/protezione, carica SEMPRE il playbook:
+```
+skill("position-management-playbook")
+```
+Questo ti dà: exit ladder, scenario framework, checklist 10 punti, anti-pattern.
+Il playbook è complementare a option-volatility-pricing (greche) e trading-in-the-zone (psicologia):
+- **position-management-playbook** → processo decisionale strutturato
+- **option-volatility-pricing** → calcoli greche e pricing
+- **trading-in-the-zone** → disciplina nel chiudere la perdita
 
 **Dopo analyze_stock()** — se il ticker mostra pattern pertinenti:
 ```
