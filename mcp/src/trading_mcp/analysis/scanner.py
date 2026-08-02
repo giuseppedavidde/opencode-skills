@@ -53,7 +53,7 @@ import pandas as pd
 
 from trading_mcp.data.provider import data_provider
 from trading_mcp.analysis.wyckoff import compute_wyckoff, compute_6clue_test
-from trading_mcp.analysis.volume_profile import compute_volume_profile
+from trading_mcp.analysis.volume_profile import compute_volume_profile, get_profile_levels
 from trading_mcp.analysis.price_action import compute_price_action, compute_multiframe_trend
 from trading_mcp.analysis.sentiment import compute_sentiment
 from trading_mcp.analysis.fundamentals import compute_fundamentals, compute_competitive_positioning
@@ -606,6 +606,8 @@ def process_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict
         if taa_score > 60 and ms_score > 60:
             final = min(100.0, final + 5)
 
+        profile_levels = get_profile_levels(hist)
+
         pattern = identify_pattern(
             int(wyckoff_score), int(volprof_score), int(pa_score),
             int(sentiment_score), int(fundamentals_score), info, wyckoff_d,
@@ -663,6 +665,7 @@ def process_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict
             "competitive_detail": competitive_d,
             "_si": float(info.get("shortPercentOfFloat", 0) or 0),
             "earnings_proximity": earnings_adj,
+            "profile_levels": profile_levels,
         }
     except Exception as e:
         logger.error("process_ticker failed for %s: %s", symbol, e)
@@ -730,6 +733,8 @@ def process_crypto_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) 
         )
         final = min(100.0, max(0.0, round(final, 1)))
 
+        profile_levels = get_profile_levels(hist)
+
         return {
             "symbol": symbol,
             "name": ticker_dict["name"],
@@ -757,6 +762,7 @@ def process_crypto_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) 
             },
             "flags": [],
             "pattern": "Crypto APC",
+            "profile_levels": profile_levels,
         }
     except Exception as e:
         logger.error("process_crypto_ticker failed for %s: %s: %s", symbol, type(e).__name__, e)
