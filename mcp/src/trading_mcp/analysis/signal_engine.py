@@ -1,13 +1,21 @@
 """Signal engine: raccomandazione operativa basata su evidenza OOS.
 
 Il segnale primario è volume_profile (unico modulo con IC reale OOS).
-EVOLUZIONE (Agosto 2026): il volume profile è un indicatore di ESTENSIONE/SCONTO
-rispetto alla value area, NON un segnale di momentum. L'evidenza empirica su
-19.488 snapshot (200 ticker, 5 anni, 2021-2026) mostra che:
+EVOLUZIONE (Agosto 2026): il volume profile è un indicatore mean-reversion,
+NON momentum. L'evidenza empirica su 19.488 snapshot (200 ticker, 5 anni,
+2021-2026) mostra IC rank −0.068 (p<0.0001): VP score alto → forward return
+basso, VP score basso → forward return alto.
 
-  IC VP vs fwd 180gg: −0.068 (p<0.0001)
-  → VP alto (≥60) = prezzo ESTESO sopra VAH → ritorno alla media
-  → VP basso (≤40) = prezzo SCONTATO sotto VAL → mean reversion verso Value Area
+SEMANTICA (mean-reversion, unica, documentata):
+  VP ≤ 40 → BUY    (ritorno alla media verso l'alto atteso, IC negativo)
+  VP ≥ 60 → AVOID  (ritorno alla media verso il basso atteso)
+  40 < VP < 60 → HOLD (nessun vantaggio direzionale statistico)
+
+NOTA: il VP score è un COMPOSITO che combina posizione prezzo vs VA,
+prossimità POC, volume ratio e D-Profile shape. Non va interpretato come
+indicatore di momentum né come "buy high/sell low".
+L'evidenza è OOS su split temporale 2021-2026; mai usata per calibrare i
+pesi del composite score live.
 """
 
 from __future__ import annotations
@@ -26,14 +34,17 @@ def compute_action(
 ) -> dict[str, Any]:
     """Produce la raccomandazione operativa basata su evidenza empirica.
 
-    Il volume profile score (VP) misura la posizione del prezzo rispetto
-    alla value area del profilo. L'evidenza su 19.488 snapshot mostra che è
-    un indicatore di mean-reversion (non momentum):
+    Il VP score è un composito mean-reversion (non momentum). L'evidenza
+    su 19.488 snapshot (200 ticker, 5 anni) mostra che:
 
-        - VP ≤ 40: prezzo sotto VAL = sconto → mean reversion verso VA
-          (IC −0.068 a 180gg, p<0.0001, Q5–Q1 spread −6.90%)
-        - VP ≥ 60: prezzo sopra VAH = esteso → expected mean reversion down
-          (evidenza statisticamente significativa a 6-12 mesi)
+        IC rank VP vs fwd 180gg = −0.068 (p<0.0001)
+        → VP score ALTO → forward return BASSO (mean-reversion down)
+        → VP score BASSO → forward return ALTO (mean-reversion up)
+
+    Soglie operative (coerenti con IC negativo):
+        - VP ≤ 40: BUY (forward return atteso superiore)
+        - VP ≥ 60: AVOID (forward return atteso inferiore)
+        - 40 < VP < 60: HOLD (nessun vantaggio direzionale statistico)
 
     Args:
         hist: DataFrame OHLCV (Open, High, Low, Close, Volume). Opzionale se

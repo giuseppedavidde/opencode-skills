@@ -19,14 +19,20 @@ from pydantic import BaseModel, Field
 from fastmcp import FastMCP
 
 from trading_mcp.data.provider import data_provider
+from trading_mcp.data.risk_free import get_risk_free_rate
 
 logger = logging.getLogger(__name__)
 
 # ── Pydantic output models ───────────────────────────────────────────
 
 class BaliResult(BaseModel):
-    """Output del tool bali_signals."""
+    """Output del tool bali_signals.
+
+    P0 Aug 2026: available, available_bars, required_bars, error_is_blocking
+    e composite_bali_score nullable. Default: available=False (failure path).
+    """
     ticker: str
+    available: bool = False
     spot: float | None = None
     rv: float | None = None
     atm_call_iv: float | None = None
@@ -34,16 +40,24 @@ class BaliResult(BaseModel):
     atm_straddle_iv: float | None = None
     rvol_ivol_spread: float | None = None
     cvol_pvol_spread: float | None = None
-    rvol_ivol_score: float = 50.0
-    cvol_pvol_score: float = 50.0
-    composite_bali_score: float = 50.0
-    direction: str = "neutral"
+    rvol_ivol_score: float | None = None
+    cvol_pvol_score: float | None = None
+    composite_bali_score: float | None = None
+    direction: str = "unavailable"
     error: str | None = None
+    error_is_blocking: bool = False
+    available_bars: int = 0
+    required_bars: int = 50
     paper_reference: dict[str, Any] = Field(default_factory=dict)
 
 class TSMomResult(BaseModel):
-    """Output del tool tsmom_signals."""
+    """Output del tool tsmom_signals.
+
+    P0 Aug 2026: available, available_bars, required_bars, error_is_blocking
+    e mom_score nullable. Default: available=False (failure path).
+    """
     ticker: str
+    available: bool = False
     price: float | None = None
     lookback_months: int = 12
     cum_return_lookback: float | None = None
@@ -51,12 +65,15 @@ class TSMomResult(BaseModel):
     ewma_vol: float | None = None
     vol_scaling: float | None = None
     position_size: float | None = None
-    mom_score: float = 50.0
-    direction: str = "neutral"
+    mom_score: float | None = None
+    direction: str = "unavailable"
     pct_positive_months: float | None = None
     sharpe_lookback: float | None = None
     target_vol: float = 0.40
     error: str | None = None
+    error_is_blocking: bool = False
+    available_bars: int = 0
+    required_bars: int = 60
     paper_reference: dict[str, Any] = Field(default_factory=dict)
 
 class BakshiVRP(BaseModel):
@@ -81,8 +98,26 @@ class BakshiStrikeAnalysis(BaseModel):
     zone: str
     recommendation: str
 
+
+# ── Bakshi VRP constants (MUST be defined before BakshiResult) ────────
+
+# Bakshi & Kapadia (2003) — empirical params from Table 4, Figure 2.
+# WARNING: These are CALIBRATED on S&P 500 only.
+_VRP_SLOPE = 1.996
+_VRP_INTERCEPT = -12.34
+_VRP_CALIBRATION_SOURCE = "Bakshi & Kapadia (2003), Table 4 (S&P 500 only)"
+
+
 class BakshiResult(BaseModel):
-    """Output del tool bakshi_signals."""
+    """Output del tool bakshi_signals.
+
+    P0 Aug 2026: added available_bars, required_bars for explicit
+    short-history status.
+
+    P1 Aug 2026: added calibration_status, calibration_source,
+    calibrated flags. When no ticker-specific VRP history exists,
+    calibrated=False and calibrated_vrp=None.
+    """
     ticker: str
     spot: float | None = None
     expiry: str | None = None
@@ -93,17 +128,45 @@ class BakshiResult(BaseModel):
     vrp: BakshiVRP = Field(default_factory=BakshiVRP)
     strikes_analysis: list[BakshiStrikeAnalysis] = Field(default_factory=list)
     error: str | None = None
+    available_bars: int = 0
+    required_bars: int = 0
     paper_reference: dict[str, Any] = Field(default_factory=dict)
+    calibration_status: str = "not_calibrated"
+    calibration_source: str = _VRP_CALIBRATION_SOURCE
+    calibrated: bool = False
+    calibrated_vrp: float | None = None
+    rate_source: str | None = None
+    rate_as_of: str | None = None
 
 class LGBMResult(BaseModel):
-    """Output del tool lgbm_predict."""
+    """Output del tool lgbm_predict.
+
+    Di default non disponibile (``available=False``, ``score=None``,
+    ``signal="unavailable"``). Solo i success path di ``lgbm_predict``
+    impostano ``available=True`` con uno score valido.
+
+    P0 August 2026: ``available_bars``, ``required_bars`` e ``reason``
+    rendono esplicito il motivo di ``available=False`` quando la storia
+    e' troppo corta per il lookback delle feature o per il modello.
+
+    P1 August 2026: ``calibrated_probability`` e ``calibration_status``
+    sono None/"not_calibrated" per default. Lo score 0-100 NON e'
+    una probabilita' senza artifact di calibrazione validato OOS.
+    """
     ticker: str
-    score: float = 50.0
-    signal: str = "neutral"
+    available: bool = False
+    score: float | None = None
+    signal: str = "unavailable"
     model: str | None = None
     individual_signals: dict[str, float] = Field(default_factory=dict)
     meta_weights: dict[str, float] = Field(default_factory=dict)
     error: str | None = None
+    error_is_blocking: bool = False
+    available_bars: int = 0
+    required_bars: int = 0
+    reason: str = ""
+    calibrated_probability: float | None = None
+    calibration_status: str = "not_calibrated"
 
 
 class PostProcessAdjustment(BaseModel):
@@ -123,12 +186,6 @@ class PostProcessResult(BaseModel):
     adjustments: dict[str, dict[str, Any]] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
 
-
-# ── Constants ────────────────────────────────────────────────────────
-
-# Bakshi & Kapadia (2003) — empirical params from Table 4, Figure 2
-_VRP_SLOPE = 1.996
-_VRP_INTERCEPT = -12.34
 
 # LGBM model directory (relative to lgbm-trader-skill)
 _LGBM_SKILL_DIR = Path.home() / ".config" / "opencode" / "skills" / "lgbm-trader-skill"
@@ -715,26 +772,64 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
         Returns:
             dict con scores 0-100 per ogni segnale + spread grezzi.
         """
+        # ── P0 short-history guard: almeno 50 barre per RV (non 10) ──
+        _MIN_BALI_BARS = 50
+        hist_rv = data_provider.get_hist(ticker, period=period)
+        avail_bars = len(hist_rv.dropna()) if not hist_rv.empty else 0
+        if avail_bars < _MIN_BALI_BARS:
+            return BaliResult(
+                ticker=ticker,
+                available=False,
+                error_is_blocking=True,
+                error=(
+                    f"Dati insufficienti per Bali volatility spread: "
+                    f"{avail_bars} barre disponibili, richieste almeno "
+                    f"{_MIN_BALI_BARS} per RV robusta."
+                ),
+                available_bars=avail_bars,
+                required_bars=_MIN_BALI_BARS,
+                direction="unavailable",
+            ).model_dump()
+
         # 1. Realized Volatility da DataProvider
         try:
             rv = _realized_vol_from_provider(ticker, period)
         except ValueError as e:
             return BaliResult(
-                ticker=ticker, error=str(e), rv=0.0
+                ticker=ticker,
+                available=False,
+                error_is_blocking=True,
+                error=str(e),
+                rv=0.0,
+                available_bars=avail_bars,
+                required_bars=_MIN_BALI_BARS,
+                direction="unavailable",
             ).model_dump()
 
         # 2. Spot price da DataProvider
         hist = data_provider.get_hist(ticker, period="5d")
         if hist.empty:
             return BaliResult(
-                ticker=ticker, error="Dati OHLCV insufficienti",
+                ticker=ticker,
+                available=False,
+                error_is_blocking=True,
+                error="Dati OHLCV insufficienti",
                 rv=round(rv, 4),
+                available_bars=avail_bars,
+                required_bars=_MIN_BALI_BARS,
+                direction="unavailable",
             ).model_dump()
         clean = hist["Close"].dropna()
         if clean.empty:
             return BaliResult(
-                ticker=ticker, error="Close prices all NaN",
+                ticker=ticker,
+                available=False,
+                error_is_blocking=True,
+                error="Close prices all NaN",
                 rv=round(rv, 4),
+                available_bars=avail_bars,
+                required_bars=_MIN_BALI_BARS,
+                direction="unavailable",
             ).model_dump()
         spot = float(clean.iloc[-1])
 
@@ -747,34 +842,54 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
             if not expiry:
                 return BaliResult(
                     ticker=ticker,
+                    available=False,
+                    error_is_blocking=True,
                     error="Nessuna scadenza opzioni disponibile",
                     rv=round(rv, 4),
                     spot=round(spot, 2),
+                    available_bars=avail_bars,
+                    required_bars=_MIN_BALI_BARS,
+                    direction="unavailable",
                 ).model_dump()
             opt = data_provider.get_options_chain(ticker, expiry)
             if opt is None:
                 return BaliResult(
                     ticker=ticker,
+                    available=False,
+                    error_is_blocking=True,
                     error="Catena opzioni non disponibile",
                     rv=round(rv, 4),
                     spot=round(spot, 2),
+                    available_bars=avail_bars,
+                    required_bars=_MIN_BALI_BARS,
+                    direction="unavailable",
                 ).model_dump()
             calls = opt.calls
             puts = opt.puts
         except Exception as e:
             return BaliResult(
                 ticker=ticker,
+                available=False,
+                error_is_blocking=True,
                 error=f"Opzioni non disponibili: {e}",
                 rv=round(rv, 4),
                 spot=round(spot, 2),
+                available_bars=avail_bars,
+                required_bars=_MIN_BALI_BARS,
+                direction="unavailable",
             ).model_dump()
 
         if calls.empty or puts.empty:
             return BaliResult(
                 ticker=ticker,
+                available=False,
+                error_is_blocking=True,
                 error="Catena opzioni vuota",
                 rv=round(rv, 4),
                 spot=round(spot, 2),
+                available_bars=avail_bars,
+                required_bars=_MIN_BALI_BARS,
+                direction="unavailable",
             ).model_dump()
 
         # 5. Trova strike ATM
@@ -807,6 +922,7 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
 
         return BaliResult(
             ticker=ticker,
+            available=True,
             spot=round(spot, 2),
             rv=round(rv, 4),
             atm_call_iv=round(atm_call_iv, 4),
@@ -861,13 +977,23 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
             dict con score TS-MOM 0-100, direzione, Sharpe stimato.
         """
         # Fetch dati via DataProvider (cache hit se analyze_stock chiamato prima)
+        _MIN_TSMOM_BARS = 60
         period_needed = f"{lookback_months + 3}mo"
         hist = data_provider.get_hist(ticker, period=period_needed)
+        avail_tsmom = len(hist) if not hist.empty else 0
 
-        if hist.empty or len(hist) < 60:
+        if hist.empty or avail_tsmom < _MIN_TSMOM_BARS:
             return TSMomResult(
                 ticker=ticker,
-                error=f"Dati insufficienti: {len(hist)} giorni",
+                available=False,
+                error_is_blocking=True,
+                error=(
+                    f"Dati insufficienti per TS-MOM: {avail_tsmom} barre "
+                    f"disponibili, richieste almeno {_MIN_TSMOM_BARS}."
+                ),
+                available_bars=avail_tsmom,
+                required_bars=_MIN_TSMOM_BARS,
+                direction="unavailable",
             ).model_dump()
 
         close = hist["Close"]
@@ -881,7 +1007,12 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
         if start_idx >= end_idx:
             return TSMomResult(
                 ticker=ticker,
+                available=False,
+                error_is_blocking=True,
                 error=f"Dati insufficienti dopo skip: start={start_idx}, end={end_idx}",
+                available_bars=avail_tsmom,
+                required_bars=_MIN_TSMOM_BARS,
+                direction="unavailable",
             ).model_dump()
 
         lookback_returns = returns.iloc[start_idx:end_idx]
@@ -890,7 +1021,12 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
         if len(lookback_returns) < 20:
             return TSMomResult(
                 ticker=ticker,
+                available=False,
+                error_is_blocking=True,
                 error=f"Lookback troppo corto: {len(lookback_returns)} giorni",
+                available_bars=avail_tsmom,
+                required_bars=_MIN_TSMOM_BARS,
+                direction="unavailable",
             ).model_dump()
 
         # TS-MOM signal (MOP 2012)
@@ -931,6 +1067,7 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
 
         return TSMomResult(
             ticker=ticker,
+            available=True,
             price=round(float(close.iloc[-1]), 2),
             lookback_months=lookback_months,
             cum_return_lookback=round(float(cum_return), 4),
@@ -985,12 +1122,24 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
                 ticker=ticker, error="Dati insufficienti"
             ).model_dump()
 
-        clean = hist["Close"].dropna()
-        if clean.empty:
+        # ── P0 short-history guard: servono almeno 63 barre per VRP ──
+        _MIN_BAKSHI_BARS = 63
+        clean_close = hist["Close"].dropna()
+        avail_bars = len(clean_close)
+        if avail_bars < _MIN_BAKSHI_BARS:
             return BakshiResult(
-                ticker=ticker, error="Close prices all NaN"
+                ticker=ticker,
+                error=(
+                    f"Dati insufficienti per Bakshi VRP: {avail_bars} barre "
+                    f"disponibili, richieste almeno {_MIN_BAKSHI_BARS}. "
+                    f"Il calcolo del VRP richiede volatilita' realizzata "
+                    f"robusta (~3 mesi di daily data)."
+                ),
+                available_bars=avail_bars,
+                required_bars=_MIN_BAKSHI_BARS,
             ).model_dump()
-        spot = float(clean.iloc[-1])
+
+        spot = float(clean_close.iloc[-1])
 
         # 2. Scadenza opzioni da DataProvider
         exp_date = expiry or _best_expiry_bakshi(ticker)
@@ -1034,7 +1183,8 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
         else:
             dte = 30
         T_years = dte / 365.0
-        r = 0.05
+        rate_snapshot = get_risk_free_rate()
+        r = rate_snapshot.value
 
         # 6. VRP stima (Bakshi empirical)
         iv_pct_val = avg_iv * 100
@@ -1147,6 +1297,12 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
                     ),
                 },
             },
+            calibration_status="not_calibrated",
+            calibration_source=_VRP_CALIBRATION_SOURCE,
+            calibrated=False,
+            calibrated_vrp=None,
+            rate_source=rate_snapshot.source_ticker,
+            rate_as_of=rate_snapshot.as_of,
         ).model_dump()
 
 
@@ -1176,6 +1332,8 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
         if not _LGBM_SKILL_DIR.exists():
             return LGBMResult(
                 ticker=ticker,
+                available=False,
+                error_is_blocking=True,
                 error=(
                     "lgbm-trader-skill non trovato. Installa la skill prima di usare "
                     "questo tool: opencode skill install lgbm-trader-skill"
@@ -1204,7 +1362,8 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
                 error_msg = f"Impossibile importare lgbm-trader-skill: {e}"
             return LGBMResult(
                 ticker=ticker,
-                score=50, signal="neutral",
+                available=False,
+                error_is_blocking=True,
                 error=error_msg,
                 model=None,
             ).model_dump()
@@ -1225,6 +1384,8 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
         else:
             return LGBMResult(
                 ticker=ticker,
+                available=False,
+                error_is_blocking=True,
                 error=(
                     f"Nessun modello trovato per {ticker}. "
                     f"Addestra con: python scripts/run_stacking.py --ticker {ticker} "
@@ -1237,6 +1398,8 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
         if hist.empty:
             return LGBMResult(
                 ticker=ticker,
+                available=False,
+                error_is_blocking=True,
                 error=f"Nessun dato live per {ticker}",
             ).model_dump()
 
@@ -1250,6 +1413,43 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
         })
         ohlcv.index = pd.to_datetime(ohlcv.index).tz_localize(None)
         ohlcv = ohlcv[~ohlcv.index.duplicated(keep="last")].sort_index()
+
+        # 3b. Short-history check: il lookback canonico delle feature e' 252 barre.
+        #     Se i dati sono insufficienti, restituiamo available=False esplicito
+        #     senza tentare predizioni su dati incompleti.
+        _FEATURE_LOOKBACK = 252
+        _MIN_DAYS_FOR_PREDICT = 120  # minimo assoluto per qualsiasi predizione
+        avail_bars = len(ohlcv)
+        if avail_bars < _MIN_DAYS_FOR_PREDICT:
+            return LGBMResult(
+                ticker=ticker,
+                model=model_file.name,
+                available=False,
+                error_is_blocking=True,
+                error=(
+                    f"Dati insufficienti per LGBM prediction: {avail_bars} barre "
+                    f"disponibili, richieste almeno {_MIN_DAYS_FOR_PREDICT} barre. "
+                    f"Lookback canonico features: {_FEATURE_LOOKBACK} barre."
+                ),
+                available_bars=avail_bars,
+                required_bars=_MIN_DAYS_FOR_PREDICT,
+                reason="short_history",
+            ).model_dump()
+        if avail_bars < _FEATURE_LOOKBACK:
+            return LGBMResult(
+                ticker=ticker,
+                model=model_file.name,
+                available=False,
+                error_is_blocking=True,
+                error=(
+                    f"Storia insufficiente per feature lookback: {avail_bars} barre "
+                    f"disponibili, richieste {_FEATURE_LOOKBACK}. "
+                    f"Non si predice su dati incompleti — lo score sarebbe spurio."
+                ),
+                available_bars=avail_bars,
+                required_bars=_FEATURE_LOOKBACK,
+                reason="short_history: feature lookback insufficiente",
+            ).model_dump()
 
         # 4. Fetch macro (tentativo via data fetcher interno della skill)
         macro_df: pd.DataFrame | None = None
@@ -1266,6 +1466,8 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
             return LGBMResult(
                 ticker=ticker,
                 model=model_file.name,
+                available=False,
+                error_is_blocking=True,
                 error=f"Feature computation failed: {e}",
             ).model_dump()
 
@@ -1273,6 +1475,8 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
             return LGBMResult(
                 ticker=ticker,
                 model=model_file.name,
+                available=False,
+                error_is_blocking=True,
                 error="Feature computation produced empty frame",
             ).model_dump()
 
@@ -1289,12 +1493,15 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
             return LGBMResult(
                 ticker=ticker,
                 model=model_file.name,
+                available=False,
+                error_is_blocking=True,
                 error=f"Prediction failed: {e}",
             ).model_dump()
 
         return LGBMResult(
             ticker=ticker,
             model=model_file.name,
+            available=True,
             **pred_result,
         ).model_dump()
 
@@ -1353,17 +1560,56 @@ def _signal_from_score(score: float) -> str:
 
 
 def _align_features(df: pd.DataFrame, feature_names: list[str]) -> pd.DataFrame:
-    """Allinea le colonne del DataFrame alle feature attese dal modello."""
+    """Validazione strict dello schema feature.
+
+    SOLO le colonne che esistono nel DataFrame vengono usate. Le feature
+    mancanti o con NaN generano errore esplicito (nessun fill silenzioso
+    con 0.0). Il chiamante deve gestire l'errore come ``available=False``.
+
+    Args:
+        df: DataFrame con le feature calcolate live.
+        feature_names: Lista ordinata di feature attese dal modello.
+
+    Returns:
+        DataFrame allineato con solo le colonne presenti e senza NaN.
+
+    Raises:
+        ValueError: Se ci sono feature mancanti o righe con NaN dopo
+                    l'allineamento.
+    """
+    available = [c for c in feature_names if c in df.columns]
     missing = [c for c in feature_names if c not in df.columns]
+
     if missing:
-        logger.debug("Aggiungo %d feature mancanti (fill=0.0): %s",
-                     len(missing), missing[:5])
-    out = df.reindex(columns=feature_names, fill_value=0.0)
-    return out.fillna(0.0)
+        raise ValueError(
+            f"Feature mismatch: {len(missing)}/{len(feature_names)} "
+            f"colonne mancanti. Mancanti: {sorted(missing)[:10]}"
+            f"{'...' if len(missing) > 10 else ''}. "
+            f"Disponibili: {sorted(available)[:10]}"
+        )
+
+    out = df[feature_names].copy()
+    nan_mask = out.isna().any(axis=1)
+    if nan_mask.any():
+        nan_cols = out.columns[out.isna().any()].tolist()
+        nan_rows = int(nan_mask.sum())
+        raise ValueError(
+            f"NaN in feature columns: {sorted(nan_cols)[:10]} "
+            f"({nan_rows} righe affette). "
+            "I dati live contengono valori mancanti — impossibile produrre "
+            "una predizione valida."
+        )
+
+    return out
 
 
 def _predict_stacking(ensemble: Any, df: pd.DataFrame) -> dict[str, Any]:
-    """Predizione usando StackingEnsemble."""
+    """Predizione usando StackingEnsemble.
+
+    Validazione strict dello schema feature: se mancano colonne o ci sono
+    NaN, lancia ValueError. Il chiamante (lgbm_predict) lo converte in
+    LGBMResult(available=False).
+    """
     aligned = df.copy()
     if hasattr(ensemble, "feature_groups"):
         for _name, feats in ensemble.feature_groups.items():
@@ -1373,7 +1619,7 @@ def _predict_stacking(ensemble: Any, df: pd.DataFrame) -> dict[str, Any]:
 
     preds = ensemble.predict(aligned)
 
-    last_score = 50.0
+    last_score = None
     if "score" in preds.columns and preds["score"].notna().any():
         last_score = float(preds["score"].dropna().iloc[-1])
     elif "pred_final" in preds.columns and preds["pred_final"].notna().any():
@@ -1389,6 +1635,12 @@ def _predict_stacking(ensemble: Any, df: pd.DataFrame) -> dict[str, Any]:
             last_row = preds[pred_cols].iloc[-1].dropna()
             if not last_row.empty:
                 last_score = float(_sigmoid(last_row.to_numpy()).mean()) * 100.0
+
+    if last_score is None:
+        raise ValueError(
+            "Stacking ensemble non ha prodotto alcuna predizione valida "
+            "(tutti i modelli base hanno fallito o restituito NaN)"
+        )
 
     individual: dict[str, float] = {}
     for col in preds.columns:
@@ -1418,14 +1670,20 @@ def _predict_stacking(ensemble: Any, df: pd.DataFrame) -> dict[str, Any]:
 
 
 def _predict_single(trainer: Any, df: pd.DataFrame) -> dict[str, Any]:
-    """Predizione usando un singolo LGBMTrainer (fallback)."""
+    """Predizione usando un singolo LGBMTrainer (fallback).
+
+    Validazione strict dello schema feature. Lancia ValueError se mancano
+    colonne o il modello non produce predizioni.
+    """
     feats = list(trainer.feature_names)
     X = _align_features(df, feats)
     raw = trainer.predict(X)
     if len(raw) == 0:
-        score = 50.0
-    else:
-        score = float(_sigmoid(np.asarray(raw))[-1]) * 100.0
+        raise ValueError(
+            "LGBMTrainer.predict ha restituito array vuoto — "
+            "il modello non ha prodotto predizioni"
+        )
+    score = float(_sigmoid(np.asarray(raw))[-1]) * 100.0
 
     individual: dict[str, float] = {}
     if len(raw) > 0:

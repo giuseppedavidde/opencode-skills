@@ -19,7 +19,12 @@ TICKERS_DIR: Path = Path(
     )
 )
 
-RISK_FREE_RATE: float = 0.045
+# P1 Aug 2026: RISK_FREE_RATE kept as FALLBACK only.
+# Use trading_mcp.data.risk_free.get_risk_free_rate() for live rates.
+FALLBACK_RISK_FREE_RATE: float = 0.045
+
+# Backward-compatible alias for code not yet migrated to provider:
+RISK_FREE_RATE: float = FALLBACK_RISK_FREE_RATE
 
 from trading_mcp.weights_config import load_weights, get_weights
 

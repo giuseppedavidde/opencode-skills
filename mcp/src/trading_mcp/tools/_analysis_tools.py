@@ -14,6 +14,7 @@ from trading_mcp.analysis.scanner import (
     apply_macro_regime,
     compute_dynamic_thresholds,
     load_universe,
+    load_universe_with_meta,
     parse_custom_tickers,
     process_crypto_ticker,
     process_ticker,
@@ -58,8 +59,15 @@ def register_analysis_tools(
         if tickers:
             universe_list = parse_custom_tickers(tickers)
             universe_name = "custom"
+            universe_meta = {
+                "name": "custom", "source": "user-provided tickers",
+                "as_of": None, "universe_type": "current",
+                "survivorship_warning": False,
+                "historical_universe_available": False,
+                "notes": ["Custom ticker list via CLI"],
+            }
         else:
-            universe_list = load_universe(universe, tickers_dir)
+            universe_list, universe_meta = load_universe_with_meta(universe, tickers_dir)
             universe_name = universe
 
         workers = min(max_workers, 50, len(universe_list))
@@ -94,17 +102,32 @@ def register_analysis_tools(
                 else:
                     failures += 1
 
-        results.sort(key=lambda r: r["final_score"], reverse=True)
+        # ── P0: separate insufficient_data from valid results ─────────
+        insufficient_data: list[dict] = []
+        valid_results: list[dict] = []
+        for r in results:
+            if r.get("status") == "insufficient_data" or r.get("final_score") is None:
+                insufficient_data.append(r)
+            else:
+                valid_results.append(r)
+
+        results = valid_results
+
+        # Only sort if results are non-empty and have final_score
+        if results:
+            results.sort(key=lambda r: r.get("final_score", 0) or 0, reverse=True)
         results = apply_macro_regime(results, regime)
-        results.sort(key=lambda r: r["final_score"], reverse=True)
+        if results:
+            results.sort(key=lambda r: r.get("final_score", 0) or 0, reverse=True)
 
         # ── Recompute pattern labels with dynamic thresholds ──
-        dyn_thresholds = compute_dynamic_thresholds(results)
-        logger.info("Dynamic thresholds for %s: %s", universe_name,
-                     {k: v for k, v in sorted(dyn_thresholds.items())})
-        recompute_patterns(results, dyn_thresholds)
+        if results:
+            dyn_thresholds = compute_dynamic_thresholds(results)
+            logger.info("Dynamic thresholds for %s: %s", universe_name,
+                         {k: v for k, v in sorted(dyn_thresholds.items())})
+            recompute_patterns(results, dyn_thresholds)
 
-        filtered = [r for r in results if r["final_score"] >= min_score]
+        filtered = [r for r in results if (r.get("final_score") or 0) >= min_score]
 
         elapsed = time.time() - t0
 
@@ -139,6 +162,7 @@ def register_analysis_tools(
 
         return {
             "universe": universe_name,
+            "universe_metadata": universe_meta,
             "timestamp": datetime.utcnow().isoformat(),
             "tickers_scanned": total,
             "tickers_passed": len(filtered),
@@ -146,6 +170,15 @@ def register_analysis_tools(
             "elapsed_seconds": round(elapsed, 1),
             "workers": workers,
             "failures": failures,
+            "insufficient_data_count": len(insufficient_data),
+            "insufficient_data_detail": [
+                {
+                    "ticker": d["symbol"],
+                    "history_bars": d.get("history_bars", 0),
+                    "required_bars": d.get("required_bars", 50),
+                }
+                for d in insufficient_data[:10]
+            ] if insufficient_data else [],
             "results": output_results,
         }
 
@@ -177,6 +210,32 @@ def register_analysis_tools(
         result = process_ticker(t_dict, fetch_news=fetch_news)
         if result is None:
             return {"error": f"Could not analyze ticker '{ticker}'. Check symbol or try later."}
+
+        # ── P0 short-history guard ──────────────────────────────────
+        if result.get("status") == "insufficient_data":
+            return {
+                "ticker": result["symbol"],
+                "timestamp": datetime.utcnow().isoformat(),
+                "composite_score": None,
+                "verdict": "insufficient_data",
+                "confidence": "N/A",
+                "signal_alignment": {"bullish": 0, "total": 0, "pct": 0.0},
+                "dimensions": [],
+                "modifiers": {},
+                "flags": [],
+                "pattern": "N/A",
+                "sector": "",
+                "price": 0.0,
+                "action_recommendation": {
+                    "action": "N/A",
+                    "reason": result.get("reason", "Dati insufficienti per l'analisi"),
+                    "confidence": "N/A",
+                },
+                "status": "insufficient_data",
+                "history_bars": result.get("history_bars", 0),
+                "required_bars": result.get("required_bars", 50),
+                "reason": result.get("reason", ""),
+            }
 
         options_context = None
         if include_options_context:
@@ -272,9 +331,13 @@ def _compute_verdict(
 ) -> dict[str, Any]:
     """Compute verdict driven by volume profile (OOS-validated signal).
 
-    Volume profile is the only module with real predictive power (IC +0.15 OOS).
-    The verdict is now based primarily on the VP score, with composite_score
-    providing context.
+    SEMANTICA MEAN-REVERSION (documentata, unica per tutto il sistema):
+    VP score è un composito mean-reversion con IC rank −0.068 OOS:
+      - VP ≤ 40 → BUY (forward return alto atteso)
+      - VP ≥ 60 → AVOID (forward return basso atteso)
+      - altrimenti HOLD
+
+    Il composite_score fornisce contesto ma non inverte il segnale VP.
     """
     bull_signals = 0
     total_signals = 0
@@ -315,15 +378,18 @@ def _compute_verdict(
 
     vp_score = result.get("profile_levels", {}).get("score", 50)
 
-    # Volume-profile-driven verdict (OOS-validated) with composite fallback
-    if vp_score >= 60 and composite_score >= 45:
-        verdict = "Buy (60d horizon)"
+    # Mean-reversion semantics (allineata a signal_engine.py):
+    # VP alto → AVOID, VP basso → BUY, VP medio → HOLD
+    if vp_score <= 40:
+        if composite_score >= 45:
+            verdict = "Long-Term Investment"
+        else:
+            verdict = "Buy (60d horizon) — context mixed"
     elif vp_score >= 60:
-        verdict = "Buy (60d horizon) — context mixed"
-    elif vp_score <= 40 and composite_score <= 55:
-        verdict = "Avoid / Sell"
-    elif vp_score <= 40:
-        verdict = "Avoid (60d horizon)"
+        if composite_score <= 55:
+            verdict = "Avoid / Wait"
+        else:
+            verdict = "Avoid (60d horizon)"
     elif composite_score >= 70:
         verdict = "Long-Term Investment"
     else:

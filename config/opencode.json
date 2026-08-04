@@ -3,6 +3,7 @@
   "model": "opencode-go/deepseek-v4-flash",
   "small_model": "opencode-go/deepseek-v4-flash",
   "subagent_depth": 2,
+  "default_agent": "router",
   "agent": {
     "build": {
       "mode": "primary",

@@ -117,7 +117,6 @@ class LGBMTrainer:
 
         idx = pd.to_datetime(df.index)
         start, end = idx.min(), idx.max()
-        total_months = (end.year - start.year) * 12 + (end.month - start.month) + 1
 
         step = vm
         splits: list[dict] = []
@@ -143,13 +142,55 @@ class LGBMTrainer:
             )
             start = start + pd.DateOffset(months=step)
 
-        # Apply embargo: drop first ``embargo`` training days of the *next*
-        # fold (purging the labels whose horizon leaks into validation).
-        if embargo > 0:
-            for sp in splits:
-                pass  # train/val already disjoint; embargo applied below
+        # ── Purging (label horizon) + embargo (gap aggiuntivo) ──
+        # Per Lopez de Prado AFML ch.7:
+        #   PURGE:  rimuovi training bar a posizione t se la label
+        #           a t "vede" dentro la validation (t+horizon >= val_start).
+        #           Il numero di barre da rimuovere è l'horizon della label.
+        #   EMBARGO: gap aggiuntivo in barre di trading dopo la validation,
+        #            per decorrelare serialmente training e test.
+        #
+        # Usiamo le posizioni intere nell'indice temporale (barre di trading),
+        # NON giorni di calendario. Questo garantisce che nessuna label
+        # training "sbordi" nella validation window.
+        purge_bars: int = int(self.target_config.get("horizon", 5))
+        embargo_bars: int = max(embargo, 0)
+        total_purge: int = purge_bars + embargo_bars
 
-        logger.info("Walk-forward produced %d folds", len(splits))
+        if total_purge > 0:
+            date_to_pos: dict = {d: i for i, d in enumerate(idx)}
+            purged_folds: list[dict] = []
+            for sp in splits:
+                val_start = sp["val_idx"].min()
+                val_start_pos = date_to_pos.get(val_start, 0)
+                cutoff_pos = val_start_pos - total_purge
+                purged_train = [
+                    d for d in sp["train_idx"]
+                    if date_to_pos.get(d, 0) < cutoff_pos
+                ]
+                if len(purged_train) < 21:
+                    logger.warning(
+                        "Fold %d: purging+embargo (%d+%d bars) leaves "
+                        "only %d training bars (<21), skipping fold",
+                        sp["fold_id"],
+                        purge_bars,
+                        embargo_bars,
+                        len(purged_train),
+                    )
+                    continue
+                sp["train_idx"] = pd.DatetimeIndex(purged_train)
+                sp["purge_bars"] = purge_bars
+                sp["embargo_bars"] = embargo_bars
+                purged_folds.append(sp)
+            splits = purged_folds
+
+        logger.info(
+            "Walk-forward produced %d folds "
+            "(purge=%d bars, embargo=%d bars)",
+            len(splits),
+            purge_bars if total_purge > 0 else 0,
+            embargo_bars if total_purge > 0 else 0,
+        )
         return splits
 
     # ------------------------------------------------------------------ #

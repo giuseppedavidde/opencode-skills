@@ -266,18 +266,34 @@ class StackingEnsemble:
         self.oof_index = meta_X.index
         logger.info("Meta-model training data: %d rows", len(meta_X))
 
-        self.meta_model = self._train_meta_model(meta_X, meta_y)
+        if len(meta_X) < 50:
+            raise RuntimeError(
+                f"Meta-model requires at least 50 OOF rows, got {len(meta_X)}. "
+                "Increase data history or reduce walk-forward parameters."
+            )
 
-        # --- Metriche ensemble ----------------------------------------- #
-        meta_preds = self.meta_model.predict(meta_X.fillna(0.0))
+        self.meta_model, meta_holdout_idx = self._train_meta_model(meta_X, meta_y)
+
+        # --- Metriche ensemble (SOLO su holdout temporale) ------------- #
+        meta_holdout_X = meta_X.loc[meta_holdout_idx]
+        meta_holdout_y = meta_y.loc[meta_holdout_idx]
+
+        if len(meta_holdout_X) < 10:
+            logger.warning(
+                "Meta holdout has only %d rows (<10) — metrics unreliable",
+                len(meta_holdout_X),
+            )
+
         meta_importance = dict(
             zip(meta_X.columns, self.meta_model.feature_importances_.tolist())
         )
 
-        corr, _ = spearmanr(meta_preds, meta_y.fillna(0.0))
+        # IC e Sharpe proxy sul SOLO holdout
+        holdout_preds = self.meta_model.predict(meta_holdout_X.fillna(0.0))
+        corr, _ = spearmanr(holdout_preds, meta_holdout_y.fillna(0.0))
         ic = float(corr) if np.isfinite(corr) else 0.0
 
-        pnl_proxy = meta_preds * meta_y.fillna(0.0).to_numpy()
+        pnl_proxy = holdout_preds * meta_holdout_y.fillna(0.0).to_numpy()
         std = float(np.std(pnl_proxy))
         sharpe_proxy = float(np.mean(pnl_proxy) / std) if std > 0 else 0.0
 
@@ -294,11 +310,19 @@ class StackingEnsemble:
                 "meta_sharpe_proxy": sharpe_proxy,
                 "spearman_ic": ic,
                 "n_meta_samples": int(len(meta_X)),
+                "n_holdout_samples": int(len(meta_holdout_X)),
                 "meta_feature_importance": meta_importance,
             },
         )
         self.result = result
-        logger.info("Stacking complete. Meta-model weights: %s", meta_importance)
+        logger.info(
+            "Stacking complete. Holdout IC=%.4f, Sharpe=%.4f (%d rows). "
+            "Meta-model weights: %s",
+            ic,
+            sharpe_proxy,
+            len(meta_holdout_X),
+            meta_importance,
+        )
         return result
 
     @staticmethod
@@ -330,13 +354,23 @@ class StackingEnsemble:
     def _train_meta_model(
         meta_X: pd.DataFrame,
         meta_y: pd.Series,
-    ) -> lgb.LGBMRegressor:
+    ) -> tuple[lgb.LGBMRegressor, pd.Index]:
         """Allena il meta-modello LightGBM sulle OOF predictions.
 
-        Holdout 20% finale per monitoring (no early stopping aggressivo:
-        il meta ha pochissime feature — fino a 5 (pred_tech, pred_macro,
-        pred_options, pred_decorr, pred_full) — quindi regolarizziamo attraverso
-        ``num_leaves=8`` + ``lambda_l2``).
+        Holdout 20% finale temporale: il meta-modello NON vede mai queste
+        righe durante il training. Le metriche ensemble (IC, Sharpe proxy)
+        vengono calcolate SOLO su questo holdout.
+
+        I 5 modelli base producono al massimo 5 colonne (pred_tech,
+        pred_macro, pred_options, pred_decorr, pred_full). Il meta-modello
+        è regolarizzato con ``num_leaves=8`` + ``lambda_l2`` per evitare
+        overfitting su poche feature.
+
+        Returns
+        -------
+        tuple
+            (meta_model, holdout_index) — il modello addestrato e l'indice
+            delle righe tenute fuori per le metriche ensemble.
         """
         meta_params = {
             "objective": "regression",
@@ -359,6 +393,7 @@ class StackingEnsemble:
         y_train = meta_y.iloc[:split_idx]
         X_val = meta_X.iloc[split_idx:]
         y_val = meta_y.iloc[split_idx:]
+        holdout_idx = meta_X.index[split_idx:]
 
         model = lgb.LGBMRegressor(**meta_params)
         if len(X_val) > 0:
@@ -370,7 +405,7 @@ class StackingEnsemble:
             )
         else:
             model.fit(X_train, y_train, callbacks=[lgb.log_evaluation(0)])
-        return model
+        return model, holdout_idx
 
     # ------------------------------------------------------------------ #
     # Prediction

@@ -14,6 +14,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from trading_mcp.data.universe import (
+    check_backtest_universe,
+    historical_universe_unavailable_message,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -94,6 +99,30 @@ def load_universe(name: str, tickers_dir: str) -> list[dict[str, str]]:
         name: Universe name (us_large, us_tech, italy, germany, france, uk, spain, all, crypto).
         tickers_dir: Path to directory containing ticker CSV files.
     """
+    return _load_universe_inner(name, tickers_dir)[0]
+
+
+def load_universe_with_meta(
+    name: str, tickers_dir: str
+) -> tuple[list[dict[str, str]], dict[str, Any]]:
+    """Load ticker universe from CSV with metadata.
+
+    P1 Aug 2026: Returns (tickers, metadata) where metadata includes
+    survivorship_warning, universe_type, as_of, and notes.
+
+    Returns:
+        Tuple of (ticker_list, universe_metadata_dict).
+    """
+    tickers, meta = _load_universe_inner(name, tickers_dir)
+    return tickers, meta
+
+
+def _load_universe_inner(
+    name: str, tickers_dir: str
+) -> tuple[list[dict[str, str]], dict[str, Any]]:
+    """Inner loader shared by load_universe and load_universe_with_meta."""
+    from trading_mcp.data.universe import get_universe_metadata
+
     data_dir = Path(tickers_dir)
 
     def _load_csv(path: Path, market: str | None = None) -> list[dict[str, str]]:
@@ -109,27 +138,46 @@ def load_universe(name: str, tickers_dir: str) -> list[dict[str, str]]:
         return rows
 
     if name == "crypto":
-        return _load_crypto_csv(data_dir)
-    if name == "all":
-        us_list = _load_csv(data_dir / "us_tickers.csv")
-        eu_list = _load_all_european(data_dir)
-        return us_list + eu_list
-    if name == "italy":
-        return _load_csv(data_dir / "italy_tickers.csv", "Italy") or _load_csv(data_dir / "europe_tickers.csv", "Italy")
-    if name == "germany":
-        return _load_csv(data_dir / "germany_tickers.csv", "Germany") or _load_csv(data_dir / "europe_tickers.csv", "Germany")
-    if name == "france":
-        return _load_csv(data_dir / "france_tickers.csv", "France") or _load_csv(data_dir / "europe_tickers.csv", "France")
-    if name == "uk":
-        return _load_csv(data_dir / "uk_tickers.csv", "UK") or _load_csv(data_dir / "europe_tickers.csv", "UK")
-    if name == "spain":
-        return _load_csv(data_dir / "spain_tickers.csv", "Spain") or _load_csv(data_dir / "europe_tickers.csv", "Spain")
-    if name == "us_tech":
+        tickers = _load_crypto_csv(data_dir)
+    elif name == "all":
+        tickers = (_load_csv(data_dir / "us_tickers.csv")
+                   + _load_all_european(data_dir))
+    elif name == "italy":
+        tickers = (_load_csv(data_dir / "italy_tickers.csv", "Italy")
+                   or _load_csv(data_dir / "europe_tickers.csv", "Italy"))
+    elif name == "germany":
+        tickers = (_load_csv(data_dir / "germany_tickers.csv", "Germany")
+                   or _load_csv(data_dir / "europe_tickers.csv", "Germany"))
+    elif name == "france":
+        tickers = (_load_csv(data_dir / "france_tickers.csv", "France")
+                   or _load_csv(data_dir / "europe_tickers.csv", "France"))
+    elif name == "uk":
+        tickers = (_load_csv(data_dir / "uk_tickers.csv", "UK")
+                   or _load_csv(data_dir / "europe_tickers.csv", "UK"))
+    elif name == "spain":
+        tickers = (_load_csv(data_dir / "spain_tickers.csv", "Spain")
+                   or _load_csv(data_dir / "europe_tickers.csv", "Spain"))
+    elif name == "us_tech":
         tech = _load_csv(data_dir / "us_tech_tickers.csv")
-        if tech:
-            return tech
-        return _load_csv(data_dir / "us_tickers.csv", "Information Technology")
-    return _load_csv(data_dir / "us_tickers.csv")
+        tickers = tech if tech else _load_csv(data_dir / "us_tickers.csv", "Information Technology")
+    else:
+        tickers = _load_csv(data_dir / "us_tickers.csv")
+
+    meta_obj = get_universe_metadata(name)
+    if meta_obj is None:
+        meta = {
+            "name": name,
+            "source": f"market-accumulation-scanner/data/{name}_tickers.csv",
+            "as_of": None,
+            "universe_type": "current",
+            "survivorship_warning": True,
+            "historical_universe_available": False,
+            "notes": [],
+        }
+    else:
+        meta = meta_obj.model_dump()
+
+    return tickers, meta
 
 
 def _load_all_european(data_dir: Path) -> list[dict[str, str]]:
@@ -437,12 +485,51 @@ def _fetch_with_retry(symbol: str, max_retries: int = 2) -> tuple:
 
 
 def process_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict[str, Any] | None:
-    """Process a single stock ticker through all analysis dimensions."""
+    """Process a single stock ticker through all analysis dimensions.
+
+    P0 Aug 2026: returns explicit short-history result (status='insufficient_data',
+    final_score=None) for < 50 valid OHLCV bars instead of None or crash.
+    """
     symbol = ticker_dict["symbol"]
     try:
         t, info, hist = _fetch_with_retry(symbol)
         if hist is None or (hasattr(hist, 'empty') and hist.empty):
             return None
+
+        # ── P0 short-history guard ──────────────────────────────────
+        _MIN_HISTORY_BARS = 50
+        valid_bars = len(hist.dropna())
+        if valid_bars < _MIN_HISTORY_BARS:
+            logger.warning(
+                "process_ticker: %s insufficient data — %d bars, need %d",
+                symbol, valid_bars, _MIN_HISTORY_BARS,
+            )
+            return {
+                "symbol": symbol,
+                "name": ticker_dict.get("name", symbol),
+                "market": ticker_dict.get("market", "US"),
+                "sector": "",
+                "price": 0.0,
+                "final_score": None,
+                "status": "insufficient_data",
+                "history_bars": valid_bars,
+                "required_bars": _MIN_HISTORY_BARS,
+                "reason": (
+                    f"Dati OHLCV insufficienti: {valid_bars} barre valide, "
+                    f"richieste almeno {_MIN_HISTORY_BARS} per il composite."
+                ),
+                "dimensions": [],
+                "sentiment_breakdown": None,
+                "modifiers": {},
+                "indicators": {},
+                "flags": [],
+                "pattern": "",
+                "competitive_score": 50,
+                "competitive_detail": "N/A",
+                "_si": 0.0,
+                "earnings_proximity": None,
+                "profile_levels": {},
+            }
 
         price = info.get("currentPrice")
         if price is None:
@@ -671,12 +758,38 @@ def process_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict
         logger.error("process_ticker failed for %s: %s", symbol, e)
         return None
 def process_crypto_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict[str, Any] | None:
-    """Process a single crypto ticker through analysis dimensions."""
+    """Process a single crypto ticker through analysis dimensions.
+
+    P0 Aug 2026: explicit short-history guard (< 50 bars).
+    """
     symbol = ticker_dict["symbol"]
     try:
         t, _, hist = data_provider.get_ticker(symbol, period="1y")
-        if hist.empty or len(hist) < 20:
-            return None
+        _MIN_BARS = 50
+        valid_bars = len(hist.dropna()) if hasattr(hist, 'dropna') else len(hist)
+        if hist.empty or valid_bars < _MIN_BARS:
+            return {
+                "symbol": symbol,
+                "name": ticker_dict["name"],
+                "market": "CRYPTO",
+                "sector": "Cryptocurrency",
+                "price": 0.0,
+                "final_score": None,
+                "status": "insufficient_data",
+                "history_bars": valid_bars,
+                "required_bars": _MIN_BARS,
+                "reason": (
+                    f"Dati OHLCV insufficienti: {valid_bars} barre valide, "
+                    f"richieste almeno {_MIN_BARS} per il composite."
+                ),
+                "dimensions": [],
+                "sentiment_breakdown": None,
+                "modifiers": {},
+                "indicators": {},
+                "flags": [],
+                "pattern": "",
+                "profile_levels": {},
+            }
 
         price = float(hist["Close"].iloc[-1])
         if price < 0.01:

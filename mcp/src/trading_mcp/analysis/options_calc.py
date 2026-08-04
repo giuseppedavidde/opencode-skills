@@ -11,8 +11,8 @@ import numpy as np
 import pandas as pd
 from scipy.stats import norm
 
-from trading_mcp.config import RISK_FREE_RATE
 from trading_mcp.data.provider import data_provider
+from trading_mcp.data.risk_free import get_risk_free_rate
 
 def _fetch_chains_parallel(ticker: str, expiries: list[str]) -> dict[str, Any]:
     """Fetch multiple option chains via DataProvider (parallel, cached)."""
@@ -168,7 +168,8 @@ def analyze_options_position(
     # Per-leg IV, indexed by leg position, reused by the multi-expiry payoff.
     leg_iv: dict[int, float] = {}
 
-    r = RISK_FREE_RATE
+    rate_snapshot = get_risk_free_rate()
+    r = rate_snapshot.value
 
     for i, leg in enumerate(parsed_legs):
         eff = eff_expiries[i]
@@ -258,6 +259,13 @@ def analyze_options_position(
         "breakevens": breakevens,
         "probabilities": probabilities,
         "recommendations": recommendations,
+        "risk_free_rate": {
+            "value": round(r, 6),
+            "source": rate_snapshot.source_ticker,
+            "as_of": rate_snapshot.as_of,
+            "is_live": rate_snapshot.is_live,
+            "fallback_reason": rate_snapshot.fallback_reason,
+        },
     }
 
     # Warning: global expiry auto-selected and actually used by at least one leg

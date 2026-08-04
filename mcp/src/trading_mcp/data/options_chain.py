@@ -14,8 +14,8 @@ import numpy as np
 import pandas as pd
 from scipy.stats import norm
 
-from trading_mcp.config import RISK_FREE_RATE
 from trading_mcp.data.provider import data_provider
+from trading_mcp.data.risk_free import get_risk_free_rate
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +139,8 @@ def fetch_options_chain(
 
     tte = _time_to_expiry(selected_expiry)
     sigma = live_iv or 0.3
-    r = RISK_FREE_RATE
+    rate_snapshot = get_risk_free_rate()
+    r = rate_snapshot.value
 
     calls_greeks = _compute_chain_greeks(spot, calls_df, tte, r, sigma, "call")
     puts_greeks = _compute_chain_greeks(spot, puts_df, tte, r, sigma, "put")
@@ -160,6 +161,13 @@ def fetch_options_chain(
         "iv_metrics": iv_metrics,
         "_source": "live",
         "_fallback_note": None,
+        "risk_free_rate": {
+            "value": round(r, 6),
+            "source": rate_snapshot.source_ticker,
+            "as_of": rate_snapshot.as_of,
+            "is_live": rate_snapshot.is_live,
+            "fallback_reason": rate_snapshot.fallback_reason,
+        },
     }
 
     _save_cached_chain(ticker, expiry, result)
@@ -192,7 +200,8 @@ def _fallback_response(ticker: str, spot: float, live_iv: Any, error_msg: str) -
 
     tte = _time_to_expiry(selected_expiry)
     sigma = info.get("impliedVolatility", 0.3)
-    r = RISK_FREE_RATE
+    rate_snap2 = get_risk_free_rate()
+    r = rate_snap2.value
 
     calls_greeks = _compute_chain_greeks(spot, calls_df, tte, r, sigma, "call")
     puts_greeks = _compute_chain_greeks(spot, puts_df, tte, r, sigma, "put")

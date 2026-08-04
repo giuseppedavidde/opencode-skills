@@ -316,3 +316,18 @@ class TradeLogEntry(BaseModel):
     pnl_pct: Optional[float] = None
     notes: Optional[str] = None
     is_open: bool = True
+
+
+class DataSufficiency(BaseModel):
+    """Explicit data-sufficiency check result (P0 Aug 2026).
+
+    Used by scanner, analyze_stock, and bakshi_signals to propagate
+    explicit status when OHLCV history is too short — never silently
+    produce scores on insufficient data.
+    """
+
+    status: str = "ok"
+    available_bars: int = 0
+    required_bars: int = 50
+    reason: str = ""
+    diagnostic_only: bool = False
