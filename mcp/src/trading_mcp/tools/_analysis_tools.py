@@ -278,6 +278,15 @@ def register_analysis_tools(
             "price": result.get("price", 0.0),
             "action_recommendation": action_obj,
         }
+
+        # ── P2: data freshness ─────────────────────────────────────
+        try:
+            from trading_mcp.data.provider import data_provider as dp
+            freshness_info = dp.get_data_freshness(ticker, data_type="stock")
+            output["data_freshness"] = freshness_info.get("freshness")
+            output["last_data_date"] = freshness_info.get("last_data_date")
+        except Exception:
+            pass
         if verbose:
             output["indicators"] = result.get("indicators", {})
             output["sentiment_breakdown"] = result.get("sentiment_breakdown")

@@ -1,4 +1,11 @@
-"""Meta-labeling analysis: TrendlineBreakout quality scoring with ML filtering."""
+"""Meta-labeling analysis: TrendlineBreakout quality scoring with ML filtering.
+
+P2 August 2026: replaced full-series training with explicit temporal split.
+The model is trained ONLY on dates <= cutoff and evaluated ONLY on
+dates > cutoff. eval_start, eval_end, roc_auc, accuracy, baseline_accuracy
+are reported. If n_eval is insufficient, metric_status='insufficient_data'
+and no metrics are exposed as valid.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +16,13 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+try:
+    from lightgbm import LGBMClassifier
+    _LGBM_AVAILABLE = True
+except ImportError:
+    _LGBM_AVAILABLE = False
+
 from sklearn.ensemble import RandomForestClassifier
 
 logger = logging.getLogger(__name__)
@@ -55,7 +69,7 @@ def generate_features(hist: pd.DataFrame, lookback: int = 30) -> dict:  # pylint
     resist_slope = coefs[0]
 
     # Feature 1: resist_s_normalized
-    resist_s_normalized = resist_slope / atr_val if atr_val > 0 else 0.0
+    resist_s_normalized = float(resist_slope / atr_val) if atr_val > 0 else 0.0
 
     # Feature 2: tl_error
     err = float(np.mean(line_vals - window))
@@ -88,7 +102,7 @@ def generate_features(hist: pd.DataFrame, lookback: int = 30) -> dict:  # pylint
     # Breakout detection
     current_resist = coefs[1] + (lookback - 1) * coefs[0]
     current_close_log = float(log_close[-1])
-    breakout = current_close_log > current_resist
+    breakout = bool(current_close_log > current_resist)
 
     return {
         "features": {
@@ -104,28 +118,159 @@ def generate_features(hist: pd.DataFrame, lookback: int = 30) -> dict:  # pylint
 
 
 class MetaLabelModel:
-    """Meta-labeling model: RandomForest che filtra i segnali."""
+    """Meta-labeling model: RandomForest (or LightGBM if available) che filtra i segnali.
+
+    P2: supports temporal split training. ``train_temporal`` trains on
+    data <= cutoff, evaluates on data > cutoff. Metrics are computed
+    only on the eval set.
+    """
 
     MODEL_DIR = Path("/home/giuseppe/.config/opencode/models")
 
     def __init__(self, ticker: str):
         self.ticker = ticker
         self.model_path = self.MODEL_DIR / f"metalabel_{ticker}.pkl"
-        self.model: RandomForestClassifier | None = None
+        self.model: RandomForestClassifier | LGBMClassifier | None = None
+        self._last_eval_metrics: dict | None = None
         self._load_model()
 
     def train(self, features_df: pd.DataFrame, labels: pd.Series) -> None:
-        """Addestra il modello su dati storici."""
+        """Addestra il modello su dati storici (senza split temporale).
+
+        DEPRECATED per training: usa ``train_temporal`` invece.
+        Mantenuto per backward compatibility.
+        """
         self.MODEL_DIR.mkdir(parents=True, exist_ok=True)
-        self.model = RandomForestClassifier(
-            n_estimators=500,
-            max_depth=3,
-            random_state=69420,
-            class_weight="balanced",
-        )
+        if _LGBM_AVAILABLE:
+            self.model = LGBMClassifier(
+                n_estimators=200,
+                max_depth=3,
+                random_state=69420,
+                class_weight="balanced",
+                verbose=-1,
+            )
+        else:
+            self.model = RandomForestClassifier(
+                n_estimators=500,
+                max_depth=3,
+                random_state=69420,
+                class_weight="balanced",
+            )
         self.model.fit(features_df.values, labels.values)
         with open(self.model_path, "wb") as f:
             pickle.dump(self.model, f)
+
+    def train_temporal(
+        self,
+        features_df: pd.DataFrame,
+        labels: pd.Series,
+        dates: pd.Series,
+        cutoff_date: str,
+        min_train: int = 20,
+        min_eval: int = 10,
+    ) -> dict:
+        """Addestra con split temporale esplicito.
+
+        Il modello e' addestrato SOLO su date <= cutoff_date e
+        valutato SOLO su date > cutoff_date. Nessun dato futuro
+        entra nel training.
+
+        Args:
+            features_df: DataFrame con feature per ogni sample.
+            labels: Series di label 0/1.
+            dates: Series di date allineate a features_df.index.
+            cutoff_date: Data di cutoff (YYYY-MM-DD).
+            min_train: Minimi sample di training richiesti.
+            min_eval: Minimi sample di eval richiesti.
+
+        Returns:
+            dict con eval_start, eval_end, n_train, n_eval,
+            roc_auc, accuracy, baseline_accuracy, metric_status.
+            Se n_eval insufficiente: metric_status='insufficient_data'.
+        """
+        from sklearn.metrics import accuracy_score, roc_auc_score
+
+        train_mask = dates <= pd.Timestamp(cutoff_date)
+        eval_mask = dates > pd.Timestamp(cutoff_date)
+
+        X_train = features_df.values[train_mask.values]
+        y_train = labels.values[train_mask.values]
+        X_eval = features_df.values[eval_mask.values]
+        y_eval = labels.values[eval_mask.values]
+
+        eval_dates = dates[eval_mask]
+        eval_start = str(eval_dates.min().date()) if len(eval_dates) > 0 else "N/A"
+        eval_end = str(eval_dates.max().date()) if len(eval_dates) > 0 else "N/A"
+
+        n_train = len(X_train)
+        n_eval = len(X_eval)
+
+        if n_train < min_train:
+            return {
+                "eval_start": eval_start,
+                "eval_end": eval_end,
+                "n_train": n_train,
+                "n_eval": n_eval,
+                "roc_auc": None,
+                "accuracy": None,
+                "baseline_accuracy": None,
+                "metric_status": "insufficient_data",
+                "reason": f"n_train={n_train} < min_train={min_train}",
+            }
+
+        if n_eval < min_eval:
+            self._last_eval_metrics = {
+                "eval_start": eval_start,
+                "eval_end": eval_end,
+                "n_train": n_train,
+                "n_eval": n_eval,
+                "roc_auc": None,
+                "accuracy": None,
+                "baseline_accuracy": None,
+                "metric_status": "insufficient_data",
+                "reason": f"n_eval={n_eval} < min_eval={min_eval}",
+            }
+            return self._last_eval_metrics
+
+        self.MODEL_DIR.mkdir(parents=True, exist_ok=True)
+        if _LGBM_AVAILABLE:
+            self.model = LGBMClassifier(
+                n_estimators=200,
+                max_depth=3,
+                random_state=69420,
+                class_weight="balanced",
+                verbose=-1,
+            )
+        else:
+            self.model = RandomForestClassifier(
+                n_estimators=500,
+                max_depth=3,
+                random_state=69420,
+                class_weight="balanced",
+            )
+        self.model.fit(X_train, y_train)
+
+        y_pred = self.model.predict(X_eval)
+        y_prob = self.model.predict_proba(X_eval)[:, 1]
+
+        accuracy = float(accuracy_score(y_eval, y_pred))
+        baseline_accuracy = float(max(np.mean(y_eval), 1.0 - np.mean(y_eval)))
+        roc_auc = float(roc_auc_score(y_eval, y_prob))
+
+        with open(self.model_path, "wb") as f:
+            pickle.dump(self.model, f)
+
+        self._last_eval_metrics = {
+            "eval_start": eval_start,
+            "eval_end": eval_end,
+            "n_train": n_train,
+            "n_eval": n_eval,
+            "roc_auc": round(roc_auc, 4),
+            "accuracy": round(accuracy, 4),
+            "baseline_accuracy": round(baseline_accuracy, 4),
+            "metric_status": "ok",
+        }
+        return self._last_eval_metrics
 
     def predict(self, features: dict) -> tuple[float, float]:
         """Restituisce (prob_win: 0-1, prob_score: 0-100)."""
@@ -151,10 +296,18 @@ class MetaLabelModel:
         return age > 7 * 86400
 
 
-def _auto_train(ticker: str, hist: pd.DataFrame) -> None:
-    """Auto-train del meta-model sul ticker specifico."""
+def _auto_train(ticker: str, hist: pd.DataFrame) -> dict | None:
+    """Auto-train del meta-model con split temporale esplicito.
+
+    Genera feature/label su tutto il dataset, poi usa train_temporal
+    per addestrare solo su date <= cutoff e valutare su date > cutoff.
+
+    Returns:
+        dict con metriche di eval o None se dati insufficienti.
+    """
     features_list = []
     labels_list = []
+    dates_list = []
 
     close = hist["Close"].values
     for i in range(60, len(close) - 10):
@@ -165,20 +318,51 @@ def _auto_train(ticker: str, hist: pd.DataFrame) -> None:
             label = 1 if future_ret > 0.02 else 0
             features_list.append(list(feat["features"].values()))
             labels_list.append(label)
+            dates_list.append(hist.index[i])
 
-    if len(features_list) >= 20:
-        df = pd.DataFrame(
-            features_list,
-            columns=["resist_s", "tl_err", "vol", "max_dist", "adx"],
+    if len(features_list) < 30:
+        logger.warning(
+            "Meta-label: insufficient samples for %s (%d)", ticker, len(features_list)
         )
-        mml = MetaLabelModel(ticker)
-        mml.train(df, pd.Series(labels_list))
+        return None
+
+    df = pd.DataFrame(
+        features_list,
+        columns=["resist_s", "tl_err", "vol", "max_dist", "adx"],
+    )
+    labels_series = pd.Series(labels_list, index=df.index)
+    dates_series = pd.Series(dates_list, index=df.index)
+
+    # Temporal split: train on first 70%, eval on last 30%
+    n_total = len(df)
+    cutoff_idx = int(n_total * 0.70)
+    cutoff_date = str(dates_series.iloc[cutoff_idx].date())
+
+    mml = MetaLabelModel(ticker)
+    metrics = mml.train_temporal(
+        df, labels_series, dates_series, cutoff_date,
+        min_train=20, min_eval=10,
+    )
+
+    if metrics.get("metric_status") == "ok":
         logger.info(
-            "Meta-label model trained for %s: %d samples, %d wins",
+            "Meta-label model trained for %s: n_train=%d, n_eval=%d, "
+            "roc_auc=%.4f, accuracy=%.4f, eval=%s to %s",
             ticker,
-            len(features_list),
-            sum(labels_list),
+            metrics["n_train"],
+            metrics["n_eval"],
+            metrics["roc_auc"],
+            metrics["accuracy"],
+            metrics["eval_start"],
+            metrics["eval_end"],
         )
+    else:
+        logger.warning(
+            "Meta-label training insufficient for %s: %s",
+            ticker, metrics.get("reason", "unknown"),
+        )
+
+    return metrics
 
 
 def compute_meta_label(hist: pd.DataFrame) -> tuple[int, str]:
@@ -256,12 +440,15 @@ def compute_meta_label(hist: pd.DataFrame) -> tuple[int, str]:
 
 
 def get_meta_label_setup(hist: pd.DataFrame) -> dict:
-    """Helper che restituisce un dict completo con setup meta-label."""
+    """Helper che restituisce un dict completo con setup meta-label.
+
+    P2: include last_eval_metrics se disponibili.
+    """
     feat = generate_features(hist)
     ticker = hist.attrs.get("ticker", "UNKNOWN")
     mml = MetaLabelModel(ticker)
     prob, prob_score = mml.predict(feat["features"])
-    return {
+    result = {
         "breakout": feat["breakout"],
         "features": feat["features"],
         "ml_probability": prob,
@@ -269,3 +456,6 @@ def get_meta_label_setup(hist: pd.DataFrame) -> dict:
         "model_trained": mml.model is not None,
         "atr": feat["atr"],
     }
+    if mml._last_eval_metrics is not None:
+        result["last_eval_metrics"] = mml._last_eval_metrics
+    return result

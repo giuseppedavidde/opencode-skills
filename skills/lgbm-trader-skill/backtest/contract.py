@@ -9,6 +9,10 @@ P0 August 2026: added explicit status for short-history scenarios.
 ``build_predictions_from_ohlcv`` now returns a ``BacktestBuildResult``
 with ``status`` (``ok`` / ``insufficient_data``), per-horizon capability
 flags, and a ``reason`` string — no more silent empty lists.
+
+P2 August 2026: added ``CostModel`` with realistic defaults for equity
+and options markets, propagated through ``BacktestConfig.apply_costs``.
+Net metrics in ``HorizonResult`` are estimates, NOT exact measures.
 """
 
 from __future__ import annotations
@@ -27,6 +31,73 @@ class BacktestBuildStatus(str, Enum):
     """Explicit build status — never hide insufficiency as empty list."""
     OK = "ok"
     INSUFFICIENT_DATA = "insufficient_data"
+
+
+# ── Cost Model ──────────────────────────────────────────────────────────
+
+class CostModel(BaseModel):
+    """Transaction cost model with realistic conservative defaults.
+
+    Costs are applied per position change (entering/exiting units).
+    For equity backtests, the round-trip bps total is approximate:
+    entering costs + exiting costs = 2 * (slippage_bps + spread_bps).
+
+    For options, ``commission_per_contract`` is added per leg per
+    contract — use ``round_trip=True`` to double it for full cycle.
+
+    Attributes:
+        commission_per_contract: Commission per option contract (IBKR pro ~$0.65).
+        slippage_bps: Slippage per side in basis points (1 bps = 0.01%).
+        spread_bps: Half-spread in basis points per side.
+        round_trip: If True, costs are doubled (enter + exit).
+    """
+
+    commission_per_contract: float = Field(
+        default=0.65, ge=0.0,
+        description="Commission per option contract (e.g. $0.65 IBKR pro)"
+    )
+    slippage_bps: float = Field(
+        default=5.0, ge=0.0,
+        description="Slippage per side in bp (5bp = 0.05%)"
+    )
+    spread_bps: float = Field(
+        default=5.0, ge=0.0,
+        description="Half-spread per side in bp (5bp = 0.05%)"
+    )
+    round_trip: bool = Field(
+        default=True,
+        description="Double costs for full enter+exit cycle"
+    )
+
+    def per_side_bps(self) -> float:
+        """Total cost per side (one direction)."""
+        return self.slippage_bps + self.spread_bps
+
+    def total_bps(self) -> float:
+        """Total round-trip cost in basis points."""
+        factor = 2.0 if self.round_trip else 1.0
+        return factor * self.per_side_bps()
+
+    def per_share_cost(self, price: float) -> float:
+        """Estimates per-share cost for a given stock price."""
+        return price * self.total_bps() / 10000.0
+
+    def assumptions_dict(self) -> dict:
+        """Documented cost assumptions for transparency."""
+        return {
+            "commission_per_contract": self.commission_per_contract,
+            "slippage_bps_per_side": self.slippage_bps,
+            "spread_bps_per_side": self.spread_bps,
+            "round_trip": self.round_trip,
+            "total_round_trip_bps": self.total_bps(),
+            "per_side_bps": self.per_side_bps(),
+            "note": (
+                "Costs are estimates based on typical retail rates "
+                "(IBKR Pro tier). Actual costs depend on execution "
+                "quality, market conditions, and broker-specific fees. "
+                "Net metrics are ESTIMATES, not exact measures."
+            ),
+        }
 
 
 # ── Config ─────────────────────────────────────────────────────────────
@@ -50,6 +121,10 @@ class BacktestConfig(BaseModel):
         permutation_control: Enable IC permutation sanity check.
         diagnostic_only: If True, results are flagged as diagnostic
             and NOT comparable to canonical 365d calibration.
+        apply_costs: If True, compute net metrics using ``cost_model``.
+            Defaults to False (gross-only, backward compatible).
+        cost_model: Transaction cost model for net metric estimation.
+            Only used when ``apply_costs=True``.
     """
 
     horizons_days: list[int] = Field(default_factory=lambda: [20, 60, 180])
@@ -60,6 +135,8 @@ class BacktestConfig(BaseModel):
     min_horizon_observations: int = 30
     permutation_control: bool = True
     diagnostic_only: bool = False
+    apply_costs: bool = False
+    cost_model: CostModel = Field(default_factory=CostModel)
 
 
 # ── Prediction record ──────────────────────────────────────────────────
@@ -154,6 +231,13 @@ class HorizonResult(BaseModel):
         supported: Whether this horizon had enough data.
         required_observations: Minimum observations needed (default 30).
         status: ``ok`` or ``insufficient_data``.
+
+    Fields added P2 (net metrics, only when ``apply_costs=True``):
+        Net metrics are ESTIMATES using the cost model. They appear
+        only when ``apply_costs`` is enabled. When costs=0 or
+        cost_model is zero-cost, net == gross.
+        costs_applied: Whether costs were subtracted.
+        cost_assumptions: Documented assumptions from CostModel.
     """
 
     horizon_days: int
@@ -171,6 +255,14 @@ class HorizonResult(BaseModel):
 
     quintile_returns: dict[str, float] = Field(default_factory=dict)
 
+    # ── P2: net metrics (estimates, only when apply_costs=True) ──────
+    hit_rate_net: Optional[float] = None
+    mean_return_pct_net: Optional[float] = None
+    quintile_spread_net: Optional[float] = None
+    quintile_returns_net: Optional[dict[str, float]] = None
+    costs_applied: bool = False
+    cost_assumptions: Optional[dict] = None
+
 
 # ── Aggregate result ───────────────────────────────────────────────────
 
@@ -184,6 +276,9 @@ class BacktestResult(BaseModel):
         limits: Known limitations of this backtest.
         diagnostic_only: True if a short VP window or diagnostic mode.
         build_status: OK or insufficient_data from the build phase.
+        costs_applied: P2 — whether net metrics were computed.
+        data_freshness: P2 — freshness label for the input data.
+        last_data_date: P2 — date of the last bar used.
     """
 
     ticker: str
@@ -197,6 +292,9 @@ class BacktestResult(BaseModel):
     created_at: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
+    costs_applied: bool = False
+    data_freshness: Optional[str] = None
+    last_data_date: Optional[str] = None
 
 
 # ── Builder function (P0 v2: explicit status) ─────────────────────────

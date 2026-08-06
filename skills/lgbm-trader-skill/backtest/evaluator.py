@@ -6,6 +6,11 @@ that timestamp. The evaluator simply aggregates and ranks.
 
 P0 August 2026: per-horizon ``supported`` / ``insufficient_data`` flags,
 ``required_observations`` threshold, diagnostic-only labelling.
+
+P2 August 2026: net metrics (after trading costs) when
+``BacktestConfig.apply_costs=True``. Costs are modelled as a fraction of
+position turnover per the ``CostModel``. Net metrics are ESTIMATES,
+never presented as exact measures.
 """
 
 from __future__ import annotations
@@ -187,6 +192,52 @@ def evaluate(
             base_p, _ = pearsonr(shuffled, returns)
             perm_ic_pearson = float(base_p) if np.isfinite(base_p) else None
 
+        # ── P2: net metrics (cost estimation) ──────────────────────
+        hit_rate_net = None
+        mean_return_pct_net = None
+        quintile_spread_net = None
+        quintile_returns_net = None
+        costs_applied = False
+        cost_assumptions = None
+
+        if config.apply_costs:
+            costs_applied = True
+            cost_assumptions = config.cost_model.assumptions_dict()
+            cost_bps = config.cost_model.total_bps() / 10000.0
+
+            if n >= 2:
+                # Sort by date to simulate sequential position changes
+                h_sorted = h_df.sort_values("as_of")
+                scores_sorted = h_sorted["signal_score"].to_numpy(dtype=float)
+                rets_sorted = h_sorted["forward_return"].to_numpy(dtype=float)
+
+                # Cost is proportional to |score_t - score_t-1| / 50
+                # (normalised position change) * cost_bps
+                score_norm = (scores_sorted - 50.0) / 50.0
+                position_changes = np.diff(score_norm, prepend=score_norm[0])
+                cost_per_obs = np.abs(position_changes) * cost_bps
+                net_returns = rets_sorted - cost_per_obs
+
+                hit_rate_net = float(np.mean(net_returns > 0))
+                mean_return_pct_net = float(np.mean(net_returns)) * 100.0
+
+                q_edges = np.percentile(scores_sorted, [0, 20, 40, 60, 80, 100])
+                q_labels_net = ["Q1", "Q2", "Q3", "Q4", "Q5"]
+                quintile_returns_net = {}
+                for qi in range(5):
+                    mask = (scores_sorted >= q_edges[qi]) & (scores_sorted < q_edges[qi + 1])
+                    if qi == 4:
+                        mask = (scores_sorted >= q_edges[qi]) & (scores_sorted <= q_edges[qi + 1])
+                    q_ret = net_returns[mask]
+                    quintile_returns_net[q_labels_net[qi]] = (
+                        float(np.mean(q_ret)) * 100.0 if len(q_ret) > 0 else 0.0
+                    )
+
+                if all(k in quintile_returns_net for k in ("Q5", "Q1")):
+                    quintile_spread_net = round(
+                        quintile_returns_net["Q5"] - quintile_returns_net["Q1"], 4
+                    )
+
         horizon_results.append(
             HorizonResult(
                 horizon_days=h,
@@ -202,17 +253,37 @@ def evaluate(
                 quintile_returns=quintile_returns,
                 permutation_ic_rank=perm_ic_rank,
                 permutation_ic_pearson=perm_ic_pearson,
+                # P2 net metrics
+                hit_rate_net=round(hit_rate_net, 4) if hit_rate_net is not None else None,
+                mean_return_pct_net=(
+                    round(mean_return_pct_net, 4)
+                    if mean_return_pct_net is not None else None
+                ),
+                quintile_spread_net=quintile_spread_net,
+                quintile_returns_net=quintile_returns_net,
+                costs_applied=costs_applied,
+                cost_assumptions=cost_assumptions,
             )
         )
 
     limits: list[str] = [
         "OHLCV-only: no fundamental/macro/options data used in signal generation",
         "Point-in-time: signals use only data available at as_of (no future leakage)",
-        "Trading costs/slippage not modeled (position-level backtest in engine.py)",
         "Signal is the CANONICAL VP composite score from volume_profile.py",
         "Permutation control IC is a sanity check, NOT an investable baseline",
         "Results are diagnostic, not predictive. OOS on real data needed for validation.",
     ]
+
+    if config.apply_costs:
+        cost_item = (
+            f"Trading costs ESTIMATED: {config.cost_model.total_bps():.0f}bps "
+            f"round-trip (slippage={config.cost_model.slippage_bps:.0f}bps, "
+            f"spread={config.cost_model.spread_bps:.0f}bps per side). "
+            f"Net metrics are estimates, not exact measures."
+        )
+        limits.insert(2, cost_item)
+    else:
+        limits.insert(2, "Trading costs/slippage not modeled (gross returns only)")
 
     if config.diagnostic_only or (build_result and build_result.diagnostic_only):
         limits.insert(0, (
@@ -237,4 +308,6 @@ def evaluate(
             build_result.status.value if build_result
             else BacktestBuildStatus.OK.value
         ),
+        costs_applied=config.apply_costs,
+        last_data_date=as_of_max if as_of_max else None,
     )

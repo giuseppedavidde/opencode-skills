@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -19,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MODEL_DIR = ROOT / "models" / "saved"
 PREDICT_SCRIPT = ROOT / "scripts" / "predict_live.py"
 STACKING_SCRIPT = ROOT / "scripts" / "run_stacking.py"
-VENV_PYTHON = "/tmp/opencode/.venv/bin/python3"
+VENV_PYTHON = os.environ.get("LGBM_VENV_PYTHON", sys.executable)
 
 
 def _find_models(ticker: str) -> list[Path]:

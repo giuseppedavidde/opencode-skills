@@ -8,6 +8,10 @@ Ordine provider:
 2. yfinance (sempre disponibile)
 3. Alpha Vantage (enrichment, se chiave presente e non rate-limited)
 4. FMP (fallback, se disponibile)
+
+P2 August 2026: added ``freshness_label`` utility with tiers (live, recent,
+stale, cached) and ``data_freshness`` / ``last_data_date`` fields in
+outputs.
 """
 
 from __future__ import annotations
@@ -22,6 +26,80 @@ import pandas as pd
 import yfinance as yf
 
 logger = logging.getLogger(__name__)
+
+
+# ── Data freshness utility ────────────────────────────────────────────
+
+_DEFAULT_FRESHNESS_THRESHOLDS: dict[str, dict[str, float]] = {
+    "stock": {"live": 300, "recent": 3600, "stale": 86400},
+    "crypto": {"live": 300, "recent": 3600, "stale": 86400},
+    "options": {"live": 60, "recent": 300, "stale": 3600},
+    "macro": {"live": 300, "recent": 1200, "stale": 7200},
+}
+
+
+def freshness_label(
+    last_ts: float | None,
+    now: float | None = None,
+    thresholds: dict[str, float] | None = None,
+) -> str:
+    """Classifies data freshness based on age.
+
+    Args:
+        last_ts: Unix timestamp of the last data point (or tz-aware
+            datetime). If None → 'cached'.
+        now: Current timestamp (defaults to ``time.time()``).
+        thresholds: Dict with ``live``, ``recent``, ``stale`` keys
+            in seconds. Defaults to stock thresholds.
+
+    Returns:
+        One of: ``'live'``, ``'recent'``, ``'stale'``, ``'cached'``.
+    """
+    if last_ts is None:
+        return "cached"
+
+    if now is None:
+        now = time.time()
+
+    if isinstance(last_ts, str):
+        try:
+            from datetime import datetime as _dt
+            last_dt = _dt.fromisoformat(last_ts.replace("Z", "+00:00"))
+            last_ts = last_dt.timestamp()
+        except (ValueError, TypeError):
+            return "cached"
+
+    if thresholds is None:
+        thresholds = _DEFAULT_FRESHNESS_THRESHOLDS["stock"]
+
+    age = now - last_ts
+    if age < thresholds["live"]:
+        return "live"
+    if age < thresholds["recent"]:
+        return "recent"
+    if age < thresholds["stale"]:
+        return "stale"
+    return "cached"
+
+
+def get_last_data_date(hist: pd.DataFrame | None) -> str | None:
+    """Extracts the date of the last bar from OHLCV history.
+
+    Args:
+        hist: DataFrame with DatetimeIndex.
+
+    Returns:
+        ISO date string or None if no data.
+    """
+    if hist is None or hist.empty:
+        return None
+    try:
+        last = hist.index[-1]
+        if hasattr(last, "date"):
+            return str(last.date())
+        return str(last)[:10]
+    except (IndexError, AttributeError):
+        return None
 
 
 @dataclass
@@ -343,6 +421,38 @@ class DataProvider:
             "total_entries": total_entries,
             "fresh_entries": fresh_entries,
             "stale_entries": stale_entries,
+        }
+
+    def get_data_freshness(
+        self, symbol: str, data_type: str = "stock"
+    ) -> dict[str, str | None]:
+        """Get freshness label and last data date for a ticker.
+
+        Args:
+            symbol: Stock ticker (e.g. 'AAPL').
+            data_type: 'stock', 'crypto', 'options', or 'macro'.
+
+        Returns:
+            dict with ``freshness`` label and ``last_data_date``.
+        """
+        tc = self._cache.get(symbol)
+        thresholds = _DEFAULT_FRESHNESS_THRESHOLDS.get(
+            data_type, _DEFAULT_FRESHNESS_THRESHOLDS["stock"]
+        )
+
+        last_data_date: str | None = None
+        last_ts: float | None = None
+
+        if tc is not None and tc.hist is not None and tc.hist.has_data:
+            hist_data = tc.hist.data
+            if isinstance(hist_data, pd.DataFrame) and not hist_data.empty:
+                last_data_date = get_last_data_date(hist_data)
+                last_ts = tc.hist.timestamp
+
+        label = freshness_label(last_ts, thresholds=thresholds)
+        return {
+            "freshness": label,
+            "last_data_date": last_data_date,
         }
 
     # ── Internal helpers ───────────────────────────────────────────────

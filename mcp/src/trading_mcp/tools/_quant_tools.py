@@ -6,6 +6,7 @@ options_expirations E options_chain. Nessuna chiamata yfinance diretta.
 
 from __future__ import annotations
 
+import json
 import logging
 import sys
 from datetime import datetime
@@ -117,6 +118,9 @@ class BakshiResult(BaseModel):
     P1 Aug 2026: added calibration_status, calibration_source,
     calibrated flags. When no ticker-specific VRP history exists,
     calibrated=False and calibrated_vrp=None.
+
+    P2 Aug 2026: added estimated_costs with per-contract commission
+    and slippage estimates for delta-hedged positions.
     """
     ticker: str
     spot: float | None = None
@@ -137,6 +141,7 @@ class BakshiResult(BaseModel):
     calibrated_vrp: float | None = None
     rate_source: str | None = None
     rate_as_of: str | None = None
+    estimated_costs: dict[str, Any] | None = None
 
 class LGBMResult(BaseModel):
     """Output del tool lgbm_predict.
@@ -1269,6 +1274,28 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
                 )
             )
 
+        # ── P2: ticker-specific VRP calibration artifact ─────────────
+        calibrated_vrp = None
+        calibration_status = "not_calibrated"
+        calibration_source = _VRP_CALIBRATION_SOURCE
+        try:
+            vrp_artifact_path = (
+                Path.home() / ".config/opencode/calibrations" /
+                f"vrp_{ticker}.json"
+            )
+            if vrp_artifact_path.exists():
+                with open(vrp_artifact_path) as af:
+                    vrp_art = json.load(af)
+                if vrp_art.get("status") in ("calibrated", "weak_calibrated"):
+                    calibrated_vrp = (
+                        vrp_art.get("calibrated_vrp_proxy")
+                        or vrp_art.get("calibrated_vrp")  # backward compat
+                    )
+                    calibration_status = vrp_art["status"]
+                    calibration_source = f"ticker-specific proxy: {vrp_artifact_path}"
+        except (json.JSONDecodeError, OSError):
+            pass
+
         return BakshiResult(
             ticker=ticker,
             spot=round(spot, 2),
@@ -1297,12 +1324,25 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
                     ),
                 },
             },
-            calibration_status="not_calibrated",
-            calibration_source=_VRP_CALIBRATION_SOURCE,
-            calibrated=False,
-            calibrated_vrp=None,
+            calibration_status=calibration_status,
+            calibration_source=calibration_source,
+            calibrated=calibration_status in ("calibrated", "weak_calibrated"),
+            calibrated_vrp=calibrated_vrp,
             rate_source=rate_snapshot.source_ticker,
             rate_as_of=rate_snapshot.as_of,
+            estimated_costs={
+                "commission_per_contract": 0.65,
+                "slippage_bps_on_premium": 5.0,
+                "per_strike_commission": round(0.65, 2),
+                "note": (
+                    "Costs are estimates for delta-hedged positions. "
+                    "Slippage on the underlying is ~5bps per hedge "
+                    "rebalance. Commissions are per option contract "
+                    "(IBKR Pro tier). Actual costs depend on execution "
+                    "quality and rebalancing frequency. Gross VRP is "
+                    "always preserved in strikes_analysis."
+                ),
+            },
         ).model_dump()
 
 
@@ -1394,7 +1434,7 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
             ).model_dump()
 
         # 3. Fetch dati live DAL DATAPROVIDER (non da yfinance)
-        hist = data_provider.get_hist(ticker, period="1y")
+        hist = data_provider.get_hist(ticker, period="5y")
         if hist.empty:
             return LGBMResult(
                 ticker=ticker,

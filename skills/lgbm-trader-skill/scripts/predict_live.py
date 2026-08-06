@@ -70,7 +70,7 @@ def find_latest_model(ticker: str) -> tuple[Path | None, str]:
 
 def fetch_live_data(
     ticker: str,
-    period: str = "1y",
+    period: str = "5y",
 ) -> tuple[pd.DataFrame, pd.DataFrame | None]:
     """Fetcha dati live per la predizione.
 

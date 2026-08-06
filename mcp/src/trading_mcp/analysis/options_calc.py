@@ -222,6 +222,32 @@ def analyze_options_position(
 
     total_pnl = current_value - cost_basis
 
+    # ── P2: estimated trading costs ────────────────────────────────
+    n_legs = len(parsed_legs)
+    commission_per_contract = 0.65
+    slippage_premium_bps = 5.0
+    estimated_commissions = n_legs * commission_per_contract * sum(
+        abs(l.qty) for l in parsed_legs
+    )
+    estimated_slippage = cost_basis * (slippage_premium_bps / 10000.0)
+    estimated_total_costs = estimated_commissions + estimated_slippage
+    pnl_net_estimate = total_pnl - estimated_total_costs
+
+    estimated_costs_dict = {
+        "commission_per_contract": commission_per_contract,
+        "commissions_total": round(estimated_commissions, 2),
+        "slippage_bps": slippage_premium_bps,
+        "slippage_total": round(estimated_slippage, 2),
+        "total_estimated_costs": round(estimated_total_costs, 2),
+        "pnl_net_estimate": round(pnl_net_estimate, 2),
+        "note": (
+            "Costs are estimates based on typical retail rates. Actual "
+            "costs depend on execution quality, market conditions, and "
+            "broker-specific fees. pnl_net_estimate is informative, not "
+            "exact — gross P&L is always preserved in pnl.total_pnl."
+        ),
+    }
+
     payoff, breakevens = _compute_payoff(
         parsed_legs, spot, r, payoff_expiry, eff_expiries, leg_iv
     )
@@ -255,6 +281,7 @@ def analyze_options_position(
             "total_pnl": round(total_pnl, 2),
             "total_pnl_pct": round(total_pnl / cost_basis * 100, 1) if cost_basis > 0 else 0.0,
         },
+        "estimated_costs": estimated_costs_dict,
         "payoff_scenarios": payoff,
         "breakevens": breakevens,
         "probabilities": probabilities,

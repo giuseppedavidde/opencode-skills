@@ -81,12 +81,14 @@ lista vuota senza spiegazione quando i dati erano insufficienti. Ora:
     via `TRADING_MCP_SRC` env var o walk-up automatico fino a 6 livelli
     dalla skill root; nessun path `/home/giuseppe` hardcoded.
 
-### Cosa NON è ancora verificato
+### Cosa NON è ancora verificato (post-P2)
 
 - Performance LGBM su holdout reale (richiede dati storici completi)
 - Consensus tra segnali quantitativi (LGBM, Bali, TS-MOM, VP)
 - Robustezza cross-sectional su universo ampio
-- Calibrazione score → probabilità reale di successo
+- Meta-label con split temporale esplicito su dati reali (ora testato solo con fixture)
+- Monitoraggio predizioni su dati reali (log vuoto, nessun outcome reale risolto)
+- Costi di trading reali vs stimati (dipendono da execution quality reale)
 
 ## Uso base
 
@@ -224,15 +226,18 @@ python scripts/run_pipeline.py --ticker GME --start 2020-01-01
 python scripts/tune_model.py --ticker GME --trials 50
 ```
 
-## Esecuzione test (AGGIORNATO P0 Ago 2026)
+## Esecuzione test (AGGIORNATO P2 Ago 2026)
 
 ```bash
 source /tmp/opencode/.venv/bin/activate
 cd ~/.config/opencode/skills/lgbm-trader-skill
 python -m pytest tests/ -v
 
-# 82 test: backtest, LGBM unavailable, short history (10-500+ barre),
+# 155 test: backtest, LGBM unavailable, short history (10-500+ barre),
 # P0 guards (scanner, analyze, bakshi, bali, tsmom, portability),
+# P1 (risk-free, calibration, universe, ablation, Bakshi/LGBM P1 fields),
+# P2 (cost model, net P&L, meta-label temporal CV, freshness,
+# prediction monitoring, put-call parity, DataProvider cache),
 # splits, VP coherence — tutti senza rete
 ```
 
@@ -317,3 +322,129 @@ ticker richiesto.
   (fix del `pass` in `lgbm_trainer.py:146-150`).
 - Il meta-modello dello stacking allena su 80% temporale e calcola le
   metriche ensemble SOLO sul 20% holdout (mai visto dal meta-model).
+
+### Novità P2 — Agosto 2026
+
+#### 1. Modello di costi e P&L netto
+
+**`CostModel` in `backtest/contract.py`**:
+- `commission_per_contract` (default $0.65 — IBKR Pro)
+- `slippage_bps` per lato (default 5 bps)
+- `spread_bps` half-spread per lato (default 5 bps)
+- `round_trip` (default True → costo doppio per enter+exit)
+- `total_bps()`: costo round-trip totale in bps
+- `per_share_cost(price)`: costo per azione a un dato prezzo
+- `assumptions_dict()`: documenta tutte le assunzioni
+
+**`BacktestConfig`**:
+- `apply_costs` (default False — retrocompatibile)
+- `cost_model` (CostModel)
+
+**Metriche nette in `HorizonResult`** (solo quando `apply_costs=True`):
+- `hit_rate_net`, `mean_return_pct_net`, `quintile_spread_net`
+- `quintile_returns_net`, `costs_applied`, `cost_assumptions`
+- I costi sono proporzionali al turnover: `|Δscore|/50 × cost_bps`
+- **I netti sono STIME, non misure esatte** — documentato nei limiti
+
+**Costi stimati in `options_calc.py`**:
+- `estimated_costs` con commissioni per contratto, slippage sul premio
+- `pnl_net_estimate` — il lordo è sempre preservato in `pnl.total_pnl`
+
+**Costi stimati in `bakshi_signals`**:
+- `estimated_costs` per posizioni delta-hedged
+- Note su frequenza di ribilanciamento e qualità di esecuzione
+
+#### 2. Meta-label con cross-validation temporale
+
+**`MetaLabelModel.train_temporal`** (nuovo metodo):
+- Split temporale esplicito: training solo su `date ≤ cutoff`, eval solo su `date > cutoff`
+- Nessun dato futuro entra nel training
+- Report: `eval_start`, `eval_end`, `n_train`, `n_eval`, `roc_auc`, `accuracy`, `baseline_accuracy`
+- Se `n_train < min_train` o `n_eval < min_eval` → `metric_status='insufficient_data'`
+- Supporta sia LightGBM (se installato) che RandomForest (fallback sklearn)
+
+**`_auto_train`** ora usa split temporale 70/30 invece dell'intera serie.
+
+#### 3. Freschezza dati
+
+**`freshness_label` in `provider.py`**:
+- Tier: `live` (<5 min stock / <1 min options), `recent` (<1h stock), `stale` (<24h), `cached`
+- Soglie differenziate per tipo: stock, crypto, options, macro
+- Campi `data_freshness` e `last_data_date` in:
+  - `analyze_stock` (via DataProvider)
+  - `BacktestResult`
+
+#### 4. Monitoraggio predizioni
+
+**`monitoring/prediction_log.py`** — nuovo modulo:
+- Log append-only JSONL di ogni predizione
+- `record_prediction()`: ticker, as_of, model_version, score, horizon
+- `resolve_outcome()`: riempie forward return senza look-ahead
+- `performance_report()` → `PredictionLogReport` con:
+  - `n_pending`, `n_resolved`, `min_required`
+  - `hit_rate`, `mean_return`, `ic_rank`, `sharpe_annualized`
+  - Se `n_resolved < min_required` → `status='insufficient_data'`, nessuno Sharpe inventato
+
+#### Test P2 (36 nuovi test, tutti offline)
+
+| Test | Copertura |
+|---|---|
+| `TestCostModel` (6 test) | Default, zero-cost, per-share, assumptions, validation |
+| `TestBacktestConfigCosts` (2 test) | apply_costs flag, cost_model forwarding |
+| `TestNetMetrics` (4 test) | Costi riducono rendimenti, zero cost = netto=lordo, turnover alto, cost_assumptions |
+| `TestMetaLabelTemporal` (4 test) | Train/eval disgiunti, insufficient train/eval, metriche cambiano con cutoff diverso |
+| `TestFreshnessLabel` (7 test) | Label ai confini, soglie options, get_last_data_date, provider integration |
+| `TestPredictionLog` (5 test) | Record+resolve, insufficient data, resolved report, empty log, horizon-specific |
+| `TestPutCallParity` (4 test) | ATM, ITM, OTM, zero rate — C−P ≈ S−K·e^(−rT) |
+| `TestDataProviderCache` (4 test) | Cache hit, stale fallback, freshness da cache, ticker inesistente |
+
+### Tool aggiornati (audit P2)
+
+| Tool/Componente | Stato | Note |
+|---|---|---|
+| `CostModel` | ✅ Nuovo | Default conservativi, retrocompatibile (`apply_costs=False`) |
+| `evaluate` net metrics | ✅ Nuovo | Solo quando `apply_costs=True`, documentate come stime |
+| `MetaLabelModel.train_temporal` | ✅ Nuovo | Split temporale, metriche solo su eval |
+| `freshness_label` | ✅ Nuovo | Tier live/recent/stale/cached per tipo |
+| `monitoring/prediction_log.py` | ✅ Nuovo | Log append-only, resolve senza look-ahead |
+| `put-call parity` | ✅ Test | Fixture sintetiche, tolleranza 1e-6 |
+| `DataProvider cache` | ✅ Test | Cache hit, stale fallback, freshness |
+| `export_predictions.py` | ✅ Nuovo | Export multi-ticker VP predictions per calibrazione |
+| `calibrate_vp.py` | ✅ Nuovo | Calibrazione isotonica reale con split temporale |
+| `signal_engine calibration` | ✅ Integrato | `hit_rate_calibrated` + `calibration_status` |
+
+### Calibrazione reale VP (Agosto 2026)
+
+La calibrazione del segnale Volume Profile è stata eseguita su **50 ticker US**
+con 5 anni di dati, split temporale: calibrazione ≤ 2024-06-30, OOS > 2024-06-30.
+
+**Dataset**:
+- 50 ticker, 120.500 predizioni totali, 0 fallimenti
+- Orizzonte di calibrazione: 180 giorni (35.500 predizioni)
+- Label: `forward_return > 0` (hit rate OOS: 67.1%)
+
+**Split temporale**:
+- Calibrazione: 18.200 predizioni (date ≤ 2024-06-30)
+- OOS: 17.300 predizioni (date > 2024-06-30)
+
+**Metriche (solo OOS)**:
+| Metrica | Valore |
+|---|---|
+| Brier score | 0.2403 |
+| Log loss | 0.6769 |
+| ECE | 0.0858 |
+| Calibration error | 0.0858 |
+
+**Mapping VP score → hit rate (da isotonic, score invertito 100−VP)**:
+| VP score | Hit rate calibrato | Semantica |
+|---|---|---|
+| 25 | 78.6% | Strong Buy |
+| 30 | 73.5% | Buy |
+| 40 | 70.8% | Buy |
+| 50 | 66.0% | Hold |
+| 60 | 61.4% | Avoid |
+| 70 | 61.4% | Avoid |
+
+**Decisione**: `status=calibrated` — Brier 0.240 ≤ 0.25, n_cal=18.200, n_oos=17.300.
+
+**Artifact**: `~/.config/opencode/calibrations/vp_calibration.json`

@@ -9,8 +9,10 @@ from __future__ import annotations
 
 from datetime import datetime  # noqa: F401  # keep for future use
 from enum import Enum
+from pathlib import Path
 from typing import Optional
 
+import pandas as pd  # noqa: F401
 from pydantic import BaseModel, Field
 
 
@@ -155,6 +157,20 @@ _UNIVERSE_REGISTRY: dict[str, UniverseMetadata] = {
             "Crypto tickers from CoinGecko.",
         ],
     ),
+    "sp500_historical": UniverseMetadata(
+        name="sp500_historical",
+        source="mcp/src/trading_mcp/data/historical_universe_sp500.csv",
+        as_of="2026-08-05",
+        universe_type=UniverseType.HISTORICAL,
+        survivorship_warning=False,
+        historical_universe_available=True,
+        notes=[
+            "Sourced from Wikipedia 'List of S&P 500 companies' (raw wikitext, ~503 active).",
+            "Includes 4 verified delistings 2020-2026 (CIT, FRC, SBNY, SIVB).",
+            "Point-in-time membership via date_added/date_removed columns.",
+            "Minor latency: Wikipedia may lag S&P announcements by 1-3 days.",
+        ],
+    ),
 }
 
 
@@ -215,3 +231,94 @@ def historical_universe_unavailable_message(universe: str) -> str:
         f"not in the CSV. To avoid bias, provide a point-in-time constituents file "
         f"with --historical-universe-file <path>.{meta_note}"
     )
+
+
+# ── Point-in-time historical universe (P2) ─────────────────────────
+
+_HISTORICAL_UNIVERSE_CACHE: dict[str, pd.DataFrame] = {}
+
+
+def load_historical_universe(path: str | Path | None = None) -> pd.DataFrame:
+    """Load historical constituents CSV with date_added/date_removed.
+
+    Returns cached singleton on repeated calls. The CSV must have
+    columns: symbol, date_added, date_removed. Lines starting with
+    '#' are skipped as comments.
+
+    Args:
+        path: Path to CSV. Defaults to the S&P 500 historical file
+            in the trading_mcp data directory.
+
+    Returns:
+        DataFrame with parsed date columns. date_removed = NaT means
+        still active as of file extraction date.
+    """
+    if path is None:
+        path = Path(__file__).resolve().parent / "historical_universe_sp500.csv"
+
+    path_str = str(path)
+    if path_str in _HISTORICAL_UNIVERSE_CACHE:
+        return _HISTORICAL_UNIVERSE_CACHE[path_str]
+
+    p = Path(path_str)
+    if not p.exists():
+        raise FileNotFoundError(
+            f"Historical universe file not found: {path_str}. "
+            f"Generate it from Wikipedia or provide a custom CSV."
+        )
+
+    df = pd.read_csv(p, comment="#", dtype={"symbol": str})
+    required = {"symbol", "date_added", "date_removed"}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(
+            f"Missing columns in historical universe CSV: {missing}. "
+            f"Expected: symbol, date_added, date_removed"
+        )
+
+    df["date_added"] = pd.to_datetime(df["date_added"], errors="coerce")
+    df["date_removed"] = pd.to_datetime(
+        df["date_removed"].replace({"": None, "None": None, "nan": None}),
+        errors="coerce",
+    )
+    df["symbol"] = df["symbol"].str.strip().str.upper()
+
+    # Deduplicate: keep last entry per symbol
+    df = df.drop_duplicates(subset=["symbol"], keep="last")
+    df = df.reset_index(drop=True)
+
+    _HISTORICAL_UNIVERSE_CACHE[path_str] = df
+    return df
+
+
+def get_universe_members(
+    as_of: str, path: str | Path | None = None
+) -> list[str]:
+    """Return ticker symbols that were S&P 500 members on a given date.
+
+    A symbol is a member if: date_added <= as_of < date_removed,
+    or date_added <= as_of and date_removed is NaT.
+
+    Args:
+        as_of: Date in YYYY-MM-DD format.
+        path: Optional path to historical CSV.
+
+    Returns:
+        Sorted list of member symbols (uppercase). Empty list if
+        file is missing (caller must handle).
+    """
+    try:
+        df = load_historical_universe(path)
+    except FileNotFoundError:
+        return []
+
+    ts = pd.Timestamp(as_of)
+    mask = (df["date_added"] <= ts) & (
+        df["date_removed"].isna() | (df["date_removed"] > ts)
+    )
+    return sorted(df.loc[mask, "symbol"].tolist())
+
+
+def is_member(symbol: str, as_of: str, path: str | Path | None = None) -> bool:
+    """Check if a symbol was an S&P 500 member on a given date."""
+    return symbol.upper() in get_universe_members(as_of, path)

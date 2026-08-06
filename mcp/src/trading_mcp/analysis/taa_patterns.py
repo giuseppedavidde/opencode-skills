@@ -575,9 +575,9 @@ def _check_flag_pattern(
     # Determine if pennant (slopes converge) or flag (parallel)
     is_pennant = False
     if direction == "bullish":
-        is_pennant = resist_slope < support_slope
+        is_pennant = bool(resist_slope < support_slope)
     else:
-        is_pennant = support_slope > resist_slope
+        is_pennant = bool(support_slope > resist_slope)
 
     entry = {
         "pole_start": round(float(np.exp(pole_start["price"])), 2),
