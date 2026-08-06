@@ -1600,22 +1600,22 @@ def _signal_from_score(score: float) -> str:
 
 
 def _align_features(df: pd.DataFrame, feature_names: list[str]) -> pd.DataFrame:
-    """Validazione strict dello schema feature.
+    """Validazione dello schema feature con fill dei NaN.
 
-    SOLO le colonne che esistono nel DataFrame vengono usate. Le feature
-    mancanti o con NaN generano errore esplicito (nessun fill silenzioso
-    con 0.0). Il chiamante deve gestire l'errore come ``available=False``.
+    Colonne mancanti → ValueError (strict, nessun fill).
+    NaN in colonne ESISTENTI → fill con 0.0 (convenzione predict_live.py:
+    FD warmup, fundamental data gaps, RS trailing NaN diventano input
+    neutri per LightGBM, che gestisce NaN nativamente se preferito).
 
     Args:
         df: DataFrame con le feature calcolate live.
         feature_names: Lista ordinata di feature attese dal modello.
 
     Returns:
-        DataFrame allineato con solo le colonne presenti e senza NaN.
+        DataFrame allineato con colonne presenti, NaN fillati a 0.0.
 
     Raises:
-        ValueError: Se ci sono feature mancanti o righe con NaN dopo
-                    l'allineamento.
+        ValueError: Se ci sono colonne mancanti (non presenti nel df).
     """
     available = [c for c in feature_names if c in df.columns]
     missing = [c for c in feature_names if c not in df.columns]
@@ -1629,16 +1629,15 @@ def _align_features(df: pd.DataFrame, feature_names: list[str]) -> pd.DataFrame:
         )
 
     out = df[feature_names].copy()
-    nan_mask = out.isna().any(axis=1)
-    if nan_mask.any():
-        nan_cols = out.columns[out.isna().any()].tolist()
-        nan_rows = int(nan_mask.sum())
-        raise ValueError(
-            f"NaN in feature columns: {sorted(nan_cols)[:10]} "
-            f"({nan_rows} righe affette). "
-            "I dati live contengono valori mancanti — impossibile produrre "
-            "una predizione valida."
+    nan_mask = out.isna()
+    if nan_mask.any().any():
+        nan_cols = out.columns[nan_mask.any()].tolist()
+        nan_total = int(nan_mask.sum().sum())
+        logger.debug(
+            "Fill NaN con 0.0 in %d colonne (%d valori totali): %s",
+            len(nan_cols), nan_total, nan_cols[:5]
         )
+        out = out.fillna(0.0)
 
     return out
 
@@ -1646,9 +1645,11 @@ def _align_features(df: pd.DataFrame, feature_names: list[str]) -> pd.DataFrame:
 def _predict_stacking(ensemble: Any, df: pd.DataFrame) -> dict[str, Any]:
     """Predizione usando StackingEnsemble.
 
-    Validazione strict dello schema feature: se mancano colonne o ci sono
-    NaN, lancia ValueError. Il chiamante (lgbm_predict) lo converte in
-    LGBMResult(available=False).
+    Validazione strict dello schema feature: colonne mancanti → ValueError.
+    NaN in colonne presenti → fill con 0.0 (convenzione predict_live.py:
+    FD warmup, fundamental data gaps, RS trailing NaN diventano input neutri).
+    La predizione usa l'ultima riga non-NaN dell'output.
+    Il chiamante (lgbm_predict) converte ValueError in LGBMResult(available=False).
     """
     aligned = df.copy()
     if hasattr(ensemble, "feature_groups"):
