@@ -79,7 +79,7 @@ After updating `skills/quant-mind-src`, apply the Pillow compatibility patch:
 ```bash
 cd "$(readlink -f ~/.config/opencode/skills/..)/skills/quant-mind-src"
 sed -i 's/pillow>=10.1.0,<11.0.0/pillow>=10.1.0/' pyproject.toml
-source /tmp/opencode/.venv-quantmind/bin/activate 2>/dev/null || source /tmp/opencode/.venv/bin/activate
+source /tmp/opencode/.venv-quantmind/bin/activate 2>/dev/null || source "$HOME/.local/share/opencode/trading-mcp-venv/bin/activate" 2>/dev/null || source /tmp/opencode/.venv/bin/activate
 pip install --quiet -e .
 ```
 

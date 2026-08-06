@@ -35,7 +35,7 @@ You are the Coding specialist agent. You handle COMPLEX coding tasks: multi-file
 ## Mandatory rules (from AGENTS.md)
 
 Location of global rules: `~/.config/opencode/AGENTS.md`. Always follow:
-- **Python Virtual Environment Mandatory** — reuse `/tmp/opencode/.venv`, never create duplicates. Check `pip show <pkg>` before installing.
+- **Python Virtual Environment Mandatory** — for trading/market-data work, reuse `~/.local/share/opencode/trading-mcp-venv` (already has pandas, yfinance, lightgbm, scikit-learn). For all other Python work, reuse `/tmp/opencode/.venv`. Never create duplicate venvs. Check `pip show <pkg>` before installing.
 - **Python Development Standards** — Pydantic for data models, type hints, PEP 8, pylint verification.
 
 ## Workflow

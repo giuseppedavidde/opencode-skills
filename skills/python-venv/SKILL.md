@@ -20,6 +20,22 @@ Any time you need to:
 
 CRITICAL: Before creating any venv, ALWAYS check if one exists and reuse it.
 
+### Priority 1: trading/market-data work → reuse trading-mcp-venv
+
+```bash
+# Questo venv esegue il server MCP "trading" e ha GIÀ tutte le dipendenze
+# (pandas, yfinance, lightgbm, scikit-learn, scipy, numpy, pydantic, requests...).
+VENV_TRADING="$HOME/.local/share/opencode/trading-mcp-venv"
+if [ -f "$VENV_TRADING/bin/activate" ]; then
+  source "$VENV_TRADING/bin/activate"
+fi
+```
+
+Regola: se il task coinvolge trading/stock/options/market data → `trading-mcp-venv`.
+Altrimenti (graphify, pdf, generico) → `/tmp/opencode/.venv` (Priority 2 sotto).
+
+### Priority 2: generic/non-trading work → /tmp/opencode/.venv
+
 ```bash
 # Check if shared venv exists in /tmp/opencode
 ls /tmp/opencode/.venv/bin/activate 2>/dev/null && echo "EXISTS"
@@ -34,8 +50,9 @@ source /tmp/opencode/.venv/bin/activate
 
 ### Reuse rule for /tmp/opencode
 
-- Use a **single shared venv** at `/tmp/opencode/.venv` for all temporary Python work.
-- Never create `pdf_venv`, `tensor_venv`, `tensor2_venv`, etc. — they all go in the same `.venv`.
+- For trading/market-data Python work, reuse the MCP trading venv at `~/.local/share/opencode/trading-mcp-venv` (Priority 1 sopra).
+- For generic/non-trading Python work, use a **single shared venv** at `/tmp/opencode/.venv` (Priority 2).
+- Never create `pdf_venv`, `tensor_venv`, `tensor2_venv`, etc. — they all go in the appropriate existing venv.
 - Before `pip install <pkg>`, check if already installed: `pip show <pkg> 2>/dev/null`
 
 ```bash

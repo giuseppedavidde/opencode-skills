@@ -15,7 +15,7 @@ All agents read these AGENTS.md rules. See opencode.json for full agent configur
 
 ## Python Virtual Environment Mandatory
 CRITICAL: Before ANY Python operation (install, run, test), load @skills/python-venv. You MUST use a virtual environment. Never `pip install` on the system Python.
-- Use a SINGLE shared venv at `/tmp/opencode/.venv` for all temporary work. Never create duplicate venvs.
+- Use a SINGLE shared venv at `/tmp/opencode/.venv` for all temporary NON-trading work. For trading/market-data Python work, REUSE the existing MCP trading venv at `~/.local/share/opencode/trading-mcp-venv` (it already has pandas, yfinance, lightgbm, scikit-learn — never reinstall). Never create duplicate venvs.
 
 ## Python Development Standards
 CRITICAL: Whenever working with Python, you MUST load and strictly adhere to the instructions defined in @skills/python-pydantic.

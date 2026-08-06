@@ -181,12 +181,13 @@ Tutti i tool condividono lo stesso DataProvider con cache:
 
 ### Nota su LGBM
 
-`lgbm_predict()` richiede LightGBM che non è compatibile con Python 3.14.
-Se il tool restituisce errore, usa il fallback bash:
+LightGBM 4.7.0 è già installato nel venv dell'MCP trading (`~/.local/share/opencode/trading-mcp-venv`).
+Se il tool MCP `lgbm_predict()` restituisce errore, usa il fallback bash:
 ```bash
-source /tmp/opencode/.venv/bin/activate
+source "$HOME/.local/share/opencode/trading-mcp-venv/bin/activate"
 python3 ~/.config/opencode/skills/lgbm-trader-skill/scripts/predict_or_train.py --ticker TICKER --json
 ```
+Non serve alcun `pip install` — le dipendenze sono già nel venv.
 Poi passa lo score a `lgbm_postprocess(ticker, score)` per gli adjustment.
 
 ### Guida all'uso (non regole, solo contesto)
@@ -355,7 +356,7 @@ Dopo aver ottenuto lo score LGBM grezzo, usa lo script Python per gli adjustment
 ### Comando
 
 ```bash
-source /tmp/opencode/.venv/bin/activate && \
+source "$HOME/.local/share/opencode/trading-mcp-venv/bin/activate" && \
 python3 ~/.config/opencode/skills/lgbm-trader-skill/scripts/lgbm_postprocess.py \
   --ticker GME --lgbm-score 67 --json
 ```
