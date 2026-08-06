@@ -4,13 +4,27 @@ mode: all
 model: opencode-go/deepseek-v4-flash
 permission:
   edit: deny
-  write: deny
+  write:
+    "research/**": allow
+    ".alice/issues/**": allow
+    "*": deny
   bash:
     "*": ask
     "python3 *": allow
     "pip *": deny
     "source *venv*": allow
     "deactivate": allow
+    "alice-workspace *": allow
+    "git add *": allow
+    "git commit *": allow
+    "git log *": allow
+    "git status *": allow
+    "git diff *": allow
+    "git show *": allow
+    "mkdir *": allow
+    "date *": allow
+    "cat > research/*": allow
+    "cat > .alice/issues/*": allow
   task:
     "*": allow
   skill:

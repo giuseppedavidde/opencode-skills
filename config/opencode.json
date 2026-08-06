@@ -109,21 +109,33 @@
     }
   },
   "mcp": {
-  "headroom": {
-    "type": "local",
-    "command": ["bash", "-c", "exec \"$HOME/.local/share/opencode/headroom-venv/bin/headroom\" mcp serve"],
-    "enabled": true
-  },
-  "trading": {
-    "type": "local",
-    "command": ["bash", "-c", "exec \"$HOME/.local/share/opencode/trading-mcp-venv/bin/trading-mcp\""],
-    "enabled": true
-  },
-  "alphavantage": {
-    "type": "local",
-    "command": ["bash", "-c", "exec \"$HOME/.local/bin/alphavantage-mcp.sh\""],
-    "enabled": true
-  }
+    "headroom": {
+      "type": "local",
+      "command": [
+        "bash",
+        "-c",
+        "exec \"$HOME/.local/share/opencode/headroom-venv/bin/headroom\" mcp serve"
+      ],
+      "enabled": true
+    },
+    "trading": {
+      "type": "local",
+      "command": [
+        "bash",
+        "-c",
+        "exec \"$HOME/.local/share/opencode/trading-mcp-venv/bin/trading-mcp\""
+      ],
+      "enabled": true
+    },
+    "alphavantage": {
+      "type": "local",
+      "command": [
+        "bash",
+        "-c",
+        "exec \"$HOME/.local/bin/alphavantage-mcp.sh\""
+      ],
+      "enabled": true
+    }
   },
   "shell": "/bin/zsh"
 }
