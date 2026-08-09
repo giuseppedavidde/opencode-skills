@@ -21,6 +21,7 @@ from fastmcp import FastMCP
 
 from trading_mcp.data.provider import data_provider
 from trading_mcp.data.risk_free import get_risk_free_rate
+from trading_mcp.data.result_cache import result_cache
 
 logger = logging.getLogger(__name__)
 
@@ -777,6 +778,11 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
         Returns:
             dict con scores 0-100 per ogni segnale + spread grezzi.
         """
+        cache_params: dict[str, Any] = {"period": period}
+        cached = result_cache.get("bali_signals", ticker, cache_params)
+        if cached is not None:
+            return cached
+
         # ── P0 short-history guard: almeno 50 barre per RV (non 10) ──
         _MIN_BALI_BARS = 50
         hist_rv = data_provider.get_hist(ticker, period=period)
@@ -925,7 +931,7 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
         else:
             direction = "neutral"
 
-        return BaliResult(
+        bali_result = BaliResult(
             ticker=ticker,
             available=True,
             spot=round(spot, 2),
@@ -957,6 +963,9 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
             },
         ).model_dump()
 
+        result_cache.set("bali_signals", ticker, cache_params, bali_result)
+        return bali_result
+
 
     # ── 2. Moskowitz, Ooi & Pedersen (2012) TS-MOM ───────────────
 
@@ -981,6 +990,14 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
         Returns:
             dict con score TS-MOM 0-100, direzione, Sharpe stimato.
         """
+        cache_params: dict[str, Any] = {
+            "lookback_months": lookback_months,
+            "skip_last_days": skip_last_days,
+        }
+        cached = result_cache.get("tsmom_signals", ticker, cache_params)
+        if cached is not None:
+            return cached
+
         # Fetch dati via DataProvider (cache hit se analyze_stock chiamato prima)
         _MIN_TSMOM_BARS = 60
         period_needed = f"{lookback_months + 3}mo"
@@ -1070,7 +1087,7 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
             else 50.0
         )
 
-        return TSMomResult(
+        tsmom_result = TSMomResult(
             ticker=ticker,
             available=True,
             price=round(float(close.iloc[-1]), 2),
@@ -1097,6 +1114,9 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
                 ),
             },
         ).model_dump()
+
+        result_cache.set("tsmom_signals", ticker, cache_params, tsmom_result)
+        return tsmom_result
 
 
     # ── 3. Bakshi & Kapadia (2003) VRP Analysis ──────────────────
@@ -1368,6 +1388,11 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
         Returns:
             dict con score, signal, sub-model signals e meta-weights.
         """
+        cache_params: dict[str, Any] = {}
+        cached = result_cache.get("lgbm_predict", ticker, cache_params)
+        if cached is not None:
+            return cached
+
         # 1. Verifica che il package lgbm-trader-skill sia importabile
         if not _LGBM_SKILL_DIR.exists():
             return LGBMResult(
@@ -1538,12 +1563,15 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
                 error=f"Prediction failed: {e}",
             ).model_dump()
 
-        return LGBMResult(
+        lgbm_result = LGBMResult(
             ticker=ticker,
             model=model_file.name,
             available=True,
             **pred_result,
         ).model_dump()
+
+        result_cache.set("lgbm_predict", ticker, cache_params, lgbm_result)
+        return lgbm_result
 
 
     # ── 5. LGBM Post-Processing Skill Adjustments ────────────────

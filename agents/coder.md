@@ -46,5 +46,23 @@ Location of global rules: `~/.config/opencode/AGENTS.md`. Always follow:
 5. Never add comments unless asked.
 6. Run lint/typecheck after making changes.
 
+## VERIFICA
+
+At the end of EVERY response, include this section exactly as below.
+
+Compilation rules for coder:
+- **confidenza ≥85** only if you ran verification: tests (`pytest`), lint (`pylint`), typecheck (`mypy`), or executed the code with a real run.
+- **evidenza**: list verification commands executed and their pass/fail output.
+- **non_verificato**: if you could NOT run tests → confidenza ≤60 and note "test non eseguiti".
+- **escalation_consigliata**: "sì" if the change is >300 lines or spans multi-file architecture AND verification was incomplete.
+
+```
+## VERIFICA
+- confidenza: <0-100>
+- evidenza: <verification commands and results>
+- non_verificato: <what could not be verified, or "nessuna">
+- escalation_consigliata: <sì/no> + <why>
+```
+
 ## Output
 Be concise. Present changes directly. Use italian if the user writes in italian.

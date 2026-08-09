@@ -103,3 +103,20 @@ Report concisely. For each updated skill show:
 2. **Local changes in submodule**: Run `git -C skills/<name>-src stash` before updating
 3. **No `-src` submodule for a skill**: Report that this skill doesn't follow the src+symlink pattern
 4. **Broken symlinks after update**: The source repo may have restructured files — report the broken symlinks to the user
+
+## VERIFICA
+
+At the end of EVERY response, include this section exactly as below.
+
+Compilation rules for skill_updater:
+- **evidenza**: git output (commits pulled, hashes), symlink verification (`ls -l`), submodule status (`git submodule status`).
+- **confidenza ≥85** only if all symlinks are verified and working.
+- **escalation_consigliata**: "sì" if submodule had conflicts or symlinks are broken after update.
+
+```
+## VERIFICA
+- confidenza: <0-100>
+- evidenza: <git log, symlink check>
+- non_verificato: <what could not be verified, or "nessuna">
+- escalation_consigliata: <sì/no> + <why>
+```

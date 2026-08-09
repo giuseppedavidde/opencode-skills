@@ -12,6 +12,7 @@ from fastmcp import FastMCP
 from trading_mcp.analysis.macro import detect_regime, get_dynamic_weights
 from trading_mcp.data.provider import data_provider
 from trading_mcp.knowledge.skill_bridge import SkillBridge
+from trading_mcp.data.result_cache import result_cache
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +177,16 @@ def register_knowledge_tools(mcp_server: FastMCP, skills_dir: str) -> None:
         Returns:
             StrategySuggestion with strategy name, structure, and rationale.
         """
+        cache_params: dict[str, Any] = {
+            "composite_score": composite_score,
+            "verdict": verdict,
+            "iv_rank": iv_rank,
+            "risk_tolerance": risk_tolerance,
+        }
+        cached = result_cache.get("suggest_options_strategy", ticker, cache_params)
+        if cached is not None:
+            return cached
+
         if verdict == "Avoid / Wait":
             return {
                 "ticker": ticker,
@@ -225,7 +236,7 @@ def register_knowledge_tools(mcp_server: FastMCP, skills_dir: str) -> None:
             f"Risk tolerance: {risk_tolerance}",
         ]
 
-        return {
+        suggest_result = {
             "ticker": ticker,
             "timestamp": datetime.utcnow().isoformat(),
             "strategy_name": strategy_name,
@@ -241,3 +252,5 @@ def register_knowledge_tools(mcp_server: FastMCP, skills_dir: str) -> None:
                 "Verify IV regime and DTE before entry.",
             ],
         }
+        result_cache.set("suggest_options_strategy", ticker, cache_params, suggest_result)
+        return suggest_result

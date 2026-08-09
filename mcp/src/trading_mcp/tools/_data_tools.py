@@ -10,6 +10,7 @@ from fastmcp import FastMCP
 from trading_mcp.data.stocks import fetch_stock_full
 from trading_mcp.data.crypto import fetch_crypto_full
 from trading_mcp.data.options_chain import fetch_options_chain as _fetch_options_chain
+from trading_mcp.data.result_cache import result_cache
 
 
 def register_data_tools(mcp_server: FastMCP) -> None:
@@ -112,4 +113,12 @@ def register_data_tools(mcp_server: FastMCP) -> None:
         """
         if not expiry or str(expiry).lower() in ("null", "none", ""):
             return {"ticker": ticker, "error": "expiry is REQUIRED. Pass expiry='YYYY-MM-DD'."}
-        return _fetch_options_chain(ticker, expiry)
+
+        cache_params: dict[str, Any] = {"expiry": str(expiry)}
+        cached = result_cache.get("fetch_options_chain", ticker, cache_params)
+        if cached is not None:
+            return cached
+
+        result = _fetch_options_chain(ticker, expiry)
+        result_cache.set("fetch_options_chain", ticker, cache_params, result)
+        return result

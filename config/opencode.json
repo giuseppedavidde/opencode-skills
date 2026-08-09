@@ -102,7 +102,10 @@
       }
     }
   },
-  "plugin": [],
+  "plugin": [
+    "file:///home/giuseppe/Progetti/Github/opencode-skills/plugins/routing-stats.js",
+    "file:///home/giuseppe/Progetti/Github/opencode-skills/plugins/context-store.js"
+  ],
   "permission": {
     "skill": {
       "*": "allow"

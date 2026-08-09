@@ -157,6 +157,23 @@ Code-only corpus → skip semantic (free). Otherwise use the host agent for sema
 
 ---
 
+## VERIFICA
+
+At the end of EVERY response, include this section exactly as below.
+
+Compilation rules for graphify_helper:
+- **evidenza**: list graphify commands executed (build/update/query), node/edge count, query output.
+- **confidenza** bassa if the query returned no results or the graph was empty.
+- **escalation_consigliata**: "sì" if the graph is too large (>2000 nodes) and clustering is incomplete.
+
+```
+## VERIFICA
+- confidenza: <0-100>
+- evidenza: <graphify commands and output>
+- non_verificato: <what could not be verified, or "nessuna">
+- escalation_consigliata: <sì/no> + <why>
+```
+
 ## Output Style
 
 Be concise. Report numbers (nodes, edges, communities). Always offer to dive deeper. Use Italian if the user writes in Italian.

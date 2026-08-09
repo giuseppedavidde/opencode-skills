@@ -22,6 +22,7 @@ from trading_mcp.analysis.scanner import (
 )
 from trading_mcp.analysis.options_calc import analyze_options_position
 from trading_mcp.analysis.signal_engine import compute_action
+from trading_mcp.data.result_cache import result_cache
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,19 @@ def register_analysis_tools(
             fetch_news: If True, scrape Finviz/WSB for web sentiment.
             verbose: If True, include full detail strings and sub-scores. Compress output with headroom to save tokens.
         """
+        cache_params: dict[str, Any] = {
+            "universe": universe,
+            "tickers": tickers,
+            "min_score": min_score,
+            "top_n": top_n,
+            "regime": regime,
+            "max_workers": max_workers,
+            "fetch_news": fetch_news,
+        }
+        cached = result_cache.get("scan_market", "BATCH", cache_params)
+        if cached is not None:
+            return cached
+
         if tickers:
             universe_list = parse_custom_tickers(tickers)
             universe_name = "custom"
@@ -160,7 +174,7 @@ def register_analysis_tools(
                 entry["sentiment_breakdown"] = sbd
             output_results.append(entry)
 
-        return {
+        scan_result = {
             "universe": universe_name,
             "universe_metadata": universe_meta,
             "timestamp": datetime.utcnow().isoformat(),
@@ -181,6 +195,8 @@ def register_analysis_tools(
             ] if insufficient_data else [],
             "results": output_results,
         }
+        result_cache.set("scan_market", "BATCH", cache_params, scan_result)
+        return scan_result
 
     @mcp_server.tool()
     def analyze_stock(
@@ -206,6 +222,14 @@ def register_analysis_tools(
             Dictionary with composite_score, verdict, confidence, dimensions,
             action_recommendation, and optional options_context.
         """
+        cache_params: dict[str, Any] = {
+            "include_options_context": include_options_context,
+            "fetch_news": fetch_news,
+        }
+        cached = result_cache.get("analyze_stock", ticker, cache_params)
+        if cached is not None:
+            return cached
+
         t_dict = {"symbol": ticker, "name": ticker, "market": "US"}
         result = process_ticker(t_dict, fetch_news=fetch_news)
         if result is None:
@@ -293,6 +317,7 @@ def register_analysis_tools(
         if include_options_context:
             output["options_context"] = options_context
 
+        result_cache.set("analyze_stock", ticker, cache_params, output)
         return output
 
     @mcp_server.tool()
@@ -321,7 +346,15 @@ def register_analysis_tools(
         """
         if not expiry or str(expiry).lower() in ("null", "none", ""):
             return {"ticker": ticker, "error": "expiry is REQUIRED. Pass expiry='YYYY-MM-DD'."}
-        return analyze_options_position(ticker, legs, expiry)
+
+        cache_params: dict[str, Any] = {"legs": legs, "expiry": str(expiry)}
+        cached = result_cache.get("analyze_options", ticker, cache_params)
+        if cached is not None:
+            return cached
+
+        result = analyze_options_position(ticker, legs, expiry)
+        result_cache.set("analyze_options", ticker, cache_params, result)
+        return result
 
 
 def _safe_process(fn, t_dict, symbol, fetch_news=True):

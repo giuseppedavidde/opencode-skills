@@ -11,6 +11,7 @@ This OpenCode instance uses automatic model routing to save tokens:
 - **@general**: glm-5.2 — escalation target per calcoli complessi di @trade (non chiamato direttamente)
 
 The router delegates based on keywords. Trading requests go to @trade, complex coding to @coder, skill updates to @skill_updater, graphify requests to @graphify_helper.
+Every subagent MUST end its response with a `## VERIFICA` section (confidenza, evidenza, non_verificato, escalation_consigliata). The router interprets this to decide whether to retry, escalate, or ask the user for clarification.
 All agents read these AGENTS.md rules. See opencode.json for full agent configuration.
 
 ## Python Virtual Environment Mandatory

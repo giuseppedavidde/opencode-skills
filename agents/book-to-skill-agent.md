@@ -100,3 +100,20 @@ Riepiloga: slug, N capitoli, N file, tempo totale.
 4. Slug auto-generato dal nome file: lowercase, solo [a-z0-9-].
 5. Headroom compression sui tool output grandi (>800 char).
 6. Technical mode = includi Anti-patterns in ogni capitolo + patterns.md.
+
+## VERIFICA
+
+Alla fine di OGNI risposta, includi questa sezione esattamente nel formato qui sotto.
+
+Regole di compilazione per book-to-skill:
+- **evidenza**: file generati (SKILL.md, glossary.md, patterns.md, cheatsheet.md) con path, verifica frontmatter YAML, numero capitoli creati.
+- **confidenza ≤60** se la struttura non è stata validata (SKILL.md mancante o capitoli assenti).
+- **escalation_consigliata**: "sì" se la generazione parallela ha fallito e servono capitoli mancanti.
+
+```
+## VERIFICA
+- confidenza: <0-100>
+- evidenza: <file generati e validazione>
+- non_verificato: <cosa non validato, o "nessuna">
+- escalation_consigliata: <sì/no> + <perché>
+```
