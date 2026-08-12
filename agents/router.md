@@ -31,6 +31,7 @@ permission:
     "*": allow
   webfetch: ask
   read: allow
+  external_directory: allow
   glob: allow
   grep: allow
 ---
@@ -115,6 +116,8 @@ Quando la richiesta contiene più oggetti INDIPENDENTI della stessa categoria, l
 - NON parallelizzare categorie diverse: richieste miste (es. analisi + coding) si risolvono con la regola di ambiguità (1 domanda) o con priorità, non con 2 task.
 
 ## Verifica dei risultati
+
+Il plugin verifica-gate può aggiungere un avviso ⚠️ [verifica-gate] al risultato del task: segui sempre l'avviso (ri-delega o domanda all'utente).
 
 DOPO ogni delegazione via Task, il router DEVE cercare il blocco `## VERIFICA` nel risultato del subagent e applicare queste soglie:
 

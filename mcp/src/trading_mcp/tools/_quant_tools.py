@@ -1628,9 +1628,9 @@ def _signal_from_score(score: float) -> str:
 
 
 def _align_features(df: pd.DataFrame, feature_names: list[str]) -> pd.DataFrame:
-    """Validazione dello schema feature con fill dei NaN.
+    """Allinea lo schema feature al modello, fillando colonne mancanti e NaN.
 
-    Colonne mancanti → ValueError (strict, nessun fill).
+    Colonne mancanti → riempite con 0.0 (lenient, come predict_live.py).
     NaN in colonne ESISTENTI → fill con 0.0 (convenzione predict_live.py:
     FD warmup, fundamental data gaps, RS trailing NaN diventano input
     neutri per LightGBM, che gestisce NaN nativamente se preferito).
@@ -1640,23 +1640,17 @@ def _align_features(df: pd.DataFrame, feature_names: list[str]) -> pd.DataFrame:
         feature_names: Lista ordinata di feature attese dal modello.
 
     Returns:
-        DataFrame allineato con colonne presenti, NaN fillati a 0.0.
-
-    Raises:
-        ValueError: Se ci sono colonne mancanti (non presenti nel df).
+        DataFrame allineato, tutte le colonne presenti, NaN fillati a 0.0.
     """
-    available = [c for c in feature_names if c in df.columns]
     missing = [c for c in feature_names if c not in df.columns]
-
     if missing:
-        raise ValueError(
-            f"Feature mismatch: {len(missing)}/{len(feature_names)} "
-            f"colonne mancanti. Mancanti: {sorted(missing)[:10]}"
-            f"{'...' if len(missing) > 10 else ''}. "
-            f"Disponibili: {sorted(available)[:10]}"
+        logger.info(
+            "Aggiungo %d feature mancanti nei dati live (fill=0.0): %s",
+            len(missing),
+            missing[:5],
         )
 
-    out = df[feature_names].copy()
+    out = df.reindex(columns=feature_names, fill_value=0.0)
     nan_mask = out.isna()
     if nan_mask.any().any():
         nan_cols = out.columns[nan_mask.any()].tolist()

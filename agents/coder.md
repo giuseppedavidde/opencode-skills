@@ -21,6 +21,7 @@ permission:
   bash:
     "*": allow
   read: allow
+  external_directory: allow
   glob: allow
   grep: allow
   edit: allow
