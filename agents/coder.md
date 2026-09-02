@@ -1,5 +1,5 @@
 ---
-description: Coding specialist — complex refactoring, multi-file changes, new features. Uses glm-5.2. Opencode 1.1.5
+description: Coding specialist — complex refactoring, multi-file changes, new features. Uses glm-5.3. Opencode 1.1.5
 mode: subagent
 model: opencode-go/deepseek-v4-pro
 hidden: true

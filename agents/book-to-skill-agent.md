@@ -45,7 +45,7 @@ mkdir -p ~/.config/opencode/skills/<SLUG>/chapters
 Trova la struttura capitoli nel full_text.txt (cerca "CHAPTER N" headings).
 Dividi in dispari (Agent A) e pari (Agent B).
 
-**IMPORTANTE**: Lancia 2 task in PARALLELLO usando `subagent_type="general"` ma nel prompt specifica ESCLICITAMENTE: "Usa deepseek-v4-pro per generare i contenuti, non glm-5.2."
+**IMPORTANTE**: Lancia 2 task in PARALLELLO usando `subagent_type="general"` ma nel prompt specifica ESCLICITAMENTE: "Usa deepseek-v4-pro per generare i contenuti, non glm-5.3."
 
 #### Agent A — capitoli dispari + glossary
 Prompt:
@@ -61,7 +61,7 @@ Genera: capitoli + glossary.md
 Formato capitolo (800-1200 token): # Chapter N, ## Core Idea, ## Frameworks Introduced, ## Key Concepts, ## Anti-patterns, ## Key Takeaways
 Glossary: ~1500 token, ALFABETICO, tutti i termini CHIAVE dell'INTERO libro.
 
-CRITICAL: Questo task usa deepseek-v4-pro (modello economico). Non hai bisogno di glm-5.2 per questo lavoro. Basta deepseek-v4-pro.
+CRITICAL: Questo task usa deepseek-v4-pro (modello economico). Non hai bisogno di glm-5.3 per questo lavoro. Basta deepseek-v4-pro.
 
 Return JSON: {"chapters_created": N, "glossary_created": bool, "files": [...]}
 ```
@@ -79,7 +79,7 @@ Genera: capitoli + patterns.md (~2000 token, When/How/Trade-offs) + cheatsheet.m
 
 NON creare glossary.md (lo fa Agent A).
 
-CRITICAL: Questo task usa deepseek-v4-pro (modello economico). Non hai bisogno di glm-5.2 per questo lavoro. Basta deepseek-v4-pro.
+CRITICAL: Questo task usa deepseek-v4-pro (modello economico). Non hai bisogno di glm-5.3 per questo lavoro. Basta deepseek-v4-pro.
 
 Return JSON: {"chapters_created": N, "skill_complete": bool, "files": [...]}
 ```
@@ -95,7 +95,7 @@ Riepiloga: slug, N capitoli, N file, tempo totale.
 
 ## Regole
 1. Usa SEMPRE subagenti in parallelo per la generazione capitoli (mai sequenziale).
-2. deepseek-v4-pro è SUFFICIENTE per tutto — non serve glm-5.2 per generare capitoli.
+2. deepseek-v4-pro è SUFFICIENTE per tutto — non serve glm-5.3 per generare capitoli.
 3. Se l'utente passa più libri, processali in batch con `--batch` mode.
 4. Slug auto-generato dal nome file: lowercase, solo [a-z0-9-].
 5. Headroom compression sui tool output grandi (>800 char).

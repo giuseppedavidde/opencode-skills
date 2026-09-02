@@ -37,7 +37,7 @@ tramite i modelli **opencode-go** (nessuna API key esterna richiesta).
 │    task(subagent_type="general")                 │
 │    Legge .md + .prompt.txt                       │
 │    Estrae Paper strutturato in JSON              │
-│    Usa deepseek-v4-flash / glm-5.2               │
+│    Usa deepseek-v4-flash / glm-5.3               │
 └──────────────────────────────────────────────────┘
 ```
 
@@ -49,7 +49,7 @@ QuantMind usa l'OpenAI Agents SDK internamente e richiederebbe una
 | Passo | Cosa | API Key | Modello |
 |-------|------|---------|---------|
 | **Preprocessing** | fetch arXiv/URL + PDF→markdown | ❌ Nessuna | — |
-| **Estrazione LLM** | markdown → Paper strutturato | ✅ opencode-go | deepseek-v4-flash / glm-5.2 |
+| **Estrazione LLM** | markdown → Paper strutturato | ✅ opencode-go | deepseek-v4-flash / glm-5.3 |
 
 ## Utilizzo
 
@@ -87,7 +87,7 @@ Estrai il JSON strutturato del paper
 ```
 
 Il subagent usa il modello opencode-go che preferisci (default:
-deepseek-v4-flash, oppure glm-5.2 per maggiore profondità).
+deepseek-v4-flash, oppure glm-5.3 per maggiore profondità).
 
 ### Workflow completo (in una richiesta)
 

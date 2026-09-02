@@ -113,7 +113,7 @@ export const VerificaGatePlugin = async ({ directory: _directory }) => {
         }
 
         if (verifica.confidenza !== null && verifica.confidenza < 40) {
-          const warning = "\n\n\u26a0\ufe0f [verifica-gate] Confidenza < 40: chiedi all'utente se vuole escalation a glm-5.2 (@general) o se va bene cosi (soglie in router.md).";
+          const warning = "\n\n\u26a0\ufe0f [verifica-gate] Confidenza < 40: chiedi all'utente se vuole escalation a glm-5.3 (@general) o se va bene cosi (soglie in router.md).";
           logEvent(subagentType, "low_confidence", verifica.confidenza, promptSnippet);
           return mutateOutput(output, field, warning);
         }

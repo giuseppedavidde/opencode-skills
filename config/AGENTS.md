@@ -3,12 +3,12 @@
 ## Multi-Agent Architecture
 This OpenCode instance uses automatic model routing to save tokens:
 - **Router (build agent)**: deepseek-v4-flash — receives all requests, classifies, delegates
-- **@trade**: deepseek-v4-pro (default), escalabile a glm-5.2 per calcoli complessi — trading, options, market analysis
-- **@coder**: glm-5.2 — complex coding, refactoring, multi-file changes 
+- **@trade**: deepseek-v4-pro (default), escalabile a glm-5.3 per calcoli complessi — trading, options, market analysis
+- **@coder**: glm-5.3 — complex coding, refactoring, multi-file changes 
 - **@graphify_helper**: deepseek-v4-flash — smart graphify orchestrator, builds/updates/queries knowledge graphs
 - **@skill_updater**: deepseek-v4-flash — updates skills that depend on -src submodules (graphify, book-to-skill, quant-mind, karpathy)
 - **@explore / @scout**: deepseek-v4-flash — code search / web research
-- **@general**: glm-5.2 — escalation target per calcoli complessi di @trade (non chiamato direttamente)
+- **@general**: glm-5.3 — escalation target per calcoli complessi di @trade (non chiamato direttamente)
 
 The router delegates based on keywords. Trading requests go to @trade, complex coding to @coder, skill updates to @skill_updater, graphify requests to @graphify_helper.
 Every subagent MUST end its response with a `## VERIFICA` section (confidenza, evidenza, non_verificato, escalation_consigliata). The router interprets this to decide whether to retry, escalate, or ask the user for clarification.
