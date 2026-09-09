@@ -108,12 +108,17 @@ def compute_sentiment_6d(
         detail_parts.append(f"P/E {pe_val:.1f} EPSg {eps_val:.1%}")
 
     try:
-        exps = ticker.options
+        # fix A2: opzioni via DataProvider (cache centralizzata, niente
+        # chiamate yfinance dirette per ticker).
+        from trading_mcp.data.provider import data_provider
+        exps = data_provider.get_options_expirations(symbol)
         if exps and len(exps) >= 2:
             pc_ratios = []
             for exp in exps[:4]:
                 try:
-                    chain = ticker.option_chain(exp)
+                    chain = data_provider.get_options_chain(symbol, exp)
+                    if chain is None:
+                        continue
                     calls = chain.calls
                     puts = chain.puts
                     if not calls.empty and not puts.empty:

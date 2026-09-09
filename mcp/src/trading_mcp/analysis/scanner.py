@@ -87,11 +87,6 @@ from trading_mcp.analysis.vsa import compute_vsa, get_vsa_signals
 from trading_mcp.weights_config import get_weights
 
 
-_WSB_HOTLIST: dict | None = None
-_WSB_HOTLIST_TIME: float = 0.0
-_WSB_HOTLIST_TTL: float = 1800.0  # 30 minutes
-
-
 def load_universe(name: str, tickers_dir: str) -> list[dict[str, str]]:
     """Load ticker universe from CSV files.
 
@@ -231,12 +226,17 @@ def _get_spx_hist() -> pd.DataFrame:
 
 
 def _get_wsb_hotlist() -> dict | None:
-    """Get WSB hotlist with 30-min TTL cache. Currently not implemented — returns None."""
-    global _WSB_HOTLIST, _WSB_HOTLIST_TIME
-    now = time.time()
-    if _WSB_HOTLIST is not None and (now - _WSB_HOTLIST_TIME) <= _WSB_HOTLIST_TTL:
-        return _WSB_HOTLIST
-    return None
+    """Get WSB hotlist with 30-min TTL cache (fix A2).
+
+    Delegates to ``fetch_wsb_hotlist`` which is already module-level cached:
+    a full scan issues at most one Reddit request per TTL window.
+    """
+    try:
+        from trading_mcp.analysis.sentiment_web import fetch_wsb_hotlist
+        return fetch_wsb_hotlist(timeout=5)
+    except Exception as e:
+        logger.warning("WSB hotlist unavailable: %s: %s", type(e).__name__, e)
+        return None
 
 
 def compute_crypto_analysis(ticker_obj: yf.Ticker, hist: pd.DataFrame) -> tuple[int, str]:

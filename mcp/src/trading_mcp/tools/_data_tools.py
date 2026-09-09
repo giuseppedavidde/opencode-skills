@@ -98,7 +98,7 @@ def register_data_tools(mcp_server: FastMCP) -> None:
 
     @mcp_server.tool()
     def fetch_options_chain(
-        ticker: str, expiry: str
+        ticker: str, expiry: str, strike_window: int | None = 10
     ) -> dict[str, Any]:
         """Fetch options chain with Greeks and IV metrics.
 
@@ -107,6 +107,9 @@ def register_data_tools(mcp_server: FastMCP) -> None:
             expiry: Target expiry date (YYYY-MM-DD). REQUIRED — the tool rejects calls
                     without it. If the exact date is unavailable, snaps to the nearest
                     available expiry.
+            strike_window: Number of strikes to keep around ATM on each side
+                    (default 10 → ±10 strikes, ~70-90% smaller payload). Pass None
+                    or -1 to return the full chain.
 
         Returns:
             Dictionary with calls/puts lists including Greeks, and IV metrics.
@@ -114,11 +117,12 @@ def register_data_tools(mcp_server: FastMCP) -> None:
         if not expiry or str(expiry).lower() in ("null", "none", ""):
             return {"ticker": ticker, "error": "expiry is REQUIRED. Pass expiry='YYYY-MM-DD'."}
 
-        cache_params: dict[str, Any] = {"expiry": str(expiry)}
+        window = strike_window if strike_window is None or strike_window > 0 else None
+        cache_params: dict[str, Any] = {"expiry": str(expiry), "strike_window": window}
         cached = result_cache.get("fetch_options_chain", ticker, cache_params)
         if cached is not None:
             return cached
 
-        result = _fetch_options_chain(ticker, expiry)
+        result = _fetch_options_chain(ticker, expiry, strike_window=window)
         result_cache.set("fetch_options_chain", ticker, cache_params, result)
         return result

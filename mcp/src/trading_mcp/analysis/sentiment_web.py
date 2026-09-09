@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from typing import Any
 
 import yfinance as yf
@@ -101,8 +102,25 @@ def fetch_finviz_news(ticker: str, timeout: int = 8) -> tuple[float | None, str]
     return _score_headlines(headlines)
 
 
+# ── WSB hotlist TTL cache (fix A2) ────────────────────────────────────
+# Un solo fetch Reddit per ~30 min, condiviso da scanner e sentiment_6d.
+_WSB_HOTLIST_CACHE: dict[str, Any] | None = None
+_WSB_HOTLIST_CACHE_TIME: float = 0.0
+_WSB_HOTLIST_CACHE_TTL: float = 1800.0  # 30 minutes
+
+
 def fetch_wsb_hotlist(timeout: int = 8) -> dict[str, Any] | None:
-    """Fetch WallStreetBets hot mentions from Reddit public JSON."""
+    """Fetch WallStreetBets hot mentions from Reddit public JSON.
+
+    Result is cached with a 30-minute TTL at module level so a full-market
+    scan issues at most one Reddit request per TTL window (fix A2).
+    """
+    global _WSB_HOTLIST_CACHE, _WSB_HOTLIST_CACHE_TIME
+
+    now = time.time()
+    if _WSB_HOTLIST_CACHE is not None and (now - _WSB_HOTLIST_CACHE_TIME) <= _WSB_HOTLIST_CACHE_TTL:
+        return _WSB_HOTLIST_CACHE
+
     try:
         import urllib.request
 
@@ -147,7 +165,11 @@ def fetch_wsb_hotlist(timeout: int = 8) -> dict[str, Any] | None:
             ticker_mentions[tick]["weight"] += weight
             ticker_mentions[tick]["wsb_keywords"] += wsb_word_hits
 
-    return ticker_mentions if ticker_mentions else None
+    if ticker_mentions:
+        _WSB_HOTLIST_CACHE = ticker_mentions
+        _WSB_HOTLIST_CACHE_TIME = now
+        return ticker_mentions
+    return None
 
 
 def compute_social_sentiment(

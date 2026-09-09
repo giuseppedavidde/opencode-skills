@@ -32,6 +32,10 @@ CACHE_DIR = Path.home() / ".cache" / "trading_mcp"
 CACHE_FILE = CACHE_DIR / "result_cache.json"
 MAX_ENTRIES = 500
 
+# Debounce/write batching (fix L2): avoids O(N) fsync on every cache write.
+# Writes are aggregated and flushed periodically, and always on shutdown.
+_SAVE_DEBOUNCE_SECONDS = 2.0
+
 # ── TTL configurabile per tool ───────────────────────────────────────
 # I TTL sono definiti qui; "EOD" = secondi fino a fine giornata UTC.
 
@@ -131,6 +135,8 @@ class ResultCache:
         self._lock = threading.Lock()
         self._entries: dict[str, ResultCacheEntry] = {}
         self._stats: dict[str, dict[str, int]] = {}
+        self._save_timer: threading.Timer | None = None
+        self._dirty: bool = False
         self._load()
 
     # ── Persistenza ───────────────────────────────────────────────
@@ -158,9 +164,18 @@ class ResultCache:
             self._entries = {}
 
     def _save(self) -> None:
-        """Salva la cache su file con scrittura atomica (temp + rename)."""
+        """Salva la cache su file con scrittura atomica (temp + rename).
+
+        Chiamata dal delayed flush: solo quando c'e' un payload effettivamente
+        sporco. L'fsync avviene una volta per flush, non per ogni ``set`` (fix L2).
+        """
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        data = {key: entry.model_dump() for key, entry in self._entries.items()}
+        with self._lock:
+            if not self._dirty:
+                return
+            data = {key: entry.model_dump() for key, entry in self._entries.items()}
+            self._dirty = False
+
         tmp_fd = None
         tmp_path = None
         try:
@@ -190,6 +205,29 @@ class ResultCache:
                     os.remove(tmp_path)
                 except OSError:
                     pass
+
+    def _schedule_save(self) -> None:
+        """Arm a debounced save: aggregate writes, flush once every TTL window.
+
+        A single Timer is reused so bursts of ``set()`` calls (e.g. a market
+        scan writing hundreds of entries) collapse into one fsync (fix L2).
+        """
+        with self._lock:
+            self._dirty = True
+            if self._save_timer is not None:
+                return  # already armed; will capture the pending changes
+            tm = threading.Timer(_SAVE_DEBOUNCE_SECONDS, self._save)
+            tm.daemon = True
+            self._save_timer = tm
+            tm.start()
+
+    def _flush_pending(self) -> None:
+        """Immediate synchronous flush (used by clear_all / graceful shutdown)."""
+        with self._lock:
+            if self._save_timer is not None:
+                self._save_timer.cancel()
+                self._save_timer = None
+        self._save()
 
     # ── Eviction LRU ──────────────────────────────────────────────
 
@@ -288,7 +326,7 @@ class ResultCache:
             self._evict_expired()
             self._entries[key] = entry
             self._evict_lru()
-            self._save()
+        self._schedule_save()
 
     def get_stats(self) -> dict[str, dict[str, Any]]:
         """Restituisce le statistiche hit/miss per tool."""
@@ -309,11 +347,12 @@ class ResultCache:
         with self._lock:
             self._entries.clear()
             self._stats.clear()
-            if CACHE_FILE.exists():
-                try:
-                    CACHE_FILE.unlink()
-                except OSError:
-                    pass
+        self._flush_pending()
+        if CACHE_FILE.exists():
+            try:
+                CACHE_FILE.unlink()
+            except OSError:
+                pass
 
 
 # ── Singleton ─────────────────────────────────────────────────────────

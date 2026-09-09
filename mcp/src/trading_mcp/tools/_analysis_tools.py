@@ -41,7 +41,7 @@ def register_analysis_tools(
         regime: str = "NORMAL",
         max_workers: int = 8,
         fetch_news: bool = True,
-        verbose: bool = True,
+        verbose: bool = False,
     ) -> dict[str, Any]:
         """Scan a market universe for accumulation patterns and rank by score.
 
@@ -53,9 +53,9 @@ def register_analysis_tools(
             min_score: Min score threshold (0-100).
             top_n: Max results.
             regime: Macro window (FULL, NORMAL, SELECTIVE, DEFENSIVE).
-            max_workers: Parallel workers (default 20).
+            max_workers: Parallel workers (default 8).
             fetch_news: If True, scrape Finviz/WSB for web sentiment.
-            verbose: If True, include full detail strings and sub-scores. Compress output with headroom to save tokens.
+            verbose: If True, include full detail strings and sub-scores. Default False.
         """
         cache_params: dict[str, Any] = {
             "universe": universe,
@@ -68,7 +68,7 @@ def register_analysis_tools(
         }
         cached = result_cache.get("scan_market", "BATCH", cache_params)
         if cached is not None:
-            return cached
+            return _apply_scan_verbose_filter(cached, verbose)
 
         if tickers:
             universe_list = parse_custom_tickers(tickers)
@@ -147,31 +147,18 @@ def register_analysis_tools(
 
         output_results = []
         for r in filtered[:top_n]:
-            dims = r.get("dimensions", [])
-            if not verbose:
-                dims = [{"name": d["name"], "score": d["score"]} for d in dims]
-
-            mods = r.get("modifiers", {})
-            if not verbose:
-                mods = {k: v.get("score") if isinstance(v, dict) else v for k, v in mods.items()}
-
-            sbd = r.get("sentiment_breakdown")
-            if not verbose and sbd:
-                sbd = {k: v for k, v in sbd.items() if v is not None}
-
             entry = {
                 "ticker": r["symbol"],
                 "final_score": r["final_score"],
-                "dimensions": dims,
-                "modifiers": mods,
-                "indicators": r.get("indicators", {}) if verbose else {},
+                "dimensions": r.get("dimensions", []),
+                "modifiers": r.get("modifiers", {}),
+                "indicators": r.get("indicators", {}),
                 "flags": r.get("flags", []),
                 "sector": r.get("sector", ""),
                 "price": r.get("price", 0.0),
                 "pattern": r.get("pattern", ""),
+                "sentiment_breakdown": r.get("sentiment_breakdown"),
             }
-            if verbose:
-                entry["sentiment_breakdown"] = sbd
             output_results.append(entry)
 
         scan_result = {
@@ -196,14 +183,14 @@ def register_analysis_tools(
             "results": output_results,
         }
         result_cache.set("scan_market", "BATCH", cache_params, scan_result)
-        return scan_result
+        return _apply_scan_verbose_filter(scan_result, verbose)
 
     @mcp_server.tool()
     def analyze_stock(
         ticker: str,
         include_options_context: bool = False,
         fetch_news: bool = True,
-        verbose: bool = True,
+        verbose: bool = False,
     ) -> dict[str, Any]:
         """Deep single-stock analysis through all dimensions.
 
@@ -216,7 +203,7 @@ def register_analysis_tools(
             include_options_context: If True, fetch options chain data too.
             fetch_news: If True, scrape yfinance/Finviz news for web sentiment.
             verbose: If True, include full detail strings and sub-scores.
-                     Compress output with headroom to save tokens.
+                     Default False.
 
         Returns:
             Dictionary with composite_score, verdict, confidence, dimensions,
@@ -228,7 +215,7 @@ def register_analysis_tools(
         }
         cached = result_cache.get("analyze_stock", ticker, cache_params)
         if cached is not None:
-            return cached
+            return _apply_stock_verbose_filter(cached, verbose)
 
         t_dict = {"symbol": ticker, "name": ticker, "market": "US"}
         result = process_ticker(t_dict, fetch_news=fetch_news)
@@ -271,16 +258,8 @@ def register_analysis_tools(
 
         composite_score = result["final_score"]
         dimensions = result.get("dimensions", [])
-        if not verbose:
-            dimensions = [{"name": d["name"], "score": d["score"]} for d in dimensions]
-
         modifiers = result.get("modifiers", {})
-        if not verbose:
-            modifiers = {k: v.get("score") if isinstance(v, dict) else v for k, v in modifiers.items()}
-
         sbd = result.get("sentiment_breakdown")
-        if not verbose and sbd:
-            sbd = {k: v for k, v in sbd.items() if v is not None}
 
         verdict_obj = _compute_verdict(composite_score, result.get("dimensions", []), result)
 
@@ -311,14 +290,13 @@ def register_analysis_tools(
             output["last_data_date"] = freshness_info.get("last_data_date")
         except Exception:
             pass
-        if verbose:
-            output["indicators"] = result.get("indicators", {})
-            output["sentiment_breakdown"] = result.get("sentiment_breakdown")
+        output["indicators"] = result.get("indicators", {})
+        output["sentiment_breakdown"] = sbd
         if include_options_context:
             output["options_context"] = options_context
 
         result_cache.set("analyze_stock", ticker, cache_params, output)
-        return output
+        return _apply_stock_verbose_filter(output, verbose)
 
     @mcp_server.tool()
     def analyze_options(
@@ -364,6 +342,50 @@ def _safe_process(fn, t_dict, symbol, fetch_news=True):
         logger.error("_safe_process failed for %s via %s: %s: %s",
                      symbol, fn.__name__, type(e).__name__, e)
         return None
+
+
+def _apply_scan_verbose_filter(scan_result: dict[str, Any], verbose: bool) -> dict[str, Any]:
+    """Post-lookup verbose filter (fix M1).
+
+    The cache always stores the FULL payload; verbose filtering is applied
+    on a copy at return time, so a non-verbose request never mutates the
+    cached rich payload.
+    """
+    if verbose:
+        return scan_result
+    out = dict(scan_result)
+    pruned: list[dict] = []
+    for r in out.get("results", []):
+        entry = dict(r)
+        entry["dimensions"] = [{"name": d["name"], "score": d["score"]} for d in r.get("dimensions", [])]
+        mods = r.get("modifiers", {})
+        entry["modifiers"] = {k: v.get("score") if isinstance(v, dict) else v for k, v in mods.items()}
+        sbd = r.get("sentiment_breakdown")
+        if sbd:
+            entry["sentiment_breakdown"] = {k: v for k, v in sbd.items() if v is not None}
+        else:
+            entry.pop("sentiment_breakdown", None)
+        entry["indicators"] = {}
+        pruned.append(entry)
+    out["results"] = pruned
+    return out
+
+
+def _apply_stock_verbose_filter(output: dict[str, Any], verbose: bool) -> dict[str, Any]:
+    """Post-lookup verbose filter for analyze_stock (fix M1)."""
+    if verbose:
+        return output
+    out = dict(output)
+    out["dimensions"] = [{"name": d["name"], "score": d["score"]} for d in output.get("dimensions", [])]
+    mods = output.get("modifiers", {})
+    out["modifiers"] = {k: v.get("score") if isinstance(v, dict) else v for k, v in mods.items()}
+    sbd = output.get("sentiment_breakdown")
+    if sbd:
+        out["sentiment_breakdown"] = {k: v for k, v in sbd.items() if v is not None}
+    else:
+        out.pop("sentiment_breakdown", None)
+    out.pop("indicators", None)
+    return out
 
 
 def _compute_verdict(

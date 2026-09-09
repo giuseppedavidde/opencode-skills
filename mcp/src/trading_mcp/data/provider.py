@@ -16,16 +16,87 @@ outputs.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
+import os
+import pickle
 import threading
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
 import yfinance as yf
 
 logger = logging.getLogger(__name__)
+
+# ── Disk persistence (M2: cold-start elimination) ────────────────────
+# Hist/info sono persistiti su disco con TTL per evitare ri-fetch al riavvio
+# del server. Si usa pickle (stdlib, zero dipendenze native) invece di parquet
+# perche' pyarrow/fastparquet non sono installati nel venv condiviso.
+_DATA_CACHE_DIR = Path(
+    os.environ.get(
+        "TRADING_DATA_CACHE_DIR",
+        str(Path.home() / ".cache" / "trading_mcp" / "data"),
+    )
+)
+
+# TTL su disco per periodo/interval: i daily bar non cambiano intraday → 6h;
+# i bar intraday → 1h (allineato al TTL in-memory di default).
+_DISK_TTL: dict[str, float] = {
+    "daily": 6 * 3600,
+    "intraday": 3600,
+}
+
+
+def _disk_ttl_for(interval: str) -> float:
+    """Resolve disk TTL for a bar interval."""
+    return _DISK_TTL["daily"] if interval == "1d" else _DISK_TTL["intraday"]
+
+
+def _disk_path(kind: str, key: str) -> Path:
+    """Build a deterministic, filesystem-safe path for a cache key."""
+    digest = hashlib.sha1(key.encode("utf-8")).hexdigest()[:24]
+    return _DATA_CACHE_DIR / f"{kind}_{digest}.pkl"
+
+
+def _disk_meta_path(kind: str, key: str) -> Path:
+    """Sidecar metadata file storing the fetch timestamp for TTL checks."""
+    digest = hashlib.sha1(f"{kind}:{key}".encode("utf-8")).hexdigest()[:24]
+    return _DATA_CACHE_DIR / f"{digest}.meta.json"
+
+
+def _disk_load(kind: str, key: str, ttl: float) -> Any | None:
+    """Load a persisted payload from disk if still within TTL."""
+    data_path = _disk_path(kind, key)
+    meta_path = _disk_meta_path(kind, key)
+    if not data_path.exists() or not meta_path.exists():
+        return None
+    try:
+        with open(meta_path, "r", encoding="utf-8") as fh:
+            meta = json.load(fh)
+        if time.time() - float(meta.get("ts", 0.0)) > ttl:
+            return None
+        with open(data_path, "rb") as fh:
+            return pickle.load(fh)
+    except (OSError, ValueError, EOFError, pickle.PickleError):
+        return None
+
+
+def _disk_save(kind: str, key: str, data: Any) -> None:
+    """Persist a payload to disk with a sidecar timestamp."""
+    try:
+        _DATA_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        data_path = _disk_path(kind, key)
+        meta_path = _disk_meta_path(kind, key)
+        with open(data_path, "wb") as fh:
+            pickle.dump(data, fh, protocol=pickle.HIGHEST_PROTOCOL)
+        with open(meta_path, "w", encoding="utf-8") as fh:
+            json.dump({"ts": time.time()}, fh)
+    except (OSError, pickle.PickleError) as exc:
+        logger.warning("Disk cache save failed for %s: %s: %s", kind, type(exc).__name__, exc)
 
 
 # ── Data freshness utility ────────────────────────────────────────────
@@ -132,9 +203,13 @@ class CacheEntry:
 
 @dataclass
 class TickerCache:
-    """Per-ticker cache holding hist, info, options, and optional stale copies."""
+    """Per-ticker cache holding hist, info, options, and optional stale copies.
 
-    hist: CacheEntry | None = None
+    ``hist`` e' indicizzato per ``(period, interval)``: un fetch ``1y`` non deve
+    avvelenare un successivo ``5d`` (fix A1).
+    """
+
+    hist: dict[tuple[str, str], CacheEntry] = field(default_factory=dict)
     info: CacheEntry | None = None
     options_expirations: CacheEntry | None = None
     options_chains: dict[str, CacheEntry] = field(default_factory=dict)
@@ -197,15 +272,33 @@ class DataProvider:
     def get_hist(
         self, symbol: str, period: str = "1y", interval: str = "1d"
     ) -> pd.DataFrame:
-        """Fetch OHLCV history with 1-hour TTL cache."""
+        """Fetch OHLCV history with TTL cache (memory + disk).
+
+        Cache key includes ``(period, interval)`` so a ``1y`` fetch never
+        poisons a subsequent ``5d`` fetch (fix A1).
+        """
         tc = self._ensure_ticker_cache(symbol)
+        cache_key = (period, interval)
 
         with tc.lock:
-            entry = getattr(tc, "hist", None)
+            entry = tc.hist.get(cache_key)
             if entry is not None and entry.is_fresh:
                 logger.debug("Cache HIT: hist for %s (%.0fs old)",
                              symbol, entry.age_seconds)
                 return entry.data
+
+        # Disk persistence (M2): cold-start → avoid re-fetch when TTL-fresh.
+        disk_key = f"hist:{symbol}:{period}:{interval}"
+        hist = _disk_load("hist", disk_key, _disk_ttl_for(interval))
+        if isinstance(hist, pd.DataFrame) and not hist.empty:
+            logger.debug("Disk HIT: hist for %s %s/%s", symbol, period, interval)
+            with tc.lock:
+                tc.hist[cache_key] = CacheEntry(
+                    data=hist,
+                    timestamp=time.time(),
+                    ttl=self._ttl["hist"],
+                )
+            return hist
 
         # Fetch outside lock to avoid deadlock during yfinance call
         hist = self._fetch_hist(symbol, period, interval)
@@ -219,16 +312,19 @@ class DataProvider:
                     return entry.data
 
         with tc.lock:
-            tc.hist = CacheEntry(
+            tc.hist[cache_key] = CacheEntry(
                 data=hist,
                 timestamp=time.time(),
                 ttl=self._ttl["hist"],
             )
 
+        if hist is not None and not hist.empty:
+            _disk_save("hist", disk_key, hist)
+
         return hist
 
     def get_info(self, symbol: str) -> dict[str, Any]:
-        """Fetch fundamental info with 6-hour TTL cache."""
+        """Fetch fundamental info with 6-hour TTL cache (memory + disk)."""
         tc = self._ensure_ticker_cache(symbol)
 
         with tc.lock:
@@ -237,6 +333,18 @@ class DataProvider:
                 logger.debug("Cache HIT: info for %s (%.0fs old)",
                              symbol, entry.age_seconds)
                 return entry.data.copy() if entry.data else {}
+
+        # Disk persistence (M2).
+        disk_key = f"info:{symbol}"
+        info = _disk_load("info", disk_key, self._ttl["info"])
+        if isinstance(info, dict) and info:
+            with tc.lock:
+                tc.info = CacheEntry(
+                    data=info,
+                    timestamp=time.time(),
+                    ttl=self._ttl["info"],
+                )
+            return info.copy()
 
         info = self._fetch_info(symbol)
 
@@ -254,6 +362,9 @@ class DataProvider:
                 timestamp=time.time(),
                 ttl=self._ttl["info"],
             )
+
+        if info:
+            _disk_save("info", disk_key, info)
 
         return info
 
@@ -400,7 +511,14 @@ class DataProvider:
 
         with self._global_lock:
             for tc in self._cache.values():
-                for attr in ("hist", "info", "options_expirations"):
+                for hist_entry in tc.hist.values():
+                    if hist_entry.has_data:
+                        total_entries += 1
+                        if hist_entry.is_fresh:
+                            fresh_entries += 1
+                        elif hist_entry.stale:
+                            stale_entries += 1
+                for attr in ("info", "options_expirations"):
                     entry = getattr(tc, attr, None)
                     if entry is not None and entry.has_data:
                         total_entries += 1
@@ -443,11 +561,15 @@ class DataProvider:
         last_data_date: str | None = None
         last_ts: float | None = None
 
-        if tc is not None and tc.hist is not None and tc.hist.has_data:
-            hist_data = tc.hist.data
-            if isinstance(hist_data, pd.DataFrame) and not hist_data.empty:
-                last_data_date = get_last_data_date(hist_data)
-                last_ts = tc.hist.timestamp
+        if tc is not None and tc.hist:
+            for hist_entry in tc.hist.values():
+                if not hist_entry.has_data:
+                    continue
+                hist_data = hist_entry.data
+                if isinstance(hist_data, pd.DataFrame) and not hist_data.empty:
+                    last_data_date = get_last_data_date(hist_data)
+                    if last_ts is None or hist_entry.timestamp > last_ts:
+                        last_ts = hist_entry.timestamp
 
         label = freshness_label(last_ts, thresholds=thresholds)
         return {

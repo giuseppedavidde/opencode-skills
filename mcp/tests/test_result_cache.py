@@ -222,6 +222,8 @@ def test_lru_eviction():
 def test_persist_and_reload():
     params = {"period": "1y"}
     result_cache.set("bali_signals", "AAPL", params, {"score": 80})
+    # fix L2: writes are debounced now → flush explicitly before asserting.
+    result_cache._flush_pending()
     assert CACHE_FILE.exists()
 
     # Crea una nuova istanza che dovrebbe caricare da file
