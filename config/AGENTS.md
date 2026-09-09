@@ -2,7 +2,7 @@
 
 ## Multi-Agent Architecture
 This OpenCode instance uses automatic model routing to save tokens:
-- **Router (build agent)**: deepseek-v4-flash — receives all requests, classifies, delegates
+- **Router (build agent)**: deepseek-v4-flash-vision-exp — receives all requests, classifies, delegates
 - **@trade**: deepseek-v4-pro (default), escalabile a glm-5.3 per calcoli complessi — trading, options, market analysis
 - **@coder**: glm-5.3 — complex coding, refactoring, multi-file changes 
 - **@graphify_helper**: deepseek-v4-flash — smart graphify orchestrator, builds/updates/queries knowledge graphs
