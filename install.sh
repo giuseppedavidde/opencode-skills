@@ -176,6 +176,23 @@ if [[ -d "$CONFIG_SRC" ]]; then
     done
 fi
 
+# ─── Routing Eval ───
+ROUTING_EVAL_SRC="$REPO_DIR/routing-eval"
+if [[ -d "$ROUTING_EVAL_SRC" ]]; then
+    echo "Installing routing-eval..."
+    target="$CONFIG_DIR/routing-eval"
+    if $FORCE; then
+        rm -rf "$target" 2>/dev/null || true
+        ln -sfn "$ROUTING_EVAL_SRC" "$target"
+        echo "  LINK  routing-eval"
+    elif [[ -e "$target" || -L "$target" ]]; then
+        echo "  SKIP  routing-eval  (already exists)"
+    else
+        ln -sfn "$ROUTING_EVAL_SRC" "$target"
+        echo "  LINK  routing-eval"
+    fi
+fi
+
 # ─── Alphavantage bootstrap ───
 ALPHA_SRC="$REPO_DIR/scripts/alphavantage-mcp.sh"
 if [[ -f "$ALPHA_SRC" ]]; then
@@ -218,13 +235,12 @@ PROSSIMI PASSI:
 
 5. Riavvia opencode per applicare la configurazione
 
-NOTA: routing-stats richiede routing-eval clonato separatamente:
-  git clone https://github.com/giuseppedavidde/routing-eval.git \\
-    ~/Progetti/Github/routing-eval
-  pip install -r ~/Progetti/Github/routing-eval/requirements.txt
-  export ROUTING_EVAL_DIR="\$HOME/Progetti/Github/routing-eval"
+NOTA: routing-stats usa routing-eval incluso nella repo (symlink
+  ~/.config/opencode/routing-eval). Dipendenze:
+  pip install -r "\$REPO_DIR/routing-eval/requirements.txt" nel venv del comando
+  (es. /tmp/opencode/.venv).
 
-Se sposti la repo, rilancia: ./install.sh --force
+Se sposti la repo, rilancia: python3 install.py (ripara i symlink rotti senza --force)
 NEXT
 echo ""
 

@@ -24,3 +24,7 @@ skills/lgbm-trader-skill/config/fmp_api_key.txt
 config/secrets.env
 skills/lgbm-trader-skill/.env
 *.env.dec
+
+# Routing eval — artefatti generati (non versionare)
+routing-eval/data/reports/
+routing-eval/data/*.jsonl

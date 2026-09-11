@@ -31,6 +31,7 @@ opencode-skills/
 │   ├── alphavantage-mcp.sh     # Alpha Vantage MCP bootstrap
 │   └── decrypt_secrets.sh      # Decrypt secrets.env.enc → API keys
 ├── mcp/                        # Trading MCP server (pip install -e)
+├── routing-eval/               # Router evaluation harness (telemetria /routing-stats)
 ├── skills/                     # Skill definitions (45+, see below)
 ├── setup-headroom.sh           # Install headroom in venv
 └── setup-trading-mcp.sh        # Install trading-mcp in venv
@@ -76,6 +77,7 @@ What gets installed:
 | commands   | `command/`     | `~/.config/opencode/command/`         |
 | plugins    | `plugins/`     | `~/.config/opencode/.opencode/plugins/` |
 | config     | `config/`      | `~/.config/opencode/` (symlinked)     |
+| routing-eval | `routing-eval/` | `~/.config/opencode/routing-eval` (symlinked) |
 | alphavantage | `scripts/`   | `~/.local/bin/alphavantage-mcp.sh`    |
 
 All items are symlinked — changes to the repo propagate immediately. The only
@@ -123,13 +125,14 @@ MCP servers to take effect.
 
 ### 7. Optional: routing-stats
 
-The `/routing-stats` slash command requires the companion repo:
+The `/routing-stats` slash command uses `routing-eval/`, which is now bundled in
+this repo and installed automatically as a symlink to
+`~/.config/opencode/routing-eval/`. No separate clone needed.
+
+The command needs `pydantic` in the command venv:
 
 ```bash
-git clone https://github.com/giuseppedavidde/routing-eval.git \
-  ~/Progetti/Github/routing-eval
-pip install -r ~/Progetti/Github/routing-eval/requirements.txt
-export ROUTING_EVAL_DIR="$HOME/Progetti/Github/routing-eval"
+/tmp/opencode/.venv/bin/pip install -r routing-eval/requirements.txt
 ```
 
 ## Portability Notes
@@ -153,7 +156,7 @@ export ROUTING_EVAL_DIR="$HOME/Progetti/Github/routing-eval"
 | MCP servers fail (`exec: ... not found`) | Run `./setup-headroom.sh` and/or `./setup-trading-mcp.sh` |
 | Submodule folders empty | `git submodule update --init --recursive` |
 | `alphavantage-mcp.sh: command not found` | Ensure `~/.local/bin` is in `$PATH` |
-| `routing-stats` shows "not found" | Clone `routing-eval` and set `ROUTING_EVAL_DIR` (see step 7) |
+| `routing-stats` shows "not found" | Rilancia `python3 install.py` per ricreare il symlink; verifica `pip install -r routing-eval/requirements.txt` |
 
 ## Contents
 

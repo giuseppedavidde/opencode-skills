@@ -143,6 +143,15 @@ def build_plan(options: InstallOptions) -> InstallPlan:
                 action.reason = "exists"
             actions.append(action)
 
+    # ── Routing eval (telemetria /routing-stats) ──
+    reval_src = repo_root / "routing-eval"
+    if reval_src.is_dir():
+        dest = options.config_dir / "routing-eval"
+        action = FileAction(source=reval_src, dest=dest, category="routing-eval")
+        if dest.exists() and not options.force:
+            action.reason = "exists"
+        actions.append(action)
+
     return InstallPlan(options=options, actions=actions)
 
 
@@ -235,18 +244,17 @@ def print_next_steps(repo_root: Path) -> None:
     steps.append("")
     steps.append("5. Riavvia opencode per applicare la configurazione")
     steps.append("")
-    steps.append("NOTA: routing-stats richiede routing-eval clonato separatamente:")
-    steps.append("  git clone https://github.com/giuseppedavidde/routing-eval.git \\")
-    steps.append("    ~/Progetti/Github/routing-eval")
-    steps.append("  pip install -r ~/Progetti/Github/routing-eval/requirements.txt")
-    steps.append("  export ROUTING_EVAL_DIR=\"$HOME/Progetti/Github/routing-eval\"")
+    steps.append("NOTA: routing-stats usa routing-eval incluso nella repo (symlink")
+    steps.append("  ~/.config/opencode/routing-eval). Dipendenze:")
+    steps.append("  pip install -r <repo>/routing-eval/requirements.txt nel venv del comando")
+    steps.append("  (es. /tmp/opencode/.venv).")
     steps.append("")
     if repo_root != Path("~/Progetti/Github/opencode-skills").expanduser():
         repo = repo_root
     else:
         repo = repo_root
     steps.append(f"Se sposti la repo, rilancia da: {repo}")
-    steps.append("  python3 install.py --force --config-dir ~/.config/opencode")
+    steps.append("  python3 install.py --config-dir ~/.config/opencode")
 
     print("\n".join(steps))
 

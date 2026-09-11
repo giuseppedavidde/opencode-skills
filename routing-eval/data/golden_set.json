@@ -1,0 +1,423 @@
+[
+  {
+    "id": 1,
+    "text": "analizza AAPL",
+    "expected": "TRADE",
+    "note": "Ticker esplicito + keyword 'analizza'",
+    "category": "TRADE"
+  },
+  {
+    "id": 2,
+    "text": "cosa faccio con la mia posizione LHX?",
+    "expected": "TRADE",
+    "note": "Ticker LHX + keyword 'posizione'",
+    "category": "TRADE"
+  },
+  {
+    "id": 3,
+    "text": "che strategia con opzioni su TSLA?",
+    "expected": "TRADE",
+    "note": "Ticker TSLA + keyword 'opzioni' e 'strategia'",
+    "category": "TRADE"
+  },
+  {
+    "id": 4,
+    "text": "quanto è il delta della mia call su NVDA?",
+    "expected": "TRADE",
+    "note": "Ticker NVDA + keyword 'delta' e 'call'",
+    "category": "TRADE"
+  },
+  {
+    "id": 5,
+    "text": "scan del mercato USA",
+    "expected": "TRADE",
+    "note": "TRADE_STRONG: 'scan del mercato' ora in strong (non più generic).",
+    "category": "TRADE"
+  },
+  {
+    "id": 6,
+    "text": "macro VIX DXY oggi",
+    "expected": "TRADE",
+    "note": "Keyword 'macro', 'VIX', 'DXY' — VIX/DXY sono TRADE_EXACT.",
+    "category": "TRADE"
+  },
+  {
+    "id": 7,
+    "text": "roll della mia call LHX scadenza dicembre",
+    "expected": "TRADE",
+    "note": "Ticker LHX + keyword 'roll', 'call', 'scadenza'",
+    "category": "TRADE"
+  },
+  {
+    "id": 8,
+    "text": "implementa il modulo di autenticazione",
+    "expected": "CODER",
+    "note": "Keyword 'implementa' + 'modulo' -> coding task",
+    "category": "CODER"
+  },
+  {
+    "id": 9,
+    "text": "refactoring del file parser in 3 file separati",
+    "expected": "CODER",
+    "note": "Keyword 'refactoring' esplicita",
+    "category": "CODER"
+  },
+  {
+    "id": 10,
+    "text": "debug this error in main.py: TypeError at line 42",
+    "expected": "CODER",
+    "note": "Keyword 'debug this' e 'error' -> coding",
+    "category": "CODER"
+  },
+  {
+    "id": 11,
+    "text": "scrivi test per utils.py",
+    "expected": "CODER",
+    "note": "Keyword 'scrivi test' -> coding",
+    "category": "CODER"
+  },
+  {
+    "id": 12,
+    "text": "write unit tests for the authentication module",
+    "expected": "CODER",
+    "note": "Keyword 'write test' -> coding",
+    "category": "CODER"
+  },
+  {
+    "id": 13,
+    "text": "graphify questo repo",
+    "expected": "GRAPHIFY",
+    "note": "Keyword 'graphify' esplicita",
+    "category": "GRAPHIFY"
+  },
+  {
+    "id": 14,
+    "text": "build knowledge graph di questo progetto",
+    "expected": "GRAPHIFY",
+    "note": "Keyword esatta 'knowledge graph'",
+    "category": "GRAPHIFY"
+  },
+  {
+    "id": 15,
+    "text": "query del grafo: path between utils.py and main.py",
+    "expected": "GRAPHIFY",
+    "note": "Keyword 'grafo' e 'path between' -> graphify",
+    "category": "GRAPHIFY"
+  },
+  {
+    "id": 16,
+    "text": "what are the god nodes in this repo?",
+    "expected": "GRAPHIFY",
+    "note": "Keyword 'god nodes' -> graphify",
+    "category": "GRAPHIFY"
+  },
+  {
+    "id": 17,
+    "text": "aggiorna graphify all'ultima versione",
+    "expected": "SKILL_UPDATER",
+    "note": "Keyword 'aggiorna graphify' -> skill updater",
+    "category": "SKILL_UPDATER"
+  },
+  {
+    "id": 18,
+    "text": "update skill book-to-skill",
+    "expected": "SKILL_UPDATER",
+    "note": "Keyword 'update skill' + nome skill",
+    "category": "SKILL_UPDATER"
+  },
+  {
+    "id": 19,
+    "text": "sync all skills with remote submodules",
+    "expected": "SKILL_UPDATER",
+    "note": "Keyword 'sync' + 'skills' + 'submodules'",
+    "category": "SKILL_UPDATER"
+  },
+  {
+    "id": 20,
+    "text": "aggiorna tutte le skill del sistema",
+    "expected": "SKILL_UPDATER",
+    "note": "Keyword 'aggiorna tutte le skill'",
+    "category": "SKILL_UPDATER"
+  },
+  {
+    "id": 21,
+    "text": "converti questo PDF in skill: /home/user/libro.pdf",
+    "expected": "BOOK_TO_SKILL",
+    "note": "Keyword 'converti' + 'PDF' + 'skill'",
+    "category": "BOOK_TO_SKILL"
+  },
+  {
+    "id": 22,
+    "text": "book-to-skill su trading.epub",
+    "expected": "BOOK_TO_SKILL",
+    "note": "Keyword esplicita 'book-to-skill'",
+    "category": "BOOK_TO_SKILL"
+  },
+  {
+    "id": 23,
+    "text": "processa questo libro in una skill: /docs/manuale.pdf",
+    "expected": "BOOK_TO_SKILL",
+    "note": "Keyword 'processa' + 'libro' + 'skill'",
+    "category": "BOOK_TO_SKILL"
+  },
+  {
+    "id": 24,
+    "text": "genera skill da questo documento EPUB",
+    "expected": "BOOK_TO_SKILL",
+    "note": "Keyword 'genera skill' + 'EPUB'",
+    "category": "BOOK_TO_SKILL"
+  },
+  {
+    "id": 25,
+    "text": "spiegami questo codice Python",
+    "expected": "SIMPLE",
+    "note": "Richiesta di spiegazione, nessuna keyword di routing",
+    "category": "SIMPLE"
+  },
+  {
+    "id": 26,
+    "text": "che ore sono?",
+    "expected": "SIMPLE",
+    "note": "Domanda generica",
+    "category": "SIMPLE"
+  },
+  {
+    "id": 27,
+    "text": "come funziona il decorator pattern in Python?",
+    "expected": "SIMPLE",
+    "note": "Domanda concettuale, nessuna azione di coding richiesta",
+    "category": "SIMPLE"
+  },
+  {
+    "id": 28,
+    "text": "cerca su web il prezzo del petrolio",
+    "expected": "SIMPLE",
+    "note": "NUOVA REGOLA: web research + commodity (petrolio) → SIMPLE (handle yourself). Non più TRADE.",
+    "category": "WEB_RESEARCH"
+  },
+  {
+    "id": 29,
+    "text": "aggiorna il mio portfolio",
+    "expected": "TRADE",
+    "note": "'aggiorna' potrebbe sembrare skill_updater ma 'portfolio' è trading. Priorità trade.",
+    "category": "TRADE"
+  },
+  {
+    "id": 30,
+    "text": "come funziona il graph nel mio codice React?",
+    "expected": "GRAPHIFY",
+    "note": "GRAPHIFY (punto 2) prevale su coding context. 'graph' → graphify anche con 'nel mio codice'.",
+    "category": "GRAPHIFY"
+  },
+  {
+    "id": 31,
+    "text": "quanto fa 2+2?",
+    "expected": "SIMPLE",
+    "note": "Domanda banale, nessuna keyword di routing",
+    "category": "SIMPLE"
+  },
+  {
+    "id": 32,
+    "text": "quali file ci sono nella cartella corrente?",
+    "expected": "SIMPLE",
+    "note": "Richiesta di elencare file",
+    "category": "SIMPLE"
+  },
+
+  {
+    "id": 33,
+    "text": "modifica IBKR_Trading per estrarre le posizioni del portfolio",
+    "expected": "CODER",
+    "note": "ADVERSARIALE: 'modifica' (coding verb) + 'posizioni' + 'portfolio' (trade generic). Coding vince.",
+    "category": "ADVERSARIAL_CODER_vs_TRADE"
+  },
+  {
+    "id": 34,
+    "text": "Guarda IBKR_Trading e fai in modo che io possa estrapolare le posizioni del mio portfolio con un nuovo script",
+    "expected": "CODER",
+    "note": "ADVERSARIALE: 'fai in modo che' (coding phrase) + 'script' + 'portfolio'. Coding vince su generic.",
+    "category": "ADVERSARIAL_CODER_vs_TRADE"
+  },
+  {
+    "id": 35,
+    "text": "scrivi un backtest per la mia strategia",
+    "expected": "CODER",
+    "note": "ADVERSARIALE: 'scrivi un backtest' (coding) + 'strategia' (trade generic). Coding vince.",
+    "category": "ADVERSARIAL_CODER_vs_TRADE"
+  },
+  {
+    "id": 36,
+    "text": "implementa un modulo che calcola i Greeks",
+    "expected": "CODER",
+    "note": "BUILD VERB (implementa + un modulo) vince su TRADE_STRONG (greeks). Il verbo d'azione è il discriminatore, non la forza della keyword.",
+    "category": "ADVERSARIAL_CODER_vs_TRADE_STRONG"
+  },
+  {
+    "id": 37,
+    "text": "come funziona il delta hedging nel mio codice?",
+    "expected": "CODER",
+    "note": "BUILD CONTEXT ('nel mio codice') vince su TRADE_STRONG (delta, hedging). Domanda sul proprio codice.",
+    "category": "ADVERSARIAL_CODER_vs_TRADE_STRONG"
+  },
+  {
+    "id": 38,
+    "text": "analizza TSLA con opzioni",
+    "expected": "TRADE",
+    "note": "ADVERSARIALE: Ticker TSLA + 'opzioni' (trade strong). Resta TRADE nonostante 'analizza'.",
+    "category": "ADVERSARIAL_TRADE_STRONG"
+  },
+  {
+    "id": 39,
+    "text": "roll della mia call LHX",
+    "expected": "TRADE",
+    "note": "ADVERSARIALE: Ticker LHX + 'roll' + 'call' (trade strong). Nessun coding verb.",
+    "category": "ADVERSARIAL_TRADE_STRONG"
+  },
+  {
+    "id": 40,
+    "text": "aggiorna graphify",
+    "expected": "SKILL_UPDATER",
+    "note": "ADVERSARIALE: 'aggiorna graphify' -> skill updater. Non deve andare a graphify.",
+    "category": "ADVERSARIAL_SKILL_UPDATER"
+  },
+  {
+    "id": 41,
+    "text": "converti questo PDF in skill",
+    "expected": "BOOK_TO_SKILL",
+    "note": "ADVERSARIALE: 'converti' + 'PDF' + 'skill' -> book-to-skill.",
+    "category": "ADVERSARIAL_BOOK_TO_SKILL"
+  },
+  {
+    "id": 42,
+    "text": "spiegami questo codice",
+    "expected": "SIMPLE",
+    "note": "ADVERSARIALE: 'codice' è keyword ma 'spiegami' non è un verbo di coding action. Resta SIMPLE.",
+    "category": "ADVERSARIAL_SIMPLE"
+  },
+  {
+    "id": 43,
+    "text": "aggiungi una funzione per calcolare il prezzo medio nel file utils.py",
+    "expected": "CODER",
+    "note": "ADVERSARIALE: 'aggiungi' + 'funzione' + 'nel file' (coding) + 'prezzo' (trade generic). Coding vince.",
+    "category": "ADVERSARIAL_CODER_vs_TRADE"
+  },
+  {
+    "id": 44,
+    "text": "devi modificare il modulo scanner per aggiungere supporto al mercato europeo",
+    "expected": "CODER",
+    "note": "ADVERSARIALE: 'devi modificare' + 'modulo' (coding) + 'scanner' + 'mercato' (trade generic). Coding vince.",
+    "category": "ADVERSARIAL_CODER_vs_TRADE"
+  },
+  {
+    "id": 45,
+    "text": "cerca su web il prezzo di TSLA",
+    "expected": "TRADE",
+    "note": "NUOVO: web research + ticker TSLA → TRADE (ticker detection vince su web research).",
+    "category": "WEB_RESEARCH_TRADE"
+  },
+  {
+    "id": 46,
+    "text": "aggiungi la posizione al file config",
+    "expected": "CODER",
+    "note": "NUOVO: 'aggiungi' (coding) + 'posizione' (trade generic) + 'file config' (coder context). Coding vince.",
+    "category": "ADVERSARIAL_CODER_vs_TRADE"
+  },
+  {
+    "id": 47,
+    "text": "analizza la mia posizione",
+    "expected": "TRADE",
+    "note": "NUOVO: 'analizza' + 'posizione' senza ticker → TRADE_GENERIC. Nessun coding verb → TRADE.",
+    "category": "TRADE"
+  },
+  {
+    "id": 48,
+    "text": "scrivi una mail",
+    "expected": "SIMPLE",
+    "note": "V5 ADVERSARIAL: verbo standalone 'scrivi' senza oggetto code-ish → SIMPLE.",
+    "category": "ADVERSARIAL_SIMPLE"
+  },
+  {
+    "id": 49,
+    "text": "crea un appuntamento",
+    "expected": "SIMPLE",
+    "note": "V5 ADVERSARIAL: verbo standalone 'crea' senza oggetto code-ish → SIMPLE.",
+    "category": "ADVERSARIAL_SIMPLE"
+  },
+  {
+    "id": 50,
+    "text": "scrivi uno script per scaricare i dati",
+    "expected": "CODER",
+    "note": "V5 ADVERSARIAL: standalone 'scrivi' + oggetto code-ish 'script' → CODER.",
+    "category": "ADVERSARIAL_CODER_vs_TRADE"
+  },
+  {
+    "id": 51,
+    "text": "crea una funzione per calcolare il prezzo medio",
+    "expected": "CODER",
+    "note": "V5 ADVERSARIAL: standalone 'crea' + oggetto code-ish 'funzione' → CODER.",
+    "category": "ADVERSARIAL_CODER_vs_TRADE"
+  },
+  {
+    "id": 52,
+    "text": "aggiungi una riga al documento",
+    "expected": "SIMPLE",
+    "note": "V5 ADVERSARIAL: standalone 'aggiungi' senza oggetto code-ish → SIMPLE.",
+    "category": "ADVERSARIAL_SIMPLE"
+  },
+  {
+    "id": 53,
+    "text": "write a letter to my boss",
+    "expected": "SIMPLE",
+    "note": "V5 ADVERSARIAL: standalone 'write' senza oggetto code-ish → SIMPLE.",
+    "category": "ADVERSARIAL_SIMPLE"
+  },
+  {
+    "id": 54,
+    "text": "write tests for utils.py",
+    "expected": "CODER",
+    "note": "V5 ADVERSARIAL: standalone 'write' + oggetto code-ish 'tests' + '.py' → CODER.",
+    "category": "ADVERSARIAL_CODER_vs_TRADE"
+  },
+  {
+    "id": 55,
+    "text": "develop a web app",
+    "expected": "CODER",
+    "note": "V5 ADVERSARIAL: standalone 'develop' + oggetto code-ish 'web app' → CODER.",
+    "category": "ADVERSARIAL_CODER_vs_TRADE"
+  },
+  {
+    "id": 56,
+    "text": "analizza AAPL e TSLA con opzioni",
+    "expected": "TRADE",
+    "note": "V6 MULTI: ticker multipli AAPL e TSLA → TRADE (multi:2).",
+    "category": "MULTI_TRADE"
+  },
+  {
+    "id": 57,
+    "text": "aggiorna graphify e quant-mind",
+    "expected": "SKILL_UPDATER",
+    "note": "V6 MULTI: skill multiple 'graphify' e 'quant-mind' → SKILL_UPDATER (multi:2).",
+    "category": "MULTI_SKILL_UPDATER"
+  },
+  {
+    "id": 58,
+    "text": "implementa il modulo A e fai refactoring del file B",
+    "expected": "CODER",
+    "note": "V6 MULTI: due task coding indipendenti → CODER (multi:2).",
+    "category": "MULTI_CODER"
+  },
+  {
+    "id": 59,
+    "text": "quanto vale il delta della mia call LHX?",
+    "expected": "TRADE",
+    "note": "V6 MULTI: singolo ticker LHX → TRADE (multi:1).",
+    "category": "MULTI_TRADE"
+  },
+  {
+    "id": 60,
+    "text": "spiegami questo codice",
+    "expected": "SIMPLE",
+    "note": "V6 MULTI: nessun oggetto multiplo → SIMPLE (multi:1).",
+    "category": "MULTI_SIMPLE"
+  }
+]

@@ -8,10 +8,10 @@ registrati dal plugin `routing-stats`.
 **Risoluzione Python e script:**
 1. Prova `/tmp/opencode/.venv/bin/python` (venv condiviso opencode)
 2. Fallback a `python3`
-3. Lo script `stats_report.py` si trova in `$ROUTING_EVAL_DIR/stats_report.py`.
-   Se `ROUTING_EVAL_DIR` non è impostata, prova:
-   - `$HOME/Progetti/Github/routing-eval/stats_report.py`
-   - `$HOME/opencode-skills/routing-eval/stats_report.py`
+3. Lo script `stats_report.py` si trova in `routing-eval`, incluso in
+   `opencode-skills` e installato come symlink in `~/.config/opencode/routing-eval`.
+   Risoluzione (in ordine): `$ROUTING_EVAL_DIR` → `~/.config/opencode/routing-eval`
+   → `~/Progetti/Github/opencode-skills/routing-eval` → `~/opencode-skills/routing-eval`.
 
 Esegui il comando equivalente a questo script bash:
 ```bash
@@ -25,11 +25,11 @@ if [ -z "$PYTHON" ]; then
     exit 1
 fi
 SCRIPT=""
-for d in "${ROUTING_EVAL_DIR:-}" "$HOME/Progetti/Github/routing-eval" "$HOME/opencode-skills/routing-eval"; do
+for d in "${ROUTING_EVAL_DIR:-}" "$HOME/.config/opencode/routing-eval" "$HOME/Progetti/Github/opencode-skills/routing-eval" "$HOME/opencode-skills/routing-eval"; do
     if [ -n "$d" ] && [ -f "$d/stats_report.py" ]; then SCRIPT="$d/stats_report.py"; break; fi
 done
 if [ -z "$SCRIPT" ]; then
-    echo "ERRORE: routing-eval non trovato. Clona il repo e imposta ROUTING_EVAL_DIR."
+    echo "ERRORE: routing-eval non trovato. Rilancia python3 install.py dalla repo."
     exit 1
 fi
 exec "$PYTHON" "$SCRIPT" $ARGUMENTS
@@ -49,10 +49,10 @@ exec "$PYTHON" "$SCRIPT" $ARGUMENTS
 Se il file `~/.config/opencode/stats/routing_events.jsonl` non esiste, viene mostrato
 un messaggio che indica plugin non attivo o nessuna delegazione.
 
-**Prerequisito portabile:** il repo `routing-eval` deve essere clonato separatamente.
-Su un nuovo PC:
+**Prerequisito portabile:** `routing-eval` è incluso nel repo `opencode-skills` e
+installato come symlink in `~/.config/opencode/routing-eval`. Dopo un `git pull`
+non serve reinstallare. Se non viene trovato, esegui dalla repo:
 ```bash
-git clone https://github.com/giuseppedavidde/routing-eval.git ~/Progetti/Github/routing-eval
-pip install -r ~/Progetti/Github/routing-eval/requirements.txt
-export ROUTING_EVAL_DIR="$HOME/Progetti/Github/routing-eval"
+python3 install.py
+pip install -r routing-eval/requirements.txt
 ```
