@@ -37,21 +37,21 @@ If the user specified a skill name, use that. Otherwise, auto-detect all skills 
 
 ```bash
 cd "$(readlink -f ~/.config/opencode/skills/..)"
-ls -d skills/*-src 2>/dev/null
+ls -d skills/*-src src/*-src 2>/dev/null
 ```
 
 ### Step 2 — Check current state
 
 ```bash
 cd "$(readlink -f ~/.config/opencode/skills/..)"
-git submodule status skills/<name>-src
+git submodule status <submodule-path>
 ```
 
 ### Step 3 — Fetch and update
 
 ```bash
 cd "$(readlink -f ~/.config/opencode/skills/..)"
-git submodule update --remote --force skills/<name>-src
+git submodule update --remote --force <submodule-path>
 ```
 
 ### Step 4 — Verify symlinks
@@ -70,7 +70,7 @@ done
 
 ```bash
 cd "$(readlink -f ~/.config/opencode/skills/..)"
-git -C skills/<name>-src log --oneline @{1}..@{0} 2>/dev/null || echo "Already up to date"
+git -C <submodule-path> log --oneline @{1}..@{0} 2>/dev/null || echo "Already up to date"
 ```
 
 ### Post-update patch: quant-mind-src
