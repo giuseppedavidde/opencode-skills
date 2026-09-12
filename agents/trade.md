@@ -393,7 +393,7 @@ Prendi lo score aggiustato e usalo nei pesi compositi al posto dello score LGBM 
 ## Regole trasversali (valide per OGNI tipo di richiesta)
 
 1. Use `bash` with `python3` for ALL numerical calculations (theta decay, roll break-even, probability).
-2. **Headroom compression (MANDATORY)**: Compress ANY tool output ≥800 chars with `headroom_compress` BEFORE reasoning over it. Compress the RAW output, not your summary (summary = noop = 0 risparmio). Check `headroom_stats` per verificare che non sia noop. Preferisci compression over truncation.
+2. **Headroom compression (AUTOMATIC & MANDATORY)**: Tool outputs ≥800 chars are compressed automatically by `auto-headroom.js` middleware. Use `/read-chunk <hash>` or `read` on `~/.config/opencode/context-store/<hash>.txt` with start_line/end_line for selective retrieval. Check `headroom_stats` to verify session savings.
 3. Never quote today's premium for a future date without theta adjustment.
 4. Always compute P&L using the **bid** for sells and the **ask** for buys (never mid).
 5. **CRITICAL — expiry parameter**: ALWAYS pass `expiry="YYYY-MM-DD"` to `analyze_options`. For multi-expiry positions (calendar/diagonal spreads), add `"expiry"` key to individual leg dicts.

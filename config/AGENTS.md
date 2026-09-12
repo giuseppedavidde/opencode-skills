@@ -42,40 +42,26 @@ Skill reference (used by @trade):
 - Market data → @skills/market-data-fetch
 - Framework knowledge → `get_skill_knowledge` for Wyckoff, VPA, VP concepts
 
-## Headroom Compression — MANDATORY & ACTIVE
-CRITICAL: You MUST use headroom to compress content and minimize token usage at ALL times.
-This is NOT optional or situational: every session must demonstrate measurable compression.
-A session that ends with `headroom_stats` showing 0 compressions is a FAILED session.
+## Headroom Compression & Token Saving — AUTOMATIC & MANDATORY
+CRITICAL: OpenCode uses automatic middleware token compression (`auto-headroom.js`).
+Every tool output (bash, read, grep, glob, webfetch) ≥800 chars is AUTOMATICALLY compressed in-process before entering your context window, eliminating double-trip token ingestion penalties.
 
-### When to compress (threshold: ≥800 chars of tool output)
-Compress with `headroom_compress` BEFORE reasoning over the content, in these cases:
-1. **Any tool result ≥800 chars** — bash, read, grep, glob, webfetch, task outputs.
-2. **JSON/CSV reports** — scanner outputs, deep-dive JSON, options chain dumps, earnings data.
-3. **Multi-file reads** — when reading 2+ files in parallel, compress each non-trivial one.
-4. **Skill content** — when a loaded skill's SKILL.md is long, compress it after first read.
-5. **Large bash outputs** — piped command results, directory listings, log tails.
+### Automated Middleware Flow & Selective Retrieval
+1. **Automatic Ingestion**: When a tool result is ≥800 chars, `auto-headroom.js` saves the raw content into `~/.config/opencode/context-store/<hash>.txt` and generates `<hash>_index.json`.
+2. **Context Delivery**: You receive a structured preview + reference hash (`hash=<hash>`).
+3. **Selective Retrieval (Chunking)**: When you need detailed lines, numbers, or specific sections:
+   - Use `/read-chunk <hash> --chunk <N>` or `/read-chunk <hash> --lines <start> <end>`.
+   - Or use the `read` tool on `~/.config/opencode/context-store/<hash>.txt` ALWAYS specifying `start_line` and `end_line`.
+   - Or use `headroom_retrieve(hash="<hash>")` for complete uncompressed retrieval.
+4. **Prompt Caching**: Keep static rules, system instructions, and skill definitions intact at the top of your prompt context to maximize provider prefix caching hit rate (50-90% discount).
 
 ### Workflow rules — GOAL: maximize token savings
-- **Compress the RAW tool output, not a summary**: ALWAYS pass the original, intact tool result
-  to `headroom_compress`. NEVER substitute it with your own hand-written summary, excerpt, or
-  paraphrase. A summary bypasses the compressor and yields `router:noop` (0 tokens saved).
-  The compressor needs the full text to achieve real 70-85% reduction.
-- **Compress early, retrieve late**: compress on first sight, use `headroom_retrieve` with the hash only when you actually need full detail (numbers, exact strings, code).
-- **Selective Retrieval (chunking)**: When reading `~/.config/opencode/context-store/<hash>.txt`, check `<hash>_index.json` first. ALWAYS specify `StartLine` and `EndLine` (or specific 50-line chunk) in `read`. NEVER read an entire context-store file at once, to avoid re-injecting uncompressed token load into context.
-- **Always prefer compression over truncation** — Never use head/tail to limit output when you can compress and retrieve on demand.
-- **Check `headroom_stats` at least twice per session**: once mid-session, once at the end.
-- **Quote hashes, not full content** — when referring to compressed data, reference the hash,
-  don't re-paste the original.
-- **Batch compress**: if multiple tools return large content in one turn, call `headroom_compress`
-  once per result, in parallel.
-- **Verify non-noop**: after each compress, confirm the returned `strategy` is NOT `router:noop`.
-  If it IS noop, the input was too small or already compressed — feed larger raw content next time.
+- **Quote hashes, not full content**: When referring to compressed data, reference the hash or chunk index, don't re-paste full raw output.
+- **Selective Retrieval over full reads**: NEVER read an entire file in `context-store` without `start_line`/`end_line` parameters.
+- **Check `headroom_stats`**: Run `headroom_stats` mid-session or end of session to audit compression metrics.
 
 ### Anti-patterns (forbidden)
-- **Passing a hand-written summary to `headroom_compress` instead of the raw tool output** (causes
-  noop, 0 savings — this is the #1 failure mode).
-- Reasoning over >800-char tool output without compressing it first.
-- Pasting full scanner JSON / analysis JSON into your reasoning context uncompressed.
-- Ending a session without calling `headroom_stats`.
-- Using `head`/`tail`/`limit` on tool outputs instead of compressing.
-- Treating the rule as "best effort": it is a hard requirement, like using a Python venv.
+- Re-pasting large uncompressed JSON, logs, or file contents into reasoning steps or prompts.
+- Reading entire files from `context-store` without specifying line ranges.
+- Bypassing automatic compression.
+
