@@ -25,13 +25,13 @@ Processi un libro alla volta seguendo la pipeline book-to-skill-bridge:
 ```bash
 BOOK_SKILL_WORKDIR="/tmp/opencode/book_skill_work/<SLUG>" python3 <EXTRACT_SCRIPT> "<PDF_PATH>" --mode text --install-missing no
 ```
-Dove EXTRACT_SCRIPT è `/home/giuseppe/.config/opencode/skills/book-to-skill/scripts/extract.py`
+Dove EXTRACT_SCRIPT è `$HOME/.config/opencode/skills/book-to-skill/scripts/extract.py`
 
 Leggi metadata.json risultante per capire dimensione e struttura.
 
 ### Phase 2 — Auto-detect
 ```bash
-python3 /home/giuseppe/.config/opencode/skills/book-to-skill-bridge/scripts/auto_detect.py /tmp/opencode/book_skill_work/<SLUG>/full_text.txt
+python3 "$HOME/.config/opencode/skills/book-to-skill-bridge/scripts/auto_detect.py" /tmp/opencode/book_skill_work/<SLUG>/full_text.txt
 ```
 Leggi il risultato e correggi title/author se necessario.
 
@@ -45,7 +45,7 @@ mkdir -p ~/.config/opencode/skills/<SLUG>/chapters
 Trova la struttura capitoli nel full_text.txt (cerca "CHAPTER N" headings).
 Dividi in dispari (Agent A) e pari (Agent B).
 
-**IMPORTANTE**: Lancia 2 task in PARALLELLO usando `subagent_type="general"` ma nel prompt specifica ESCLICITAMENTE: "Usa deepseek-v4-pro per generare i contenuti, non glm-5.3."
+**IMPORTANTE**: Lancia 2 task in PARALLELLO usando `subagent_type="explore"` ma nel prompt specifica ESPLICITAMENTE: "Usa deepseek-v4-pro per generare i contenuti."
 
 #### Agent A — capitoli dispari + glossary
 Prompt:

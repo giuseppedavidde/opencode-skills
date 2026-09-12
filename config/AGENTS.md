@@ -2,13 +2,13 @@
 
 ## Multi-Agent Architecture
 This OpenCode instance uses automatic model routing to save tokens:
-- **Router (build agent)**: deepseek-v4-flash-vision-exp — receives all requests, classifies, delegates
-- **@trade**: deepseek-v4-pro (default), escalabile a glm-5.3 per calcoli complessi — trading, options, market analysis
-- **@coder**: glm-5.3 — complex coding, refactoring, multi-file changes 
+- **Router (agent router)**: deepseek-v4-flash-vision-exp — receives all requests, classifies, delegates
+- **@trade**: deepseek-v4-pro — trading, options, market analysis. Delega i task di codice e script personalizzati a @coder
+- **@coder**: deepseek-v4.1-flash esecutore guidato da @coder_planner (glm-5.3) per decomposizione atomica — complex coding, refactoring, multi-file changes
+- **@coder_planner**: glm-5.3 — definisce la lista di azioni atomiche per @coder (unico utilizzo consentito di GLM-5.3 per minimizzare i token)
 - **@graphify_helper**: deepseek-v4-flash — smart graphify orchestrator, builds/updates/queries knowledge graphs
 - **@skill_updater**: deepseek-v4-flash — updates skills that depend on -src submodules (graphify, book-to-skill, quant-mind, karpathy)
 - **@explore / @scout**: deepseek-v4-flash — code search / web research
-- **@general**: glm-5.3 — escalation target per calcoli complessi di @trade (non chiamato direttamente)
 
 The router delegates based on keywords. Trading requests go to @trade, complex coding to @coder, skill updates to @skill_updater, graphify requests to @graphify_helper.
 Every subagent MUST end its response with a `## VERIFICA` section (confidenza, evidenza, non_verificato, escalation_consigliata). The router interprets this to decide whether to retry, escalate, or ask the user for clarification.
@@ -60,10 +60,9 @@ Compress with `headroom_compress` BEFORE reasoning over the content, in these ca
   to `headroom_compress`. NEVER substitute it with your own hand-written summary, excerpt, or
   paraphrase. A summary bypasses the compressor and yields `router:noop` (0 tokens saved).
   The compressor needs the full text to achieve real 70-85% reduction.
-- **Compress early, retrieve late**: compress on first sight, use `headroom_retrieve` with the hash
-  only when you actually need full detail (numbers, exact strings, code).
-- **Always prefer compression over truncation** — Never use head/tail to limit output when you
-  can compress and retrieve on demand.
+- **Compress early, retrieve late**: compress on first sight, use `headroom_retrieve` with the hash only when you actually need full detail (numbers, exact strings, code).
+- **Selective Retrieval (chunking)**: When reading `~/.config/opencode/context-store/<hash>.txt`, check `<hash>_index.json` first. ALWAYS specify `StartLine` and `EndLine` (or specific 50-line chunk) in `read`. NEVER read an entire context-store file at once, to avoid re-injecting uncompressed token load into context.
+- **Always prefer compression over truncation** — Never use head/tail to limit output when you can compress and retrieve on demand.
 - **Check `headroom_stats` at least twice per session**: once mid-session, once at the end.
 - **Quote hashes, not full content** — when referring to compressed data, reference the hash,
   don't re-paste the original.

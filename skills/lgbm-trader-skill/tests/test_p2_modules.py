@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-_MCP_SRC = Path("/home/giuseppe/Progetti/Github/opencode-skills/mcp/src")
+_MCP_SRC = Path(__file__).resolve().parents[3] / "mcp" / "src"
 if str(_MCP_SRC) not in sys.path:
     sys.path.insert(0, str(_MCP_SRC))
 

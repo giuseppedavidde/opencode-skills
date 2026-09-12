@@ -212,9 +212,7 @@ class TestVPNoLookahead:
         import sys
         from pathlib import Path
 
-        mcp_src = Path(
-            "/home/giuseppe/Progetti/Github/opencode-skills/mcp/src"
-        )
+        mcp_src = Path(__file__).resolve().parents[3] / "mcp" / "src"
         if str(mcp_src) not in sys.path:
             sys.path.insert(0, str(mcp_src))
 

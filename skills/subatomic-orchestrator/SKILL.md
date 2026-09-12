@@ -1,6 +1,4 @@
 ---
-
-
 name: subatomic-orchestrator
 description: >
   Meta-skill that decomposes any workload into independent sub-tasks, dispatches

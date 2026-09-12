@@ -1,6 +1,4 @@
 ---
-
-
 name: crypto-crash-course
 description: "Knowledge base from 'The Crypto Crash Course' by Frank Richmond. Beginner-friendly cryptocurrency fundamentals, blockchain, Bitcoin, wallets, exchanges, and secure investing frameworks."
 metadata:

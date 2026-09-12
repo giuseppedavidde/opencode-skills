@@ -34,7 +34,7 @@ check_submodules() {
     local dirs=(
         "skills/graphify-src"
         "skills/karpathy-llm-wiki-src"
-        "skills/book-to-skill-src"
+        "src/book-to-skill-src"
         "skills/quant-mind-src"
     )
     local missing=false
@@ -60,34 +60,43 @@ check_submodules() {
 
 check_submodules
 
-# ─── Skills ───
+mkdir -p "$CONFIG_DIR"
+
+# ─── Link helper ───
+# link_item <src> <target>
+#   - target assente        → crea symlink
+#   - target è symlink      → ripara/relinka (anche rotto)
+#   - target file/dir reale → SKIP (mai cancellare, anche con --force)
+link_item() {
+    local src="$1"
+    local target="$2"
+    local name
+    name="$(basename "$target")"
+
+    if [[ -L "$target" ]]; then
+        ln -sfn "$src" "$target"
+        echo "  LINK  $name"
+    elif [[ -e "$target" ]]; then
+        echo "  SKIP  $name  (già presente, non symlink)"
+    else
+        ln -s "$src" "$target"
+        echo "  LINK  $name"
+    fi
+}
+
+# ─── Skills (whole-dir symlink, come routing-eval) ───
 SKILLS_SRC="$REPO_DIR/skills"
 if [[ -d "$SKILLS_SRC" ]]; then
     echo "Installing skills..."
-    mkdir -p "$CONFIG_DIR/skills"
-    SKIP_SKILLS="market-accumulation-scanner stock-crypto-analysis options-analysis options-strategy-suggestions market-data-fetch"
-    if $FORCE; then
-        for item in "$SKILLS_SRC"/*; do
-            name=$(basename "$item")
-            target="$CONFIG_DIR/skills/$name"
-            rm -rf "$target" 2>/dev/null || true
-            ln -sf "$item" "$target"
-        done
+    target="$CONFIG_DIR/skills"
+    if [[ -L "$target" ]]; then
+        ln -sfn "$SKILLS_SRC" "$target"
+        echo "  LINK  skills (whole-dir)"
+    elif [[ -e "$target" ]]; then
+        echo "  SKIP  skills  (directory reale: non la cancello)"
     else
-        for item in "$SKILLS_SRC"/*; do
-            name=$(basename "$item")
-            target="$CONFIG_DIR/skills/$name"
-            if [[ " $SKIP_SKILLS " == *" $name "* ]]; then
-                echo "  SKIP  $name  (replaced by trading MCP)"
-                continue
-            fi
-            if [[ -e "$target" ]]; then
-                echo "  SKIP  $name  (already exists)"
-            else
-                ln -s "$item" "$target"
-                echo "  LINK  $name"
-            fi
-        done
+        ln -s "$SKILLS_SRC" "$target"
+        echo "  LINK  skills (whole-dir)"
     fi
 fi
 
@@ -97,18 +106,7 @@ if [[ -d "$AGENTS_SRC" ]]; then
     echo "Installing agents..."
     mkdir -p "$CONFIG_DIR/agents"
     for item in "$AGENTS_SRC"/*; do
-        name=$(basename "$item")
-        target="$CONFIG_DIR/agents/$name"
-        if $FORCE; then
-            rm -rf "$target" 2>/dev/null || true
-            ln -sf "$item" "$target"
-            echo "  LINK  $name"
-        elif [[ -e "$target" ]]; then
-            echo "  SKIP  $name  (already exists)"
-        else
-            ln -s "$item" "$target"
-            echo "  LINK  $name"
-        fi
+        link_item "$item" "$CONFIG_DIR/agents/$(basename "$item")"
     done
 fi
 
@@ -118,18 +116,7 @@ if [[ -d "$COMMANDS_SRC" ]]; then
     echo "Installing commands..."
     mkdir -p "$CONFIG_DIR/command"
     for item in "$COMMANDS_SRC"/*; do
-        name=$(basename "$item")
-        target="$CONFIG_DIR/command/$name"
-        if $FORCE; then
-            rm -rf "$target" 2>/dev/null || true
-            ln -sf "$item" "$target"
-            echo "  LINK  $name"
-        elif [[ -e "$target" ]]; then
-            echo "  SKIP  $name  (already exists)"
-        else
-            ln -s "$item" "$target"
-            echo "  LINK  $name"
-        fi
+        link_item "$item" "$CONFIG_DIR/command/$(basename "$item")"
     done
 fi
 
@@ -139,18 +126,7 @@ if [[ -d "$PLUGINS_SRC" ]]; then
     echo "Installing plugins..."
     mkdir -p "$CONFIG_DIR/.opencode/plugins"
     for item in "$PLUGINS_SRC"/*; do
-        name=$(basename "$item")
-        target="$CONFIG_DIR/.opencode/plugins/$name"
-        if $FORCE; then
-            rm -rf "$target" 2>/dev/null || true
-            ln -sf "$item" "$target"
-            echo "  LINK  $name"
-        elif [[ -e "$target" ]]; then
-            echo "  SKIP  $name  (already exists)"
-        else
-            ln -s "$item" "$target"
-            echo "  LINK  $name"
-        fi
+        link_item "$item" "$CONFIG_DIR/.opencode/plugins/$(basename "$item")"
     done
 fi
 
@@ -158,21 +134,12 @@ fi
 CONFIG_SRC="$REPO_DIR/config"
 if [[ -d "$CONFIG_SRC" ]]; then
     echo "Installing config files..."
+    mkdir -p "$CONFIG_DIR"
     for item in "$CONFIG_SRC"/*; do
         name=$(basename "$item")
         # Skip encrypted secrets file
         [[ "$name" == "secrets.env.enc" ]] && continue
-        target="$CONFIG_DIR/$name"
-        if $FORCE; then
-            rm -rf "$target" 2>/dev/null || true
-            ln -sf "$item" "$target"
-            echo "  LINK  $name"
-        elif [[ -e "$target" ]]; then
-            echo "  SKIP  $name  (already exists)"
-        else
-            ln -s "$item" "$target"
-            echo "  LINK  $name"
-        fi
+        link_item "$item" "$CONFIG_DIR/$name"
     done
 fi
 
@@ -237,7 +204,7 @@ PROSSIMI PASSI:
 
 NOTA: routing-stats usa routing-eval incluso nella repo (symlink
   ~/.config/opencode/routing-eval). Dipendenze:
-  pip install -r "\$REPO_DIR/routing-eval/requirements.txt" nel venv del comando
+  pip install -r "$REPO_DIR/routing-eval/requirements.txt" nel venv del comando
   (es. /tmp/opencode/.venv).
 
 Se sposti la repo, rilancia: python3 install.py (ripara i symlink rotti senza --force)

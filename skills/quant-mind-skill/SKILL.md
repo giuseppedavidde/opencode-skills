@@ -1,6 +1,4 @@
 ---
-
-
 name: quant-mind-skill
 description: >
   Integrazione con QuantMind — knowledge extraction e retrieval per
@@ -9,7 +7,7 @@ description: >
   OpenCode che usa i modelli opencode-go.
 
 metadata:
-  argument-hint: "[arxiv_id, URL, "extract paper", "batch papers"]"
+  argument-hint: '[arxiv_id, URL, "extract paper", "batch papers"]'
 ---
 
 # QuantMind Skill

@@ -22,7 +22,9 @@ cd ~/.config/opencode/routing-eval
 | Flag | Descrizione |
 |---|---|
 | `--history` | Replay del classificatore su TUTTE le sessioni storiche nel DB |
+| `--message-level` | Replay del classificatore sul dataset a livello di messaggio |
 | `--golden`  | Precision/recall/F1 su golden set curato (60 casi) |
+| `--before-after` | Confronto old vs new classifier su tutti i dataset |
 | `--all`     | Entrambe le modalità |
 
 Opzionale: `--output-dir /path/to/dir` per specificare la directory dei report.
@@ -57,7 +59,7 @@ Modifica `data/golden_set.json` e aggiungi un nuovo oggetto:
 
 ```json
 {
-  "id": 31,
+  "id": 61,
   "text": "la tua nuova richiesta utente qui",
   "expected": "TRADE",
   "note": "perché questa è la categoria giusta",
@@ -91,11 +93,13 @@ routing-eval/
 ├── requirements.txt     # Pydantic v2
 ├── src/
 │   ├── models.py        # Pydantic v2 data models
-│   ├── extractor.py     # DB extraction → history_dataset.jsonl
+│   ├── extractor.py     # DB extraction → history_dataset.jsonl (sessioni)
+│   ├── extractor_v2.py  # DB extraction → message_dataset.jsonl (messaggi)
 │   ├── live_stats.py    # Aggregazione telemetria live
-│   └── classifier.py    # RouterClassifier (keyword-based rules)
+│   ├── classifier.py    # RouterClassifier corrente (keyword-based rules)
+│   └── classifier_{old,v1,v4}.py  # classificatori legacy per il confronto --before-after
 ├── data/
-│   ├── golden_set.json          # 30 casi curati per regression testing
+│   ├── golden_set.json          # 60 casi curati per regression testing
 │   ├── history_dataset.jsonl    # Dataset storico esportato
 │   ├── misrouted_report.jsonl   # Casi di misrouting per revisione
 │   └── reports/                 # Report JSON generati

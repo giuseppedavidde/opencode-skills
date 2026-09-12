@@ -1,6 +1,4 @@
 ---
-
-
 name: wallstreetbets-pump-detect
 description: >
   Scrapes r/wallstreetbets public JSON to find stocks/ETFs being pumped, scores
@@ -8,7 +6,7 @@ description: >
   stock-crypto-analysis and options-strategy-suggestions for full entry
   evaluation (buy underlying or options strategy).
 metadata:
-  argument-hint: "[scan, "cosa pompano su WSB", "wsb radar", "meme stock scan", "pump detect"]"
+  argument-hint: '[scan, "cosa pompano su WSB", "wsb radar", "meme stock scan", "pump detect"]'
 ---
 
 # WallStreetBets Pump Detect

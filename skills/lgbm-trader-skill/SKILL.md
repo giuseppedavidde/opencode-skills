@@ -1,5 +1,4 @@
 ---
-
 name: lgbm-trader-skill
 description: >
   LightGBM Trading System — 98 features in 5 decorrelated groups,
@@ -20,7 +19,7 @@ LightGBM Trading System — feature engineering, stacking ensemble, signal gener
 
 ```bash
 source /tmp/opencode/.venv/bin/activate
-cd /home/giuseppe/.config/opencode/skills/lgbm-trader-skill
+cd "$HOME/.config/opencode/skills/lgbm-trader-skill"
 
 # Uso diretto (fallisce se nessun modello)
 python scripts/predict_live.py --ticker GME
@@ -86,7 +85,7 @@ Dopo la chiamata, il trade agent DEVE controllare il campo `model`:
 
 ```bash
 result=$(source /tmp/opencode/.venv/bin/activate && \
-         python /home/giuseppe/.config/opencode/skills/lgbm-trader-skill/scripts/predict_or_train.py \
+         python "$HOME/.config/opencode/skills/lgbm-trader-skill/scripts/predict_or_train.py" \
                --ticker GME --json)
 has_model=$(echo "$result" | python3 -c "import sys, json; d=json.load(sys.stdin); print(str(d.get('model') is not None).lower())")
 ensemble_score=$(echo "$result" | python3 -c "import sys, json; print(json.load(sys.stdin).get('score', 50))")
@@ -100,4 +99,4 @@ Install: `pip install -e .` nella cartella della skill.
 
 ## Base directory
 
-/home/giuseppe/Progetti/Github/opencode-skills/skills/lgbm-trader-skill
+~/.config/opencode/skills/lgbm-trader-skill

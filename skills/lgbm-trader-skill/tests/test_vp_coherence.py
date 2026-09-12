@@ -22,9 +22,7 @@ class TestVPSemantics:
     def test_signal_engine_low_vp_is_buy(self) -> None:
         """VP ≤ 40 must produce LONG_TERM_BUY."""
         # Add MCP src to path
-        mcp_src = Path(
-            "/home/giuseppe/Progetti/Github/opencode-skills/mcp/src"
-        )
+        mcp_src = Path(__file__).resolve().parents[3] / "mcp" / "src"
         if str(mcp_src) not in sys.path:
             sys.path.insert(0, str(mcp_src))
 
@@ -45,9 +43,7 @@ class TestVPSemantics:
 
     def test_signal_engine_high_vp_is_avoid(self) -> None:
         """VP ≥ 60 must produce AVOID."""
-        mcp_src = Path(
-            "/home/giuseppe/Progetti/Github/opencode-skills/mcp/src"
-        )
+        mcp_src = Path(__file__).resolve().parents[3] / "mcp" / "src"
         if str(mcp_src) not in sys.path:
             sys.path.insert(0, str(mcp_src))
 
@@ -68,9 +64,7 @@ class TestVPSemantics:
 
     def test_signal_engine_mid_vp_is_hold(self) -> None:
         """VP in (40, 60) must produce HOLD."""
-        mcp_src = Path(
-            "/home/giuseppe/Progetti/Github/opencode-skills/mcp/src"
-        )
+        mcp_src = Path(__file__).resolve().parents[3] / "mcp" / "src"
         if str(mcp_src) not in sys.path:
             sys.path.insert(0, str(mcp_src))
 
@@ -91,9 +85,7 @@ class TestVPSemantics:
 
     def test_compute_verdict_low_vp_is_long_term(self) -> None:
         """_compute_verdict: VP ≤ 40 must produce Long-Term Investment."""
-        mcp_src = Path(
-            "/home/giuseppe/Progetti/Github/opencode-skills/mcp/src"
-        )
+        mcp_src = Path(__file__).resolve().parents[3] / "mcp" / "src"
         if str(mcp_src) not in sys.path:
             sys.path.insert(0, str(mcp_src))
 
@@ -112,9 +104,7 @@ class TestVPSemantics:
 
     def test_compute_verdict_high_vp_is_avoid(self) -> None:
         """_compute_verdict: VP ≥ 60 must produce Avoid / Wait."""
-        mcp_src = Path(
-            "/home/giuseppe/Progetti/Github/opencode-skills/mcp/src"
-        )
+        mcp_src = Path(__file__).resolve().parents[3] / "mcp" / "src"
         if str(mcp_src) not in sys.path:
             sys.path.insert(0, str(mcp_src))
 
@@ -133,9 +123,7 @@ class TestVPSemantics:
 
     def test_threshold_boundaries(self) -> None:
         """Regression test: verify exact threshold behavior."""
-        mcp_src = Path(
-            "/home/giuseppe/Progetti/Github/opencode-skills/mcp/src"
-        )
+        mcp_src = Path(__file__).resolve().parents[3] / "mcp" / "src"
         if str(mcp_src) not in sys.path:
             sys.path.insert(0, str(mcp_src))
 
@@ -171,9 +159,7 @@ class TestVPSemantics:
 
     def test_no_levels_raises_error(self) -> None:
         """compute_action without hist or levels must raise ValueError."""
-        mcp_src = Path(
-            "/home/giuseppe/Progetti/Github/opencode-skills/mcp/src"
-        )
+        mcp_src = Path(__file__).resolve().parents[3] / "mcp" / "src"
         if str(mcp_src) not in sys.path:
             sys.path.insert(0, str(mcp_src))
 

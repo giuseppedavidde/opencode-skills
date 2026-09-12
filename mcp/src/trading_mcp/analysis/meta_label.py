@@ -125,7 +125,7 @@ class MetaLabelModel:
     only on the eval set.
     """
 
-    MODEL_DIR = Path("/home/giuseppe/.config/opencode/models")
+    MODEL_DIR = Path.home() / ".config" / "opencode" / "models"
 
     def __init__(self, ticker: str):
         self.ticker = ticker

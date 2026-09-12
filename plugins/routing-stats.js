@@ -44,8 +44,8 @@ function parseVerifica(output) {
   if (!outStr || typeof outStr !== "string") return { has_verifica: false, confidenza: null, escalation: null };
 
   const hasVerifica = outStr.includes("## VERIFICA");
-  const confMatch = outStr.match(/- confidenza\s*:\s*(\d+)\s*$/m);
-  const escMatch = outStr.match(/- escalation_consigliata\s*:\s*(s[ìi]|yes|no)\s*$/m);
+  const confMatch = outStr.match(/- confidenza\s*:\s*(\d+)/);
+  const escMatch = outStr.match(/- escalation_consigliata\s*:\s*(s[ìi]|yes|no)(?=\s|$)/m);
 
   let escalation = null;
   if (escMatch) {

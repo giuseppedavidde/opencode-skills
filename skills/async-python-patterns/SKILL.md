@@ -1,6 +1,4 @@
 ---
-
-
 name: async-python-patterns
 description: "Comprehensive guidance for implementing asynchronous Python applications using asyncio, concurrent programming patterns, and async/await for building high-performance, non-blocking systems."
 ---

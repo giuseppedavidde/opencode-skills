@@ -1,6 +1,4 @@
 ---
-
-
 name: wyckoff-2-0
 description: "Knowledge base from 'Wyckoff 2.0' by Rubén Villahermosa Chaves. Wyckoff Method frameworks for volume profile, order flow, and market structure analysis."
 metadata:

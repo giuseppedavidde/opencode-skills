@@ -1,6 +1,4 @@
 ---
-
-
 name: stock-crypto-analysis
 description: >
   Deep single-stock/crypto analysis via trading MCP, arricchita con i segnali

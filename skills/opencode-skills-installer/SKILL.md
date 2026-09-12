@@ -1,6 +1,4 @@
 ---
-
-
 name: opencode-skills-installer
 description: >
   Use when adding, creating, installing, or syncing opencode skills. Manages
@@ -17,7 +15,7 @@ skills are stored and version-controlled.
 ## Repository Location
 
 ```
-/home/giuseppe/Progetti/Github/opencode-skills/
+~/opencode-skills/
 ```
 
 ## Symlink Setup

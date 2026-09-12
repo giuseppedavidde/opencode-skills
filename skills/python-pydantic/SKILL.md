@@ -1,6 +1,4 @@
 ---
-
-
 name: python-pydantic
 description: Python coding standards with Pydantic data models, type hints, and pylint compliance
 ---

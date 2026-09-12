@@ -1,6 +1,4 @@
 ---
-
-
 name: options-playbook
 description: "Knowledge base from 'The Options Playbook' by Brian Overby. 40+ option strategies reference for all market outlooks."
 metadata:

@@ -16,7 +16,7 @@ if str(_skill_root) not in sys.path:
     sys.path.insert(0, str(_skill_root))
 
 # MCP src path
-_mcp_src = Path("/home/giuseppe/Progetti/Github/opencode-skills/mcp/src")
+_mcp_src = Path(__file__).resolve().parents[3] / "mcp" / "src"
 if str(_mcp_src) not in sys.path:
     sys.path.insert(0, str(_mcp_src))
 

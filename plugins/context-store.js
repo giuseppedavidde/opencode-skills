@@ -1,6 +1,6 @@
 // context-store — Persiste i contenuti compressi da headroom su disco
-// in modo che i subagent possano leggerli senza che il router ripaghi i token.
-// Hook: "tool.execute.after" su tool che contiene "headroom_compress"
+// e genera un indice a blocchi <hash>_index.json per il Selective Retrieval.
+// Hook: "tool.execute.after" su headroom_compress e read tool
 import { existsSync, mkdirSync, writeFileSync, renameSync } from "fs";
 import { join } from "path";
 import { createHash } from "crypto";
@@ -57,6 +57,36 @@ function sha256(content) {
   return createHash("sha256").update(content, "utf-8").digest("hex").slice(0, 16);
 }
 
+function generateIndex(hash, content) {
+  const lines = content.split("\n");
+  const totalLines = lines.length;
+  const chunkSize = 50; // 50 lines per chunk for selective retrieval
+  const chunks = [];
+
+  for (let i = 0; i < totalLines; i += chunkSize) {
+    const end = Math.min(i + chunkSize, totalLines);
+    const chunkLines = lines.slice(i, end);
+    const headings = chunkLines.filter(l => /^(#|##|###|\s*"(id|name|ticker|title)":)/i.test(l.trim())).map(l => l.trim().slice(0, 60));
+    
+    chunks.push({
+      chunk_index: Math.floor(i / chunkSize),
+      start_line: i + 1,
+      end_line: end,
+      preview: chunkLines[0] ? chunkLines[0].slice(0, 70) : "",
+      headings: headings,
+    });
+  }
+
+  return {
+    hash: hash,
+    total_lines: totalLines,
+    total_bytes: Buffer.byteLength(content, "utf-8"),
+    chunk_size: chunkSize,
+    total_chunks: chunks.length,
+    chunks: chunks,
+  };
+}
+
 export const ContextStorePlugin = async ({ directory: _directory }) => {
   ensureDir();
 
@@ -74,12 +104,22 @@ export const ContextStorePlugin = async ({ directory: _directory }) => {
       }
 
       const filePath = join(STORE_DIR, `${hash}.txt`);
+      const indexPath = join(STORE_DIR, `${hash}_index.json`);
       const tmpPath = filePath + ".tmp";
+      const tmpIndexPath = indexPath + ".tmp";
 
       try {
-        writeFileSync(tmpPath, content, "utf-8");
+        const indexData = generateIndex(hash, content);
+        const indexedHeader = `# [selective-retrieval] Index available at ${hash}_index.json | Total lines: ${indexData.total_lines} | Use start_line/end_line to read specific chunks!\n`;
+        const contentWithHeader = indexedHeader + content;
+
+        writeFileSync(tmpPath, contentWithHeader, "utf-8");
         renameSync(tmpPath, filePath);
-        console.error(`[context-store] saved ${hash} (${Buffer.byteLength(content, "utf-8")} bytes)`);
+
+        writeFileSync(tmpIndexPath, JSON.stringify(indexData, null, 2), "utf-8");
+        renameSync(tmpIndexPath, indexPath);
+
+        console.error(`[context-store] saved ${hash} (${indexData.total_bytes} bytes, ${indexData.total_chunks} chunks index)`);
       } catch (err) {
         console.error(`[context-store] ERROR writing ${hash}: ${err.message}`);
       }

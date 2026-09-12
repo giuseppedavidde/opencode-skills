@@ -1,6 +1,4 @@
 ---
-
-
 name: options-course-workbook
 description: "Knowledge base from 'The Options Course Workbook' by George A. Fontanills. Options education frameworks with exercises and practical applications."
 metadata:

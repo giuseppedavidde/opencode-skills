@@ -1,6 +1,4 @@
 ---
-
-
 name: options-analysis
 description: >
   Analyzes multi-leg options positions via trading MCP. Use when user asks

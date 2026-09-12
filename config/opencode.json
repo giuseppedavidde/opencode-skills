@@ -5,33 +5,6 @@
   "subagent_depth": 2,
   "default_agent": "router",
   "agent": {
-    "build": {
-      "mode": "primary",
-      "model": "opencode-go/deepseek-v4-flash-vision-exp",
-      "prompt": "{file:~/.config/opencode/agents/router.md}",
-      "permission": {
-        "edit": "deny",
-        "write": "deny",
-        "bash": {
-          "*": "ask",
-          "python3 *": "allow",
-          "pip *": "deny",
-          "source *venv*": "allow",
-          "deactivate": "allow"
-        },
-        "task": {
-          "*": "allow"
-        },
-        "skill": {
-          "*": "allow"
-        },
-        "webfetch": "ask",
-        "read": "allow",
-        "glob": "allow",
-        "grep": "allow"
-      },
-      "options": {}
-    },
     "explore": {
       "model": "opencode-go/deepseek-v4-flash",
       "options": {},
@@ -112,6 +85,15 @@
   "permission": {
     "skill": {
       "*": "allow"
+    },
+    "headroom_*": "allow",
+    "doom_loop": "allow",
+    "external_directory": {
+      "*": "allow"
+    },
+    "read": {
+      "*.env": "allow",
+      "*.env.*": "allow"
     }
   },
   "mcp": {

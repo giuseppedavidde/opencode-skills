@@ -1,6 +1,4 @@
 ---
-
-
 name: system-info
 description: >
   Use when asked to report OS/hardware details, compile binaries, set up build

@@ -1,6 +1,4 @@
 ---
-
-
 name: market-accumulation-scanner
 description: >
   Scans stock/crypto markets for accumulation patterns via trading MCP.
@@ -57,7 +55,7 @@ scan appena salvato. Il bridge `opencli barchart flow` fornisce il feed
 
 ```
 # dalla dir della skill (scripts/ è qui)
-/home/giuseppe/.local/share/opencode/trading-mcp-venv/bin/python scripts/uoa_flow.py --limit 100 --scan-json /tmp/opencode/scan_results.json
+"$HOME/.local/share/opencode/trading-mcp-venv/bin/python" scripts/uoa_flow.py --limit 100 --scan-json /tmp/opencode/scan_results.json
 ```
 
 (`python3` va altrettanto bene se ha `yfinance`+`pydantic`; fallback anche la

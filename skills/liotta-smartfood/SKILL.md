@@ -1,6 +1,4 @@
 ---
-
-
 name: liotta-smartfood
 description: "Knowledge base from \"Le Ricette Smartfood\" by Eliana Liotta & Lucilla Titta. Use when applying nutrigenomics-based nutrition, Smartfood recipes, or fasting-mimicking protocols."
 metadata:

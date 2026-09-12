@@ -1,6 +1,4 @@
 ---
-
-
 name: volume-price-analysis
 description: "Knowledge base from 'A Complete Guide To Volume Price Analysis' by Anna Coulling. Volume-price relationship frameworks for market analysis."
 metadata:

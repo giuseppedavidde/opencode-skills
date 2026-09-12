@@ -1,6 +1,4 @@
 ---
-
-
 name: market-data-fetch
 description: >
   Fetches market data via trading MCP. Use when user asks for

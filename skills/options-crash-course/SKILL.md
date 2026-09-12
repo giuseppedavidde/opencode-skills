@@ -1,6 +1,4 @@
 ---
-
-
 name: options-crash-course
 description: "Knowledge base from 'Options Trading Crash Course' by Mark Elder and Brian Douglas. Beginner-friendly options trading frameworks and strategies."
 metadata:

@@ -35,7 +35,7 @@ Then add to your `opencode.json`:
   "mcp": {
     "trading": {
       "type": "local",
-      "command": ["/home/giuseppe/.local/share/opencode/trading-mcp-venv/bin/trading-mcp"],
+      "command": ["$HOME/.local/share/opencode/trading-mcp-venv/bin/trading-mcp"],
       "args": [],
       "enabled": true
     }

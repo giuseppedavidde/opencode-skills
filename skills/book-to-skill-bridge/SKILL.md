@@ -1,6 +1,4 @@
 ---
-
-
 name: book-to-skill-bridge
 description: "Auto-generates OpenCode skills from books/documents. Wraps book-to-skill with zero interactive prompts: auto-detects book type (technical/text), auto-extracts title/author, generates skill files in ~/.config/opencode/skills/<slug>/. Supports parallel batch processing for multiple books. Use when you want to convert a book to a skill without answering questions."
 metadata:

@@ -1,6 +1,4 @@
 ---
-
-
 name: volume-profile
 description: "Knowledge base from 'VOLUME PROFILE' by Trader Dale. Volume Profile frameworks for institutional trading, value area analysis, and market structure."
 metadata:

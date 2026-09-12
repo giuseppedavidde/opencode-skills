@@ -61,7 +61,7 @@ def check_submodules(repo_root: Path) -> bool:
     submodule_dirs = [
         "skills/graphify-src",
         "skills/karpathy-llm-wiki-src",
-        "skills/book-to-skill-src",
+        "src/book-to-skill-src",
         "skills/quant-mind-src",
     ]
     empty_dirs = [
@@ -102,10 +102,11 @@ def build_plan(options: InstallOptions) -> InstallPlan:
     repo_root = Path(__file__).parent.resolve()
     actions: list[FileAction] = []
 
-    # ── Skills ──
-    for source, rel in discover_files(repo_root / "skills"):
-        dest = options.config_dir / "skills" / rel
-        action = FileAction(source=source, dest=dest, category="skill")
+    # ── Skills (whole-dir symlink, come routing-eval) ──
+    skills_src = repo_root / "skills"
+    if skills_src.is_dir():
+        dest = options.config_dir / "skills"
+        action = FileAction(source=skills_src, dest=dest, category="skill")
         if dest.exists() and not options.force:
             action.reason = "exists"
         actions.append(action)
@@ -155,8 +156,18 @@ def build_plan(options: InstallOptions) -> InstallPlan:
     return InstallPlan(options=options, actions=actions)
 
 
+def _resolve_into_repo(dest: Path, repo_root: Path) -> bool:
+    """True if dest, followed through symlinks, lands inside repo_root."""
+    try:
+        dest.resolve().relative_to(repo_root)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
 def execute_plan(plan: InstallPlan) -> None:
     """Execute or print the actions in the install plan."""
+    repo_root = Path(__file__).parent.resolve()
     for action in plan.actions:
         if action.reason == "exists":
             if plan.options.verbose:
@@ -169,7 +180,17 @@ def execute_plan(plan: InstallPlan) -> None:
 
         action.dest.parent.mkdir(parents=True, exist_ok=True)
         if action.dest.exists() or action.dest.is_symlink():
-            action.dest.unlink()
+            if action.dest.is_symlink():
+                # Sostituire un symlink è sicuro: non tocca mai il target.
+                action.dest.unlink()
+            elif _resolve_into_repo(action.dest, repo_root):
+                print(
+                    f"  ERROR  {action.dest}  → risolve dentro la repo "
+                    f"({action.dest.resolve()}): non modifico file reali della repo"
+                )
+                continue
+            else:
+                action.dest.unlink()
         os.symlink(action.source, action.dest)
         if plan.options.verbose:
             print(f"  LINK  {action.source}  →  {action.dest}")
@@ -191,7 +212,13 @@ def install_alphavantage(options: InstallOptions, repo_root: Path) -> None:
         return
     dest_dir.mkdir(parents=True, exist_ok=True)
     if dest.exists() or dest.is_symlink():
-        dest.unlink()
+        if dest.is_symlink():
+            dest.unlink()
+        elif _resolve_into_repo(dest, repo_root):
+            print(f"  ERROR  {dest}  → risolve dentro la repo: non modifico file reali")
+            return
+        else:
+            dest.unlink()
     os.symlink(src, dest)
     os.chmod(src, 0o755)
     if options.verbose:
@@ -249,11 +276,7 @@ def print_next_steps(repo_root: Path) -> None:
     steps.append("  pip install -r <repo>/routing-eval/requirements.txt nel venv del comando")
     steps.append("  (es. /tmp/opencode/.venv).")
     steps.append("")
-    if repo_root != Path("~/Progetti/Github/opencode-skills").expanduser():
-        repo = repo_root
-    else:
-        repo = repo_root
-    steps.append(f"Se sposti la repo, rilancia da: {repo}")
+    steps.append(f"Se sposti la repo, rilancia da: {repo_root}")
     steps.append("  python3 install.py --config-dir ~/.config/opencode")
 
     print("\n".join(steps))

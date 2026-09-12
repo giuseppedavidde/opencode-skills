@@ -1,6 +1,4 @@
 ---
-
-
 name: pdf-ingest
 description: >
   PDF extraction helper for both Karpathy LLM Wiki and Graphify workflows. Use when

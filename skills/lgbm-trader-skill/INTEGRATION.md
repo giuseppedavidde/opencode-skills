@@ -94,7 +94,7 @@ lista vuota senza spiegazione quando i dati erano insufficienti. Ora:
 
 ```bash
 source /tmp/opencode/.venv/bin/activate
-python /home/giuseppe/Progetti/Github/lgbm-trader/scripts/predict_live.py --ticker GME
+python "$HOME/Progetti/Github/lgbm-trader/scripts/predict_live.py" --ticker GME
 ```
 
 ## Backtest point-in-time (AGGIORNATO P0 Ago 2026)
@@ -150,7 +150,7 @@ To run with short history, use --diagnostic and --no-strict:
 ## Output JSON (per uso programmatico)
 
 ```bash
-python /home/giuseppe/Progetti/Github/lgbm-trader/scripts/predict_live.py --ticker AAPL --json
+python "$HOME/Progetti/Github/lgbm-trader/scripts/predict_live.py" --ticker AAPL --json
 ```
 
 Quando il modello LGBM NON è disponibile, l'output ora restituisce

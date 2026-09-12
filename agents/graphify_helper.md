@@ -9,6 +9,7 @@ permission:
   read: allow
   glob: allow
   grep: allow
+  headroom_*: allow
   write: allow
   edit: allow
   skill:

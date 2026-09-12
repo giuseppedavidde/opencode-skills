@@ -1,1 +1,1 @@
-../book-to-skill-src/SKILL.md
+../../src/book-to-skill-src/SKILL.md

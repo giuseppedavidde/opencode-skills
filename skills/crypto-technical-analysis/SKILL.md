@@ -1,6 +1,4 @@
 ---
-
-
 name: crypto-technical-analysis
 description: "Knowledge base from 'Crypto Technical Analysis' by Alan John & Jon Law. Technical analysis frameworks adapted for cryptocurrency markets with on-chain and 24/7 volatility considerations."
 metadata:

@@ -1,6 +1,4 @@
 ---
-
-
 name: options-strategy-suggestions
 description: >
   Suggests options strategy from stock analysis verdict + IV regime.
