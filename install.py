@@ -135,6 +135,14 @@ def build_plan(options: InstallOptions) -> InstallPlan:
             action.reason = "exists"
         actions.append(action)
 
+    # ── Scripts ──
+    for source, rel in discover_files(repo_root / "scripts"):
+        dest = options.config_dir / "scripts" / rel
+        action = FileAction(source=source, dest=dest, category="script")
+        if dest.exists() and not options.force:
+            action.reason = "exists"
+        actions.append(action)
+
     # ── Config (AGENTS.md, opencode.json) ──
     if not options.skip_config:
         for source, rel in discover_files(repo_root / "config"):
@@ -257,6 +265,8 @@ def print_next_steps(repo_root: Path) -> None:
     steps.append("")
     steps.append("1. Headroom (compressione token):")
     steps.append("   ./setup-headroom.sh")
+    steps.append("   (installa headroom-ai[mcp]==0.27.0 e applica il patch opencode;")
+    steps.append("    rieseguilo dopo ogni upgrade manuale di headroom)")
     steps.append("")
     steps.append("2. Trading MCP (analisi mercati):")
     steps.append("   ./setup-trading-mcp.sh")

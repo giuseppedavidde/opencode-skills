@@ -92,9 +92,13 @@ exception is `alphavantage-mcp.sh` which is also symlinked into
 ./setup-headroom.sh
 ```
 
-Creates `~/.local/share/opencode/headroom-venv/`, installs `headroom-ai[mcp]`.
-`opencode.json` is pre-configured with the MCP command
+Creates `~/.local/share/opencode/headroom-venv/`, installs `headroom-ai[mcp]==0.27.0`,
+and applies the required opencode patch (`scripts/patches/headroom-0.27.0-opencode.patch`)
+idempotently (fixed retrieve fallback, store format v2, coherent stats). `opencode.json`
+is pre-configured with the MCP command
 (`$HOME/.local/share/opencode/headroom-venv/bin/headroom`).
+
+> After any manual `headroom` upgrade, re-run `./setup-headroom.sh` to re-apply the patch.
 
 ### 4. Trading MCP (market analysis)
 
