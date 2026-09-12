@@ -100,8 +100,8 @@ Report concisely. For each updated skill show:
 
 ### Edge cases
 
-1. **Submodule not initialized**: Run `git submodule update --init skills/<name>-src` first
-2. **Local changes in submodule**: Run `git -C skills/<name>-src stash` before updating
+1. **Submodule not initialized**: Run `git submodule update --init <submodule-path>` first
+2. **Local changes in submodule**: Run `git -C <submodule-path> stash` before updating
 3. **No `-src` submodule for a skill**: Report that this skill doesn't follow the src+symlink pattern
 4. **Broken symlinks after update**: The source repo may have restructured files — report the broken symlinks to the user
 
