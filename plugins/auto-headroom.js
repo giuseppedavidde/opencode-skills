@@ -180,6 +180,14 @@ function appendAutoHeadroomEvent(hash, originalBytes, injectedBytes) {
   }
 }
 
+// Tronca le righe troppo lunghe nel preview: evita che payload single-line o
+// JSON compatti facciano ESPANDERE il riassunto iniettato (anomalia preview).
+const PREVIEW_LINE_MAX = 300;
+function truncatePreviewLine(line) {
+  if (line.length <= PREVIEW_LINE_MAX) return line;
+  return line.slice(0, PREVIEW_LINE_MAX) + " \u2026";
+}
+
 function buildSmartSummary(toolName, text, hash, totalBytes) {
   const lines = text.split("\n");
   const totalLines = lines.length;
@@ -196,17 +204,19 @@ function buildSmartSummary(toolName, text, hash, totalBytes) {
     tailCount = 12;
     errorLines = lines.filter(l =>
       /\b(error|failed|exception|traceback|fatal|syntaxerror|assertionerror)\b/i.test(l)
-    ).slice(0, 8);
+    ).slice(0, 8).map(truncatePreviewLine);
   }
 
-  const headLines = lines.slice(0, headCount).join("\n");
-  const tailLines = lines.slice(-tailCount).join("\n");
+  const canDedupe = totalLines <= headCount + tailCount;
+  const headShown = canDedupe ? totalLines : headCount;
+  const headLines = lines.slice(0, headShown).map(truncatePreviewLine).join("\n");
+  const tailLines = canDedupe ? "" : lines.slice(-tailCount).map(truncatePreviewLine).join("\n");
   const omittedCount = Math.max(0, totalLines - (headCount + tailCount));
 
   let summary = `⚡ [AUTO-HEADROOM COMPRESSED] Tool '${toolName}' result compressed (${totalBytes} bytes, ${totalLines} lines).\n`;
   summary += `🔑 Context Store Reference: hash=${hash} | File: ${txtFile} | Index: ${indexFile}\n\n`;
 
-  summary += `--- ANTEPRIMA TESTO (Prime ${headCount} righe) ---\n`;
+  summary += `--- ANTEPRIMA TESTO (Prime ${headShown} righe) ---\n`;
   summary += headLines + "\n";
 
   if (errorLines.length > 0) {
@@ -218,8 +228,10 @@ function buildSmartSummary(toolName, text, hash, totalBytes) {
     summary += `\n... [${omittedCount} righe omesse per risparmio token. Usa hash="${hash}" o fai read su ~/.config/opencode/context-store/${txtFile} con start_line/end_line] ...\n\n`;
   }
 
-  summary += `--- ANTEPRIMA FINALE (Ultime ${tailCount} righe) ---\n`;
-  summary += tailLines + "\n";
+  if (!canDedupe) {
+    summary += `--- ANTEPRIMA FINALE (Ultime ${tailCount} righe) ---\n`;
+    summary += tailLines + "\n";
+  }
   summary += `----------------------------------------------------\n`;
   summary += `📌 Selective Retrieval: Per leggere chunk specifici, consulta ~/.config/opencode/context-store/${indexFile} e usa start_line e end_line.`;
 
@@ -260,14 +272,21 @@ export const AutoHeadroomPlugin = async ({ directory: _directory }) => {
           return; // Sotto la soglia, nessuna compressione necessaria
         }
 
-        // Calcola Hash e salva l'originale in context-store
+        // Calcola l'hash e genera la versione compressa
         const hash = sha256(text);
         const totalBytes = Buffer.byteLength(text, "utf-8");
-        saveToContextStore(hash, text);
-
-        // Genera la versione compressa e sostituisci l'output
         const compressedText = buildSmartSummary(toolName, text, hash, totalBytes);
-        appendAutoHeadroomEvent(hash, totalBytes, Buffer.byteLength(compressedText, "utf-8"));
+        const compressedBytes = Buffer.byteLength(compressedText, "utf-8");
+
+        // Guardia anti-espansione: se il preview non riduce i byte, passthrough
+        // (nessuna scrittura in context-store, nessun evento stats).
+        if (compressedBytes >= totalBytes) {
+          return;
+        }
+
+        // Salva l'originale in context-store e sostituisci l'output
+        saveToContextStore(hash, text);
+        appendAutoHeadroomEvent(hash, totalBytes, compressedBytes);
         return replaceOutputText(output, field, compressedText);
 
       } catch (err) {
