@@ -2,13 +2,106 @@
 // Assicura che ogni subagent rispetti il contratto VERIFICA (router.md),
 // ancora la confidenza agli exit code reali dei comandi bash (pytest/pylint/mypy) e compatta l'output dei task lunghi.
 // Hook: "tool.execute.after" su input.tool === "task" | "bash"
-import { existsSync, mkdirSync, appendFileSync } from "fs";
+import { existsSync, mkdirSync, appendFileSync, statSync, openSync, readSync, closeSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { env } from "process";
 
 const GATE_LOG_DIR = env.GATE_LOG_DIR || join(homedir(), ".config", "opencode", "stats");
 const GATE_LOG_FILE = join(GATE_LOG_DIR, "gate_events.jsonl");
+
+// ── Headroom token-saving tracking ──
+// Log eventi condiviso scritto dal plugin auto-headroom e dal MCP (formato JSONL).
+const HEADROOM_WORKSPACE_DIR = env.HEADROOM_WORKSPACE_DIR || join(homedir(), ".headroom");
+const HEADROOM_STATS_FILE = join(HEADROOM_WORKSPACE_DIR, "session_stats.jsonl");
+
+// Tracking incrementale: offset byte già consumato + cumulativi di sessione.
+// Approssimazione accettata: task paralleli possono attribuire lo stesso delta.
+const headroomState = {
+  offsetBytes: 0,
+  sessionTokensSaved: 0,
+  compressions: 0,
+  originalBytes: 0,
+  injectedBytes: 0,
+};
+
+function initHeadroomOffset() {
+  try {
+    headroomState.offsetBytes = existsSync(HEADROOM_STATS_FILE) ? statSync(HEADROOM_STATS_FILE).size : 0;
+  } catch (_e) {
+    headroomState.offsetBytes = 0;
+  }
+}
+
+// Legge i byte nuovi (offset→EOF), somma i `compress`, aggiorna offset/cumulativi.
+// Edge: se il file è più corto dell'offset (pruned/truncated) → reset, delta 0 (mai negativi).
+function readHeadroomDelta() {
+  const delta = { tokensSaved: 0, compressions: 0, originalBytes: 0, injectedBytes: 0 };
+  try {
+    if (!existsSync(HEADROOM_STATS_FILE)) return delta;
+    const size = statSync(HEADROOM_STATS_FILE).size;
+    if (size < headroomState.offsetBytes) {
+      headroomState.offsetBytes = size;
+      return delta;
+    }
+    if (size === headroomState.offsetBytes) return delta;
+
+    const length = size - headroomState.offsetBytes;
+    const buf = Buffer.alloc(length);
+    const fd = openSync(HEADROOM_STATS_FILE, "r");
+    try {
+      readSync(fd, buf, 0, length, headroomState.offsetBytes);
+    } finally {
+      closeSync(fd);
+    }
+    headroomState.offsetBytes = size;
+
+    for (const raw of buf.toString("utf-8").split("\n")) {
+      const line = raw.trim();
+      if (!line) continue;
+      let evt;
+      try {
+        evt = JSON.parse(line);
+      } catch (_e) {
+        continue; // riga corrotta: ignora
+      }
+      if (evt && evt.type === "compress") {
+        delta.tokensSaved += Number(evt.tokens_saved) || 0;
+        delta.compressions += 1;
+        delta.originalBytes += Number(evt.original_bytes) || 0;
+        delta.injectedBytes += Number(evt.injected_bytes) || 0;
+      }
+    }
+    headroomState.sessionTokensSaved += delta.tokensSaved;
+    headroomState.compressions += delta.compressions;
+    headroomState.originalBytes += delta.originalBytes;
+    headroomState.injectedBytes += delta.injectedBytes;
+  } catch (_e) {
+    // best effort: non bloccare mai
+  }
+  return delta;
+}
+
+function formatTokens(n) {
+  return n >= 10000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+}
+
+function formatKB(bytes) {
+  return (bytes / 1024).toFixed(1);
+}
+
+function buildTokenSavingLine(delta) {
+  if (!delta || delta.tokensSaved === 0) {
+    return `📊 Token saving: 0 token salvati durante questo task (nessuna compressione) | sessione: ${formatTokens(headroomState.sessionTokensSaved)} token`;
+  }
+  return `📊 Token saving: ~${formatTokens(delta.tokensSaved)} token salvati durante questo task (${delta.compressions} compressioni, ${formatKB(delta.originalBytes)} KB → ${formatKB(delta.injectedBytes)} KB iniettati) | sessione: ${formatTokens(headroomState.sessionTokensSaved)} token`;
+}
+
+// Inserisce la riga come ULTIMA riga della sezione ## VERIFICA (o in coda se assente).
+function appendTokenLine(text, tokenLine) {
+  if (!text) return tokenLine;
+  return text.includes("## VERIFICA") ? `${text}\n${tokenLine}` : `${text}\n\n${tokenLine}`;
+}
 
 // Session-level tracking for failed verification commands (exit status != 0)
 let lastFailedBashCommand = null;
@@ -66,7 +159,7 @@ function parseVerifica(outputText) {
   return { present, confidenza, mechanicalError: hasErrorPattern };
 }
 
-function logEvent(subagentType, caseType, confidenza, promptSnippet) {
+function logEvent(subagentType, caseType, confidenza, promptSnippet, extra) {
   ensureLogDir();
   const event = {
     ts: new Date().toISOString(),
@@ -74,6 +167,7 @@ function logEvent(subagentType, caseType, confidenza, promptSnippet) {
     case: caseType,
     confidenza: confidenza,
     prompt_snippet: promptSnippet,
+    ...(extra || {}),
   };
   try {
     appendFileSync(GATE_LOG_FILE, JSON.stringify(event) + "\n", "utf-8");
@@ -103,6 +197,7 @@ function pruneTaskOutput(text) {
 
 export const VerificaGatePlugin = async ({ directory: _directory }) => {
   ensureLogDir();
+  initHeadroomOffset();
 
   return {
     "tool.execute.after": async (input, output) => {
@@ -154,9 +249,21 @@ export const VerificaGatePlugin = async ({ directory: _directory }) => {
           logEvent(subagentType, "mechanical_error", verifica.confidenza, promptSnippet);
         }
 
-        // Apply task output pruning for long results
+        // Token saving del task (headroom): delta incrementale dal log eventi condiviso
+        const tokenDelta = readHeadroomDelta();
+        const tokenLine = buildTokenSavingLine(tokenDelta);
+        logEvent(subagentType, "token_saving", null, promptSnippet, {
+          tokens_saved: tokenDelta.tokensSaved,
+          compressions: tokenDelta.compressions,
+          original_bytes: tokenDelta.originalBytes,
+          injected_bytes: tokenDelta.injectedBytes,
+          session_tokens_saved: headroomState.sessionTokensSaved,
+        });
+
+        // Prune + warning, poi inietta la riga token come ULTIMA riga (del ## VERIFICA o in coda)
         const prunedText = pruneTaskOutput(processedText) + warning;
-        return replaceOutputText(output, field, prunedText);
+        const finalText = appendTokenLine(prunedText, tokenLine);
+        return replaceOutputText(output, field, finalText);
 
       } catch (_err) {
         // Non crashare mai il tool execution
