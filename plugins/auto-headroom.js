@@ -238,7 +238,10 @@ function buildSmartSummary(toolName, text, hash, totalBytes) {
   return summary;
 }
 
-export const AutoHeadroomPlugin = async ({ directory: _directory }) => {
+export const AutoHeadroomPlugin = async (ctx) => {
+  // Firma resiliente: compatibile con opencode ≤1.18.29 ({ directory })
+  // e ≥1.18.30 ({ client, ... }) — non dipende da nessuna property specifica.
+  const _directory = ctx && typeof ctx === "object" ? (ctx.directory ?? null) : null;
   ensureDir();
 
   return {

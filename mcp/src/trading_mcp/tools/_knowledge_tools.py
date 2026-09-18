@@ -9,7 +9,11 @@ from typing import Any
 
 from fastmcp import FastMCP
 
-from trading_mcp.analysis.macro import detect_regime, get_dynamic_weights
+from trading_mcp.analysis.macro import (
+    detect_regime,
+    get_dynamic_weights,
+    regime_to_macro_window,
+)
 from trading_mcp.data.provider import data_provider
 from trading_mcp.knowledge.skill_bridge import SkillBridge
 from trading_mcp.data.result_cache import result_cache
@@ -54,8 +58,10 @@ def _fetch_macro_context() -> dict[str, Any]:
     vix_val = raw["vix"]
     dxy_val = raw["dxy"]
     dxy_prev = raw["dxy_prev"]
-    btc_dominance = raw["btc_dominance"]
-    fear_greed = None
+    btc_dominance = raw.get("btc_dominance")
+    btc_price = raw.get("btc_price")
+    # Real Fear & Greed fetched by the DataProvider (None when unavailable).
+    fear_greed = raw.get("fear_greed")
 
     # fix L4: fed_rate was a hardcoded placeholder (4.75). Use the live
     # risk-free rate (^IRX, 13-week T-bill) as a fed-funds proxy, with the
@@ -79,17 +85,9 @@ def _fetch_macro_context() -> dict[str, Any]:
     weights_stock = get_dynamic_weights(regime, is_crypto=False)
     weights_crypto = get_dynamic_weights(regime, is_crypto=True)
 
-    if vix_val is not None:
-        if vix_val < 15:
-            macro_window = "FULL"
-        elif vix_val < 25:
-            macro_window = "NORMAL"
-        elif vix_val < 35:
-            macro_window = "SELECTIVE"
-        else:
-            macro_window = "DEFENSIVE"
-    else:
-        macro_window = "NORMAL"
+    # Macro window is DERIVED from the regime (single source of truth) so the
+    # two fields can never contradict each other. See regime_to_macro_window.
+    macro_window = regime_to_macro_window(regime)
 
     return {
         "timestamp": datetime.utcnow().isoformat(),
@@ -98,6 +96,7 @@ def _fetch_macro_context() -> dict[str, Any]:
         "dxy_trend": dxy_trend,
         "fed_rate": fed_rate,
         "btc_dominance": btc_dominance,
+        "btc_price": btc_price,
         "fear_greed_index": fear_greed,
         "detected_regime": regime.value,
         "macro_window": macro_window,
@@ -262,11 +261,20 @@ def register_knowledge_tools(mcp_server: FastMCP, skills_dir: str) -> None:
             try:
                 from trading_mcp.data.options_chain import fetch_options_chain
                 chain = fetch_options_chain(ticker)
-                iv_rank = chain.get("iv_metrics", {}).get("iv_rank", 50.0)
+                # iv_rank is None unless computable from a historical IV series;
+                # never substitute a misleading in-chain range position here.
+                iv_rank = chain.get("iv_metrics", {}).get("iv_rank")
             except Exception:
-                iv_rank = 50.0
+                iv_rank = None
 
-        iv_regime = "high" if iv_rank > 70 else ("low" if iv_rank < 30 else "normal")
+        if iv_rank is None:
+            iv_regime = "unknown"
+        elif iv_rank > 70:
+            iv_regime = "high"
+        elif iv_rank < 30:
+            iv_regime = "low"
+        else:
+            iv_regime = "normal"
 
         strategy_name = "Bull Call Spread"
         strategy_desc = "Buy ATM Call + Sell OTM Call. Defined risk, moderate bullish."
@@ -290,7 +298,11 @@ def register_knowledge_tools(mcp_server: FastMCP, skills_dir: str) -> None:
 
         rationale = [
             f"Score {composite_score} with verdict '{verdict}' → {direction} outlook",
-            f"IV rank {iv_rank:.0f} ({iv_regime})",
+            (
+                f"IV rank {iv_rank:.0f} ({iv_regime})"
+                if iv_rank is not None
+                else f"IV regime: {iv_regime} (historical IV rank unavailable)"
+            ),
             f"Risk tolerance: {risk_tolerance}",
         ]
 

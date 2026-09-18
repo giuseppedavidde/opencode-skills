@@ -216,6 +216,51 @@ class TickerCache:
     lock: threading.Lock = field(default_factory=threading.Lock)
 
 
+def _fetch_btc_dominance() -> float | None:
+    """Fetch BTC market-cap dominance (%) from CoinGecko ``/global``.
+
+    Returns ``None`` (graceful) on any network/parsing failure so macro
+    context never crashes offline. Uses the optional COINGECKO_API_KEY
+    header when present (same convention as :mod:`trading_mcp.data.crypto`).
+    """
+    try:
+        import urllib.request  # local import: stdlib, keep module import light
+
+        req = urllib.request.Request("https://api.coingecko.com/api/v3/global")
+        api_key = os.environ.get("COINGECKO_API_KEY")
+        if api_key:
+            req.add_header("x-cg-demo-api-key", api_key)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            payload = json.loads(resp.read().decode())
+        pct = payload.get("data", {}).get("market_cap_percentage", {}).get("btc")
+        return round(float(pct), 2) if pct is not None else None
+    except Exception:  # pylint: disable=broad-exception-caught
+        logger.warning("Failed to fetch BTC dominance", exc_info=True)
+        return None
+
+
+def _fetch_fear_greed() -> int | None:
+    """Fetch the Crypto Fear & Greed index (0-100) from alternative.me.
+
+    No API key required. Returns ``None`` (graceful, documented as
+    "unavailable") on any network/parsing failure.
+    """
+    try:
+        import urllib.request  # local import: stdlib, keep module import light
+
+        req = urllib.request.Request("https://api.alternative.me/fng/")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            payload = json.loads(resp.read().decode())
+        entries = payload.get("data") or []
+        if not entries:
+            return None
+        value = entries[0].get("value")
+        return int(value) if value is not None else None
+    except Exception:  # pylint: disable=broad-exception-caught
+        logger.warning("Failed to fetch Fear & Greed index", exc_info=True)
+        return None
+
+
 class DataProvider:
     """Centralized data provider with TTL cache.
 
@@ -440,10 +485,15 @@ class DataProvider:
         return chain
 
     def get_macro_context(self) -> dict[str, Any]:
-        """Fetch macro indicators: VIX, DXY, BTC price via yfinance.
+        """Fetch macro indicators: VIX, DXY, BTC price/dominance, Fear & Greed.
 
         Returns raw values without regime detection.
         The caller applies regime classification on top.
+
+        ``btc_dominance`` is the true market-cap share (%) from CoinGecko;
+        ``btc_price`` is the BTC spot price in USD. ``fear_greed`` is the
+        Crypto Fear & Greed index (0-100). Both network-sourced fields are
+        ``None`` when unavailable (never a placeholder/mislabeled value).
         """
         vix_val = None
         dxy_val = None
@@ -476,7 +526,9 @@ class DataProvider:
             "vix": vix_val,
             "dxy": dxy_val,
             "dxy_prev": dxy_prev,
-            "btc_dominance": btc_price,
+            "btc_price": btc_price,
+            "btc_dominance": _fetch_btc_dominance(),
+            "fear_greed": _fetch_fear_greed(),
         }
 
     def get_crypto_hist(self, symbol: str, period: str = "1y") -> pd.DataFrame:

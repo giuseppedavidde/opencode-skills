@@ -17,19 +17,6 @@
     }
   },
   "provider": {
-    "llama-local": {
-      "name": "LLM Locale",
-      "npm": "@ai-sdk/openai-compatible",
-      "options": {
-        "baseURL": "http://127.0.0.1:8080/v1",
-        "apiKey": "dummy"
-      },
-      "models": {
-        "local": {
-          "name": "Qwen3.6-35B-A3B-UDT-Q3_K_XL_MTP"
-        }
-      }
-    },
     "opencode-go": {
       "name": "OpenCode Go",
       "models": {
@@ -112,15 +99,6 @@
         "bash",
         "-c",
         "exec \"$HOME/.local/share/opencode/trading-mcp-venv/bin/trading-mcp\""
-      ],
-      "enabled": true
-    },
-    "alphavantage": {
-      "type": "local",
-      "command": [
-        "bash",
-        "-c",
-        "exec \"$HOME/.local/bin/alphavantage-mcp.sh\""
       ],
       "enabled": true
     }

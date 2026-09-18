@@ -156,6 +156,6 @@ Quando il router comprime contenuto con headroom e POI delega a un subagent, DEV
 Dati completi: leggi ~/.config/opencode/context-store/<hash>.txt se servono
 ```
 
-Questo permette al subagent di recuperare il contenuto originale da disco senza che il router ripaghi i token. I file vengono scritti automaticamente dal plugin `context-store.js`.
+Questo permette al subagent di recuperare il contenuto originale da disco senza che il router ripaghi i token. I file vengono scritti automaticamente dal middleware `auto-headroom.js`.
 
 NON sostituire i contenuti compressi nei prompt: il file è un complemento opzionale.

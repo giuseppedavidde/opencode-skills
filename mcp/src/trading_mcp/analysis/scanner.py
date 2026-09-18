@@ -344,6 +344,10 @@ def identify_pattern(
 
     t = thresholds
 
+    # "Spring detected" is emitted by compute_wyckoff only for a genuine
+    # near-lows shakeout (price below the upper 40% of the 30-bar range), so a
+    # high Wyckoff score alone — e.g. pure markup/ATH trend strength — can no
+    # longer produce an "Accumulation" label here.
     if wyckoff_score >= t["wyckoff_strong"] and "Spring" in wyckoff_detail:
         return "Accumulation Spring"
     if volprof_score >= t["volprof_strong"] and fundamentals_score >= t["fundamentals_moderate"]:

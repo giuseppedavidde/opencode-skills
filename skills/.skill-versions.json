@@ -43,13 +43,6 @@
     "depends_on": {},
     "description": "any input (code, docs, papers, images) → knowledge graph → clustered communities → HTML + JSON + audit report. Use when user asks any question about a codebase, project content, architecture, or file "
   },
-  "italy-tax-declaration-instructions": {
-    "version": "1.0",
-    "generated": "unknown",
-    "source": "Italy Tax Declaration Instructions 2026 by Agenzia delle Entrate",
-    "depends_on": {},
-    "description": "Knowledge base from 'Redditi Derivati - Istruzioni 2026' by Agenzia delle Entrate. Italian tax rules for financial income, capital gains, derivatives, foreign investments, and tax return instructions "
-  },
   "karpathy-llm-wiki": {
     "version": "1.0",
     "generated": "unknown",

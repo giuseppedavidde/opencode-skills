@@ -18,7 +18,7 @@ LightGBM Trading System — feature engineering, stacking ensemble, signal gener
 ### Predizione live (con auto-training)
 
 ```bash
-source /tmp/opencode/.venv/bin/activate
+source $HOME/.local/share/opencode/trading-mcp-venv/bin/activate
 cd "$HOME/.config/opencode/skills/lgbm-trader-skill"
 
 # Uso diretto (fallisce se nessun modello)
@@ -84,7 +84,7 @@ Dopo la chiamata, il trade agent DEVE controllare il campo `model`:
 ### Esempio di parsing dal trade agent (bash + python)
 
 ```bash
-result=$(source /tmp/opencode/.venv/bin/activate && \
+result=$(source $HOME/.local/share/opencode/trading-mcp-venv/bin/activate && \
          python "$HOME/.config/opencode/skills/lgbm-trader-skill/scripts/predict_or_train.py" \
                --ticker GME --json)
 has_model=$(echo "$result" | python3 -c "import sys, json; d=json.load(sys.stdin); print(str(d.get('model') is not None).lower())")

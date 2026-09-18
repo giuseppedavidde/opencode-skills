@@ -20,7 +20,11 @@ import sys
 import time
 from datetime import datetime
 
-from trading_mcp.analysis.macro import detect_regime, get_dynamic_weights
+from trading_mcp.analysis.macro import (
+    detect_regime,
+    get_dynamic_weights,
+    regime_to_macro_window,
+)
 from trading_mcp.analysis.options_calc import analyze_options_position
 from trading_mcp.analysis.scanner import (
     apply_macro_regime,
@@ -208,17 +212,8 @@ def cmd_macro(_args: argparse.Namespace) -> dict:
     weights_stock = get_dynamic_weights(regime, is_crypto=False)
     weights_crypto = get_dynamic_weights(regime, is_crypto=True)
 
-    if vix_val is not None:
-        if vix_val < 15:
-            macro_window = "FULL"
-        elif vix_val < 25:
-            macro_window = "NORMAL"
-        elif vix_val < 35:
-            macro_window = "SELECTIVE"
-        else:
-            macro_window = "DEFENSIVE"
-    else:
-        macro_window = "NORMAL"
+    # Derived from the regime (single source of truth) — see macro.py.
+    macro_window = regime_to_macro_window(regime)
 
     return {
         "vix": vix_val,

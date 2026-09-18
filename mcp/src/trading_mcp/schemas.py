@@ -264,11 +264,18 @@ class ScannerBatchResult(BaseModel):
 
 
 class IVTermStructureResult(BaseModel):
-    """IV term structure analysis."""
+    """IV term structure analysis.
 
-    iv_rank: float = Field(..., ge=0.0, le=100.0)
-    iv_percentile: float = Field(..., ge=0.0, le=100.0)
-    current_atm_iv: float
+    ``iv_rank`` / ``iv_percentile`` are ``None`` when no historical IV
+    series is available — never a misleading in-chain substitute.
+    ``iv_range_position`` is the within-chain min-max position (0-100),
+    explicitly not a historical rank.
+    """
+
+    iv_rank: Optional[float] = Field(None, ge=0.0, le=100.0)
+    iv_percentile: Optional[float] = Field(None, ge=0.0, le=100.0)
+    iv_range_position: Optional[float] = Field(None, ge=0.0, le=100.0)
+    current_atm_iv: Optional[float] = None
     regime: IVRegime
     shape: TermStructureShape
     expirations: list[dict] = Field(default_factory=list)

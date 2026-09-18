@@ -62,9 +62,16 @@ def compute_wyckoff(hist: pd.DataFrame, info: dict[str, Any]) -> tuple[int, str]
 
     if len(hist) >= 30:
         recent_30 = hist.tail(30)
+        high_30 = float(recent_30["High"].max())
         low_30 = float(recent_30["Low"].min())
         low_pos = int(recent_30["Low"].values.argmin())
-        if low_pos < 25 and price > low_30 * 1.05:
+        range_30 = high_30 - low_30
+        pos_30 = ((price - low_30) / range_30 * 100) if range_30 > 0 else 50.0
+        # A genuine Spring is a shakeout near the lows, NOT a pullback inside
+        # an extended markup. Without the position constraint the detector is
+        # trivially true in any uptrend (the 30-bar low is always early and
+        # price is >5% above it), which mislabels ATH names as accumulation.
+        if low_pos < 25 and price > low_30 * 1.05 and pos_30 < 60:
             score += 30
             details.append("Spring detected (+30)")
 

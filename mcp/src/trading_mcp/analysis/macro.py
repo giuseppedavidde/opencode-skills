@@ -53,13 +53,36 @@ def detect_regime(
         return Regime.HIGH_VOLATILITY
     if fear_greed is not None and (fear_greed > 75 or fear_greed < 20):
         return Regime.HIGH_VOLATILITY
-    if vix is not None and vix < 15 and dxy_trend == "neutral":
+    if vix is not None and vix < 25 and dxy_trend == "neutral":
         return Regime.RANGE_BOUND
     if dxy_trend == "falling":
         return Regime.TRENDING_BULL
     if dxy_trend == "rising":
         return Regime.TRENDING_BEAR
     return Regime.UNKNOWN
+
+
+# ── Adaptive Macro Matrix window mapping ─────────────────────────────
+# Single source of truth: the macro window is DERIVED from the detected
+# regime so the two fields can never contradict each other.
+_REGIME_TO_MACRO_WINDOW: dict[Regime, str] = {
+    Regime.CRISIS: "DEFENSIVE",
+    Regime.HIGH_VOLATILITY: "SELECTIVE",
+    Regime.RANGE_BOUND: "NORMAL",
+    Regime.TRENDING_BULL: "FULL",
+    Regime.TRENDING_BEAR: "DEFENSIVE",
+    Regime.UNKNOWN: "NORMAL",
+}
+
+
+def regime_to_macro_window(regime: Regime) -> str:
+    """Map a detected :class:`Regime` to its Adaptive Macro Matrix window.
+
+    Mapping (documented, single source of truth):
+    CRISIS→DEFENSIVE, HIGH_VOLATILITY→SELECTIVE, RANGE_BOUND→NORMAL,
+    TRENDING_BULL→FULL, TRENDING_BEAR→DEFENSIVE, UNKNOWN→NORMAL.
+    """
+    return _REGIME_TO_MACRO_WINDOW.get(regime, "NORMAL")
 
 
 def get_dynamic_weights(regime: Regime, is_crypto: bool = False) -> dict[str, float]:

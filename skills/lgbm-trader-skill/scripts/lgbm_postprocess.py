@@ -5,7 +5,7 @@ Calcola 8 adjustment basati sulle skill di trading per correggere/aumentare
 la confidenza dello score LGBM grezzo.
 
 Uso:
-    source /tmp/opencode/.venv/bin/activate
+    source $HOME/.local/share/opencode/trading-mcp-venv/bin/activate
     python3 lgbm_postprocess.py --ticker GME --lgbm-score 67 --json
     python3 lgbm_postprocess.py --ticker LHX --lgbm-score 65
 """

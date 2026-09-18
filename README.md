@@ -209,7 +209,6 @@ rm -rf ~/.local/share/opencode/headroom-venv && ./setup-headroom.sh
 | `encyclopedia-writing` | Encyclopedic neutral-reference writing craft — NPOV (attribute facts not opinions, due weight, neutral faction labels, verdict restraint), summary style and Coatrack avoidance, wikilink conventions (link density, first-mention, slug alias, abbreviation glossing) |
 | `evidence-based-technical-analysis` | Knowledge base from 'Evidence-Based Technical Analysis' by David R. Aronson (scientific method for trading signals) |
 | `graphify` | any input (code, docs, papers, images) → knowledge graph → clustered communities → HTML + JSON + audit report |
-| `italy-tax-declaration-instructions` | Italian tax return instructions for financial income, capital gains, derivatives, foreign investments (Redditi PF 2026) |
 | `journalism-writing` | Journalism and argumentation writing craft — inverted pyramid, lede, nut graph, kicker, explainer framing, PAGE frames, Toulmin argument (claim/rebuttal/qualifier), Hegelian dialectic, BBC due impartiality |
 | `karpathy-llm-wiki` | Build and maintain a personal LLM-powered knowledge base |
 | `lgbm-trader-skill` | LightGBM Trading System — stacking ensemble of 5 models + meta-model producing a 0-100 trade score |

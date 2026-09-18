@@ -93,7 +93,7 @@ lista vuota senza spiegazione quando i dati erano insufficienti. Ora:
 ## Uso base
 
 ```bash
-source /tmp/opencode/.venv/bin/activate
+source $HOME/.local/share/opencode/trading-mcp-venv/bin/activate
 python "$HOME/Progetti/Github/lgbm-trader/scripts/predict_live.py" --ticker GME
 ```
 
@@ -101,7 +101,7 @@ python "$HOME/Progetti/Github/lgbm-trader/scripts/predict_live.py" --ticker GME
 
 ```bash
 # Backtest canonico (strict mode, VP window 365d, richiede >=432 barre)
-source /tmp/opencode/.venv/bin/activate
+source $HOME/.local/share/opencode/trading-mcp-venv/bin/activate
 python scripts/run_backtest.py --ticker SPY --horizons 20,60,180 --output backtest_results/
 
 # Modalita' diagnostica per ticker con storia corta (VP window adattiva >=20d)
@@ -229,7 +229,7 @@ python scripts/tune_model.py --ticker GME --trials 50
 ## Esecuzione test (AGGIORNATO P2 Ago 2026)
 
 ```bash
-source /tmp/opencode/.venv/bin/activate
+source $HOME/.local/share/opencode/trading-mcp-venv/bin/activate
 cd ~/.config/opencode/skills/lgbm-trader-skill
 python -m pytest tests/ -v
 

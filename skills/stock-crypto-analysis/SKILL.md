@@ -31,9 +31,8 @@ Returns: composite_score, verdict, confidence, signal_alignment,
 ### Step 2b — Bali volatility spread signals (Bali & Hovakimian 2009)
 Dopo `analyze_stock`, arricchisci con i 2 segnali cross-sectional da opzioni:
 
-```bash
-source /tmp/opencode/.venv-quantmind/bin/activate
-python3 ~/.config/opencode/skills/quant-mind-skill/bali_signals.py <TICKER> --json
+```
+Call: bali_signals(ticker="<TICKER>")
 ```
 
 Questo calcola:
@@ -49,9 +48,8 @@ Output JSON con scores 0-100 e direzione combinata.
 ### Step 2c — Time Series Momentum (Moskowitz, Ooi & Pedersen 2012)
 Dopo `analyze_stock`, arricchisci con il TS-MOM signal:
 
-```bash
-source /tmp/opencode/.venv-quantmind/bin/activate
-python3 ~/.config/opencode/skills/quant-mind-skill/tsmom_signals.py <TICKER> --lookback 12 --json
+```
+Call: tsmom_signals(ticker="<TICKER>", lookback_months=12)
 ```
 
 Questo calcola:
@@ -89,9 +87,8 @@ Call: suggest_options_strategy(ticker="<TICKER>", composite_score=<FINAL_SCORE>,
 
 Prima di suggerire la strategia, arricchisci con Bakshi & Kapadia VRP signals:
 
-```bash
-source /tmp/opencode/.venv-quantmind/bin/activate
-python3 ~/.config/opencode/skills/quant-mind-skill/bakshi_kapadia_signals.py <TICKER> --json
+```
+Call: bakshi_signals(ticker="<TICKER>")
 ```
 
 Questo calcola:

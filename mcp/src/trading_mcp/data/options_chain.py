@@ -145,7 +145,7 @@ def fetch_options_chain(
 
     # IV metrics on the FULL chain (ratios representative), then trim
     # the returned strike lists to the ATM window (fix A3).
-    iv_metrics = _compute_iv_metrics(calls_df, puts_df, info)
+    iv_metrics = _compute_iv_metrics(calls_df, puts_df, spot)
 
     calls_df = _filter_strike_window(calls_df, spot, strike_window)
     puts_df = _filter_strike_window(puts_df, spot, strike_window)
@@ -195,9 +195,10 @@ def _fallback_response(ticker: str, spot: float, live_iv: Any, error_msg: str) -
         "calls": [],
         "puts": [],
         "iv_metrics": {
-            "atm_iv": round(float(live_iv or 0), 4),
-            "iv_rank": 50.0,
-            "iv_percentile": 50.0,
+            "atm_iv": round(float(live_iv), 4) if live_iv else None,
+            "iv_rank": None,
+            "iv_percentile": None,
+            "iv_range_position": None,
             "put_call_ratio_vol": 0.0,
             "put_call_ratio_oi": 0.0,
             "term_structure": [],
@@ -353,38 +354,74 @@ def _chain_to_list(df: pd.DataFrame, greeks: pd.DataFrame) -> list[dict[str, Any
     return result
 
 
+def _nearest_strike_iv(df: pd.DataFrame, spot: float) -> float | None:
+    """Return the IV at the strike nearest to ``spot``, or ``None``."""
+    if df.empty or "strike" not in df.columns or "impliedVolatility" not in df.columns:
+        return None
+    idx = (df["strike"] - spot).abs().idxmin()
+    try:
+        iv = float(df.loc[idx, "impliedVolatility"])
+    except (TypeError, ValueError):
+        return None
+    return iv if np.isfinite(iv) and iv > 0 else None
+
+
+def _collect_ivs(calls_df: pd.DataFrame, puts_df: pd.DataFrame) -> list[float]:
+    """Collect all finite positive IVs from both sides of the chain."""
+    all_ivs: list[float] = []
+    for df in (calls_df, puts_df):
+        if "impliedVolatility" in df.columns:
+            all_ivs.extend(float(v) for v in df["impliedVolatility"].dropna() if v > 0)
+    return all_ivs
+
+
 def _compute_iv_metrics(
-    calls_df: pd.DataFrame, puts_df: pd.DataFrame, info: dict[str, Any]
+    calls_df: pd.DataFrame, puts_df: pd.DataFrame, spot: float
 ) -> dict[str, Any]:
+    """Compute IV metrics anchored on the true ATM strike.
+
+    ``atm_iv`` is the mean of the call and put IV at the strike nearest to
+    ``spot`` — the same definition used by the Bali/Bakshi tools — NOT a
+    median over the whole chain, which is contaminated by the volatility
+    smile/skew and by strikes outside the returned window.
+
+    ``iv_rank`` / ``iv_percentile`` require a historical IV series; since
+    none is available here they are ``None`` (never a misleading in-chain
+    value). The within-chain min-max position — explicitly not a historical
+    rank — is exposed separately as ``iv_range_position``.
+    """
     c_vol = int(calls_df["volume"].fillna(0).sum()) if "volume" in calls_df.columns else 0
     p_vol = int(puts_df["volume"].fillna(0).sum()) if "volume" in puts_df.columns else 0
     c_oi = int(calls_df["openInterest"].fillna(0).sum()) if "openInterest" in calls_df.columns else 0
     p_oi = int(puts_df["openInterest"].fillna(0).sum()) if "openInterest" in puts_df.columns else 0
 
-    atm_iv = info.get("impliedVolatility", 0.0) or 0.0
-    iv_rank = min(100.0, max(0.0, atm_iv * 100)) if isinstance(atm_iv, float) and atm_iv < 2 else 50.0
-    iv_percentile = iv_rank
-
-    all_ivs = []
-    if "impliedVolatility" in calls_df.columns:
-        all_ivs.extend(calls_df["impliedVolatility"].dropna().tolist())
-    if "impliedVolatility" in puts_df.columns:
-        all_ivs.extend(puts_df["impliedVolatility"].dropna().tolist())
-    if all_ivs:
-        atm_iv = float(np.median(all_ivs))
-        min_iv = float(np.min(all_ivs))
-        max_iv = float(np.max(all_ivs))
-        if max_iv > min_iv:
-            iv_rank = (atm_iv - min_iv) / (max_iv - min_iv) * 100
+    # ── ATM IV: nearest-strike call/put, mirroring bali/bakshi ────────
+    atm_iv: float | None = None
+    if spot > 0 and not calls_df.empty and not puts_df.empty:
+        call_iv = _nearest_strike_iv(calls_df, spot)
+        put_iv = _nearest_strike_iv(puts_df, spot)
+        if call_iv is not None and put_iv is not None:
+            atm_iv = (call_iv + put_iv) / 2
         else:
-            iv_rank = 50.0
+            atm_iv = call_iv if call_iv is not None else put_iv
+
+    # ── Within-chain IV range position (NOT a historical rank) ────────
+    iv_range_position: float | None = None
+    if atm_iv is not None:
+        all_ivs = _collect_ivs(calls_df, puts_df)
+        if all_ivs:
+            min_iv = float(np.min(all_ivs))
+            max_iv = float(np.max(all_ivs))
+            if max_iv > min_iv:
+                iv_range_position = round((atm_iv - min_iv) / (max_iv - min_iv) * 100, 1)
 
     term_structure: list[dict] = []
 
     return {
-        "atm_iv": round(atm_iv, 4),
-        "iv_rank": round(iv_rank, 1),
-        "iv_percentile": round(iv_percentile, 1),
+        "atm_iv": round(atm_iv, 4) if atm_iv is not None else None,
+        "iv_rank": None,
+        "iv_percentile": None,
+        "iv_range_position": iv_range_position,
         "put_call_ratio_vol": round(p_vol / c_vol, 4) if c_vol > 0 else 0.0,
         "put_call_ratio_oi": round(p_oi / c_oi, 4) if c_oi > 0 else 0.0,
         "term_structure": term_structure,

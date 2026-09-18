@@ -935,6 +935,8 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
             ticker=ticker,
             available=True,
             spot=round(spot, 2),
+            available_bars=avail_bars,
+            required_bars=_MIN_BALI_BARS,
             rv=round(rv, 4),
             atm_call_iv=round(atm_call_iv, 4),
             atm_put_iv=round(atm_put_iv, 4),
@@ -1091,6 +1093,8 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
             ticker=ticker,
             available=True,
             price=round(float(close.iloc[-1]), 2),
+            available_bars=avail_tsmom,
+            required_bars=_MIN_TSMOM_BARS,
             lookback_months=lookback_months,
             cum_return_lookback=round(float(cum_return), 4),
             signal=signal,
@@ -1319,6 +1323,8 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
         return BakshiResult(
             ticker=ticker,
             spot=round(spot, 2),
+            available_bars=avail_bars,
+            required_bars=_MIN_BAKSHI_BARS,
             expiry=exp_date,
             dte=dte,
             atm_iv=round(avg_iv, 4),
@@ -1567,6 +1573,8 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
             ticker=ticker,
             model=model_file.name,
             available=True,
+            available_bars=avail_bars,
+            required_bars=_FEATURE_LOOKBACK,
             **pred_result,
         ).model_dump()
 
