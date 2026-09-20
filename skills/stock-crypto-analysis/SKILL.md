@@ -63,16 +63,17 @@ Risultato empirico del paper: Sharpe ratio > 1.0 su portafoglio diversificato cr
 universale in 58 futures su 4 asset class.
 
 ### Step 3 — Synthesize verdict (con Bali + TS-MOM signals)
-Fondi il `composite_score` di analyze_stock con i segnali Bali e TS-MOM:
+Usa il `composite_score` restituito da `analyze_stock` (calcolato dal server MCP;
+pesi definiti in `mcp/src/trading_mcp/weights_config.py` — non ricalcolarli).
+Combina il composite con i segnali Bali e TS-MOM come conferma qualitativa, senza
+ri-pesare a mano i singoli punteggi.
 
-```
-Pesi aggiornati:
-  analyze_stock score:    60%
-  Bali composite:         20%
-  TS-MOM score:           20%
-  
-  final_score = composite_score × 0.60 + bali_composite × 0.20 + mom_score × 0.20
-```
+Se `lgbm_predict.available=False` (gate train-vs-skip negato o non valutato) il
+verdetto si compone SOLO da Step 2/2b/2c + bakshi, rinormalizzando i pesi
+compositi sulla tabella `without_lgbm` di
+`mcp/src/trading_mcp/weights_config.py`; dichiara nel report la riga
+**"LGBM non contribuisce: fallback"** e prosegui verso Step 4 senza bloccare
+né addestrare.
 
 - final_score ≥ 70 → **Long-Term Investment**
 - 50-69 → **Short-Term Speculation (Bullish)**

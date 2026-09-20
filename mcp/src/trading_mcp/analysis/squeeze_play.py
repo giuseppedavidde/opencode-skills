@@ -7,6 +7,8 @@ from typing import Any
 import pandas as pd
 import yfinance as yf
 
+from trading_mcp.data.provider import data_provider
+
 
 def compute_squeeze_play(
     ticker: yf.Ticker, info: dict[str, Any], hist: pd.DataFrame
@@ -25,12 +27,16 @@ def compute_squeeze_play(
     details = []
 
     try:
-        exps = ticker.options
+        # fix R1: opzioni via DataProvider (cache condivisa con sentiment_6d)
+        symbol = getattr(ticker, "ticker", "")
+        exps = data_provider.get_options_expirations(symbol)
         if exps and len(exps) >= 2:
             pc_ratios: list[float] = []
             for exp in exps[:4]:
                 try:
-                    chain = ticker.option_chain(exp)
+                    chain = data_provider.get_options_chain(symbol, exp)
+                    if chain is None:
+                        continue
                     calls = chain.calls
                     puts = chain.puts
                     if not calls.empty and not puts.empty:

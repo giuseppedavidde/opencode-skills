@@ -20,6 +20,13 @@ _mcp_src = Path(__file__).resolve().parents[3] / "mcp" / "src"
 if str(_mcp_src) not in sys.path:
     sys.path.insert(0, str(_mcp_src))
 
+# Skill scripts path (predict_or_train gate)
+_scripts_dir = _skill_root / "scripts"
+if str(_scripts_dir) not in sys.path:
+    sys.path.insert(0, str(_scripts_dir))
+
+import predict_or_train as pot  # noqa: E402  # pylint: disable=import-error,wrong-import-position
+
 
 class TestLGBMResultModel:
     """Tests for LGBMResult Pydantic model."""
@@ -216,3 +223,94 @@ class TestFeatureAlignment:
         assert list(aligned.columns) == feature_names
         assert aligned["mom_1"].iloc[0] == 5.5
         assert aligned["vol_1"].iloc[0] == -1.2
+
+
+class TestTrainGate:
+    """Gate train-vs-skip: threshold, uplift math, LGBMResult semantics."""
+
+    @pytest.fixture(autouse=True)
+    def _default_gate(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from trading_mcp.weights_config import WeightsConfig
+
+        monkeypatch.setattr(pot, "_GATE", WeightsConfig().lgbm_gate)
+
+    def test_gate_rejects_below_threshold(self) -> None:
+        """High fallback confidence everywhere -> marginal uplift -> skip."""
+        conf = {"bali": 78, "tsmom": 75, "bakshi": 80, "factor_scan": 72}
+        approve, metrics = pot._gate_decision(conf, False)
+        assert approve is False
+        assert metrics["uplift"] < 5.0
+        assert metrics["decision"] == "skip"
+
+    def test_gate_approves_above_threshold(self) -> None:
+        """Divergent fallback signals -> real uplift -> train."""
+        conf = {"bali": 80, "tsmom": 30, "bakshi": 40, "factor_scan": 50}
+        approve, metrics = pot._gate_decision(conf, False)
+        assert approve is True
+        assert metrics["uplift"] == pytest.approx(6.0, abs=0.05)
+        assert metrics["decision"] == "train"
+
+    def test_gate_boundary_inclusive(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """uplift exactly == threshold must approve (>= semantics)."""
+        from trading_mcp.weights_config import GateComponents, LgbmGateWeights
+
+        gate = LgbmGateWeights(
+            uplift_threshold=5.0,
+            without_lgbm=GateComponents(
+                bali=0.5, tsmom=0.5, bakshi=0.0, factor_scan=0.0, lgbm=0.0
+            ),
+            with_lgbm=GateComponents(
+                bali=0.5, tsmom=0.0, bakshi=0.0, factor_scan=0.0, lgbm=0.5
+            ),
+        )
+        monkeypatch.setattr(pot, "_GATE", gate)
+        conf = {"bali": 60.0, "tsmom": 50.0, "bakshi": 0.0, "factor_scan": 0.0}
+        approve, metrics = pot._gate_decision(conf, False)
+        assert metrics["uplift"] == 5.0
+        assert approve is True
+
+    def test_gate_no_confidence_skips(self) -> None:
+        """No confidence input -> never train silently."""
+        approve, metrics = pot._gate_decision(None, False)
+        assert approve is False
+        assert metrics["gate"] == "skip"
+        assert "no-confidence-input" in metrics["reason"]
+
+    def test_gate_force_train_bypasses(self) -> None:
+        """Explicit on-demand override trains regardless of the gate."""
+        approve, metrics = pot._gate_decision(None, True)
+        assert approve is True
+        assert metrics["gate"] == "forced"
+        assert metrics["decision"] == "train"
+
+    def test_gate_skip_result_respects_lgbm_semantics(self) -> None:
+        """Skipped training must look like an unavailable LGBMResult."""
+        _, metrics = pot._gate_decision(None, False)
+        result = pot._gate_skip_result("TEST", metrics)
+        assert result["available"] is False
+        assert result["score"] is None
+        assert result["signal"] == "unavailable"
+        assert result["error_is_blocking"] is False
+        assert result["train_skipped"] is True
+        assert result["score"] != 50.0
+
+    def test_threshold_single_source(self, tmp_path: Path) -> None:
+        """Threshold has a single Pydantic source and is configurable."""
+        from trading_mcp.weights_config import WeightsConfig, load_weights
+
+        assert WeightsConfig().lgbm_gate.uplift_threshold == 5.0
+        cfg_file = tmp_path / "weights.json"
+        cfg_file.write_text(
+            '{"lgbm_gate": {"uplift_threshold": 12.5}}', encoding="utf-8"
+        )
+        assert load_weights(cfg_file).lgbm_gate.uplift_threshold == 12.5
+
+    def test_gate_tables_sum_to_one(self) -> None:
+        """Gate weight tables are normalized to 1.0."""
+        from trading_mcp.weights_config import GateComponents, WeightsConfig
+
+        raw = GateComponents(bali=1.0, tsmom=1.0, bakshi=1.0, factor_scan=1.0)
+        assert sum(raw.to_dict().values()) == pytest.approx(1.0)
+        gate = WeightsConfig().lgbm_gate
+        assert sum(gate.without_lgbm.to_dict().values()) == pytest.approx(1.0)
+        assert sum(gate.with_lgbm.to_dict().values()) == pytest.approx(1.0)

@@ -118,12 +118,81 @@ class ModifierScale(BaseModel):
     market_structure: float = Field(default=0.10, ge=0.0, le=1.0)
 
 
+class GateComponents(BaseModel):
+    """Component weights for the composite train-gate confidence (0-100 scale)."""
+
+    bali: float = Field(default=0.30, ge=0.0, le=1.0)
+    tsmom: float = Field(default=0.30, ge=0.0, le=1.0)
+    bakshi: float = Field(default=0.20, ge=0.0, le=1.0)
+    factor_scan: float = Field(default=0.20, ge=0.0, le=1.0)
+    lgbm: float = Field(default=0.0, ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def normalize_sum(self) -> "GateComponents":
+        """Normalize the component weights to sum to 1.0."""
+        total = (
+            self.bali
+            + self.tsmom
+            + self.bakshi
+            + self.factor_scan
+            + self.lgbm
+        )
+        if abs(total - 1.0) > 0.01:
+            logger.warning("Gate weights sum to %.4f (expected 1.0), normalizing", total)
+            if total > 0:
+                self.bali /= total
+                self.tsmom /= total
+                self.bakshi /= total
+                self.factor_scan /= total
+                self.lgbm /= total
+        return self
+
+    def to_dict(self) -> dict[str, float]:
+        """Return the component weights as a plain dict."""
+        return {
+            "bali": self.bali,
+            "tsmom": self.tsmom,
+            "bakshi": self.bakshi,
+            "factor_scan": self.factor_scan,
+            "lgbm": self.lgbm,
+        }
+
+
+class LgbmGateWeights(BaseModel):
+    """Gate train-vs-skip for on-demand LGBM training.
+
+    Training of the slow path is authorized only when the estimated composite
+    confidence uplift (with-LGBM vs. fallback baseline without-LGBM) reaches
+    ``uplift_threshold`` (inclusive). Single source of the threshold.
+    """
+
+    uplift_threshold: float = Field(
+        default=5.0,
+        ge=0.0,
+        le=100.0,
+        description=(
+            "Minimum composite-confidence points (0-100, inclusive) required "
+            "to authorize on-demand LGBM training. Default 5.0: cross-signal "
+            "confidence noise is ~+/-5 pts, so a smaller uplift is "
+            "indistinguishable from noise and does not justify the 30-60s "
+            "training cost or the overfitting risk of a fresh model."
+        ),
+    )
+    without_lgbm: GateComponents = Field(default_factory=GateComponents)
+    with_lgbm: GateComponents = Field(
+        default_factory=lambda: GateComponents(
+            bali=0.25, tsmom=0.25, bakshi=0.15, factor_scan=0.15, lgbm=0.20
+        )
+    )
+
+
 class WeightsConfig(BaseModel):
     """Complete scoring weights configuration."""
     stocks: StockWeights = Field(default_factory=StockWeights)
     crypto: CryptoWeights = Field(default_factory=CryptoWeights)
     indicators: IndicatorWeights = Field(default_factory=IndicatorWeights)
     modifier_scale: ModifierScale = Field(default_factory=ModifierScale)
+    lgbm_gate: LgbmGateWeights = Field(default_factory=LgbmGateWeights)
 
 
 def load_weights(path: Optional[Path] = None) -> WeightsConfig:

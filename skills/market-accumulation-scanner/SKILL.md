@@ -90,8 +90,14 @@ Call: analyze_stock(ticker="<TOP_TICKER>", verbose=true, fetch_news=true)
 Repeat for top 3 candidates. Se un ticker del deep dive ha UOA in banda
 ideale (flag `InScan ✓`), menzionalo nel report.
 
+LGBM (gate train-vs-skip): per ogni ticker con LGBM assente esegui
+`lgbm_predict` (o il fallback bash con `--fallback-confidence`). Su
+`available=False` + `train_skipped` (exit 2) NON addestrare: classifica con
+bali+tsmom+bakshi+factor-scan e annota `LGBM: skipped (uplift < soglia)`.
+
 ### Step 6 — Options (if requested)
-Chain to `options-strategy-suggestions` skill.
+Chain to `options-strategy-suggestions` skill. Lo score passato allo strategy
+engine è quello del fallback composito: non attendere alcun training LGBM.
 
 ## Universes
 `us_large` | `us_tech` | `all` | `italy` | `germany` | `france` | `uk` | `spain` | `crypto`

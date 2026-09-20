@@ -104,8 +104,10 @@ function appendTokenLine(text, tokenLine) {
   return text.includes("## VERIFICA") ? `${text}\n${tokenLine}` : `${text}\n\n${tokenLine}`;
 }
 
-// Session-level tracking for failed verification commands (exit status != 0)
-let lastFailedBashCommand = null;
+// Session-level tracking for verification command outcomes (exit status != 0).
+// Solo i fallimenti REALI ancorano la confidenza; quelli infrastrutturali no.
+let lastFailedVerification = null;
+let lastIndeterminateVerification = null;
 
 function ensureLogDir() {
   if (!existsSync(GATE_LOG_DIR)) {
@@ -218,6 +220,129 @@ function extractExitCode(result) {
   return null;
 }
 
+// ── Classificazione dei comandi di verifica ──
+// Distingue un VERO fallimento di verifica da un fallimento infrastrutturale
+// (venv assente, comando malformato/vuoto, errori di shell). Solo i veri
+// fallimenti ancorano la confidenza; gli altri NON producono falsi positivi.
+
+const VERIFICATION_TOOL_RE = /\b(pytest|pylint|mypy|python3|python|unittest|npm\s+test|jest|vitest|tsc)\b/i;
+
+// Errori a livello di shell/ambiente: il comando non è stato realmente eseguito.
+const INFRA_ERROR_RES = [
+  /command not found/i,
+  /:\s*not found\b/i,
+  /no such file or directory/i,
+  /cannot source/i,
+  /cannot execute/i,
+  /permission denied/i,
+  /syntax error near/i,
+  /unbound variable/i,
+  /is a directory/i,
+  /not a valid/i,
+  /\bENOENT\b/,
+  /failed to activate/i,
+];
+
+// Segnali di un fallimento reale di test/lint/type-check.
+const REAL_FAILURE_RES = [
+  /\bFAILED\b/,
+  /\b\d+\s+failed\b/i,
+  /\bAssertionError\b/,
+  /\bSyntaxError\b/,
+  /Traceback \(most recent call last\)/,
+  /\bExit code:\s*[1-9]/i,
+  /\b[1-9]\d*\s+errors?\b/i,
+  /rated at (?!10\.00)(?:-inf|-?\d+(?:\.\d+)?)\/10/i,
+  /\berror:\s/i,
+];
+
+function matchesAny(regexes, text) {
+  return regexes.some(re => re.test(text || ""));
+}
+
+// Estrae i target di `source X` / `. X`, tollerando quoting e chain `;`/`&&`/`|`.
+function extractSourceTargets(cmd) {
+  const out = [];
+  const re = /(?:^|[;&|]\s*)(?:source|\.)\s+(?:"([^"]+)"|'([^']+)'|([^\s;&|]+))/g;
+  let m;
+  while ((m = re.exec(cmd)) !== null) {
+    const target = m[1] || m[2] || m[3];
+    if (target) out.push(target);
+  }
+  return out;
+}
+
+function expandTilde(p) {
+  if (typeof p !== "string") return p;
+  if (p === "~") return homedir();
+  if (p.startsWith("~/")) return join(homedir(), p.slice(2));
+  return p;
+}
+
+// Individua il pattern fragile `source .../activate` (o `. .../activate`).
+function fragileActivationTargets(cmd) {
+  return extractSourceTargets(cmd)
+    .map(expandTilde)
+    .filter(t => /(^|\/)activate$/.test(t) || /bin\/activate$/.test(t));
+}
+
+// Individua l'uso ROBUSTO del binario del venv (/path/venv/bin/python|pytest|...).
+function hasDirectVenvBinary(cmd) {
+  return /(?:^|\s)(?:[\w.~/-]*\/)?bin\/(?:python|python3|pytest|pylint|mypy)\b/.test(cmd);
+}
+
+function isVerificationCommand(cmd) {
+  return VERIFICATION_TOOL_RE.test(cmd || "");
+}
+
+/**
+ * Classifica l'esito di un comando shell candidato alla verifica.
+ * @returns {{applicable:boolean, realFailure:boolean, reason:string,
+ *            exitCode:(number|null), envMode:string}}
+ */
+function classifyVerificationOutcome(cmd, exitCode, status, text) {
+  const command = (cmd || "").trim();
+  const exit = (typeof exitCode === "number") ? exitCode : null;
+
+  if (!command) {
+    return { applicable: false, realFailure: false, reason: "comando vuoto", exitCode: exit, envMode: "system" };
+  }
+  if (!isVerificationCommand(command)) {
+    return { applicable: false, realFailure: false, reason: "nessun comando di verifica riconosciuto", exitCode: exit, envMode: "system" };
+  }
+
+  const activations = fragileActivationTargets(command);
+  const envMode = hasDirectVenvBinary(command)
+    ? "direct-binary"
+    : (activations.length > 0 ? "source-activate" : "system");
+
+  if (status !== "error" && (exit === null || exit === 0)) {
+    return { applicable: true, realFailure: false, reason: "esito ok", exitCode: exit, envMode };
+  }
+
+  // 1) Errore infrastrutturale nel testo (shell/ambiente) → non eseguibile.
+  if (matchesAny(INFRA_ERROR_RES, text)) {
+    return { applicable: false, realFailure: false, reason: "errore infrastrutturale (shell/ambiente)", exitCode: exit, envMode };
+  }
+
+  // 2) Attivazione venv fragile con path inesistente → non eseguibile.
+  const missing = activations.filter(t => !existsSync(t));
+  if (missing.length > 0) {
+    return { applicable: false, realFailure: false, reason: `venv/activate assente: ${missing.join(", ")}`, exitCode: exit, envMode };
+  }
+
+  // 3) Fallimento reale con evidenza di test/lint.
+  if (matchesAny(REAL_FAILURE_RES, text)) {
+    return { applicable: true, realFailure: true, reason: "fallimento reale di verifica", exitCode: exit, envMode };
+  }
+
+  // 4) Exit != 0 senza evidenza chiara né causa infrastrutturale → indeterminato.
+  //    Nessun ancoraggio automatico: si segnala la non conclusività.
+  return { applicable: true, realFailure: false, reason: "exit != 0 senza evidenza di fallimento reale", exitCode: exit, envMode };
+}
+
+export { classifyVerificationOutcome, isVerificationCommand, fragileActivationTargets, hasDirectVenvBinary };
+
 export default {
   id: "verifica-gate",
   async setup(ctx) {
@@ -228,19 +353,42 @@ export default {
       try {
         const toolName = typeof event.tool === "string" ? event.tool : "";
 
-        // Track shell execution exit codes for verification tools (pytest, pylint, mypy, python3)
+        // Traccia gli exit code dei comandi shell di verifica (pytest/pylint/mypy/python...).
+        // Il comando NON viene rieseguito dal gate: si osserva l'esecuzione reale e la
+        // si classifica (fallimento reale vs infrastrutturale) prima di ancorare.
         if (toolName === "shell" || toolName === "bash") {
           const args = (event.input && typeof event.input === "object") ? event.input : {};
           const cmd = (args.command || "").toString();
-          const isVerificationCmd = /\b(pytest|pylint|mypy|python3|unittest|npm test)\b/i.test(cmd);
+          if (!isVerificationCommand(cmd)) return; // non è una verifica: ignora
+
           const { text } = extractText(event.result);
           const exitCode = extractExitCode(event.result);
-          const isFailedExit = event.status === "error" ||
-                               (exitCode !== null && exitCode !== 0) ||
-                               /\b(FAILED|ERRORS|Exit code: [1-9]|command failed)\b/i.test(text);
+          const outcome = classifyVerificationOutcome(cmd, exitCode, event.status, text);
 
-          if (isVerificationCmd && isFailedExit) {
-            lastFailedBashCommand = { cmd: cmd.slice(0, 80), ts: new Date().toISOString() };
+          logEvent(null, "shell_verification", null, cmd.slice(0, 80), {
+            command: cmd.slice(0, 200),
+            exit_code: outcome.exitCode,
+            applicable: outcome.applicable,
+            real_failure: outcome.realFailure,
+            env_mode: outcome.envMode,
+            reason: outcome.reason,
+          });
+
+          if (outcome.realFailure) {
+            lastFailedVerification = {
+              cmd: cmd.slice(0, 80),
+              exitCode: outcome.exitCode,
+              reason: outcome.reason,
+              ts: new Date().toISOString(),
+            };
+            lastIndeterminateVerification = null;
+          } else if (outcome.applicable && exitCode !== null && exitCode !== 0) {
+            lastIndeterminateVerification = {
+              cmd: cmd.slice(0, 80),
+              exitCode: outcome.exitCode,
+              reason: outcome.reason,
+              ts: new Date().toISOString(),
+            };
           }
           return;
         }
@@ -254,25 +402,40 @@ export default {
 
         let warning = "";
 
-        // Check if shell verification command failed in this session
-        const hasFailedBash = !!lastFailedBashCommand;
-        if (hasFailedBash) {
-          warning += `\n\n⚠️ [verifica-gate] EXIT CODE FAILURE: Il comando di verifica \`${lastFailedBashCommand.cmd}\` ha restituito un errore/exit-code != 0. Confidenza ancorata a <= 35.`;
-          logEvent(subagentType, "exit_code_failure", 35, promptSnippet);
-          lastFailedBashCommand = null; // reset
+        // Ancoraggio SOLO su fallimenti reali; gli esiti infrastrutturali/indeterminati
+        // producono un avviso informativo senza ancorare la confidenza.
+        const hasRealFailure = !!lastFailedVerification;
+        if (lastFailedVerification) {
+          warning += `\n\n⚠️ [verifica-gate] EXIT CODE FAILURE: il comando di verifica \`${lastFailedVerification.cmd}\` ha restituito exit-code ${lastFailedVerification.exitCode} (${lastFailedVerification.reason}). Confidenza ancorata a <= 35.`;
+          logEvent(subagentType, "exit_code_failure", 35, promptSnippet, {
+            command: lastFailedVerification.cmd,
+            exit_code: lastFailedVerification.exitCode,
+            reason: lastFailedVerification.reason,
+            anchored: true,
+          });
+          lastFailedVerification = null; // reset
+        } else if (lastIndeterminateVerification) {
+          warning += `\n\n⚠️ [verifica-gate] VERIFICA NON CONCLUSA: il comando \`${lastIndeterminateVerification.cmd}\` ha restituito exit-code ${lastIndeterminateVerification.exitCode} senza evidenza di fallimento reale (${lastIndeterminateVerification.reason}). Nessun ancoraggio automatico: ricontrollare l'esito.`;
+          logEvent(subagentType, "indeterminate_verification", null, promptSnippet, {
+            command: lastIndeterminateVerification.cmd,
+            exit_code: lastIndeterminateVerification.exitCode,
+            reason: lastIndeterminateVerification.reason,
+            anchored: false,
+          });
+          lastIndeterminateVerification = null; // reset
         }
 
         if (!verifica.present) {
           warning += "\n\n⚠️ [verifica-gate] Il subagent NON ha compilato il blocco ## VERIFICA. Non riassumere come verificato: ri-delega UNA volta chiedendo di compilare il blocco, oppure segnala all'utente che il risultato non e' verificato.";
           logEvent(subagentType, "missing_verifica", null, promptSnippet);
-        } else if ((verifica.confidenza !== null && verifica.confidenza < 40) || hasFailedBash) {
-          if (!hasFailedBash) {
+        } else if ((verifica.confidenza !== null && verifica.confidenza < 40) || hasRealFailure) {
+          if (!hasRealFailure) {
             warning += "\n\n⚠️ [verifica-gate] Confidenza < 40: ri-delega a @coder per un'analisi approfondita o segnala l'incompiutezza all'utente.";
             logEvent(subagentType, "low_confidence", verifica.confidenza, promptSnippet);
           }
         }
 
-        if (verifica.mechanicalError && (verifica.confidenza === null || verifica.confidenza >= 70) && !hasFailedBash) {
+        if (verifica.mechanicalError && (verifica.confidenza === null || verifica.confidenza >= 70) && !hasRealFailure) {
           warning += "\n\n⚠️ [verifica-gate] Rilevati errori meccanici o fallimenti nei test/traceback nell'output. Verificare attentamente l'esito.";
           logEvent(subagentType, "mechanical_error", verifica.confidenza, promptSnippet);
         }

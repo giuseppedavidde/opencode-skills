@@ -94,19 +94,27 @@ TS-MOM universale: 58/58 futures, 4 asset class, Sharpe > 1.0.
 
 ### LGBM Trading System
 Stacking ensemble: 5 modelli LightGBM + meta-modello, 98 features in 5 gruppi decorrelati.
-Training automatico (30-60s prima volta, poi fast path ~2s).
+Training on-demand SOLO se il gate lo approva (30-60s); altrimenti fast path o skip.
 Path: `~/.config/opencode/skills/lgbm-trader-skill/scripts/predict_or_train.py`
 
-Pesi raccomandati:
-```
-Con LGBM:          Senza LGBM:
-  stock     40%      stock     50%
-  tsmom     20%      tsmom     25%
-  bali      20%      bali      25%
-  lgbm      20%
-```
+Pesi raccomandati: riferisciti alla fonte unica
+(`mcp/src/trading_mcp/weights_config.py`). Usa il `composite_score` restituito da
+`analyze_stock` — non ricalcolare i pesi. TS-MOM, Bali e LGBM sono conferme
+aggiuntive, non componenti da ri-pesare manualmente.
 
-Sempre verificare `model` nel JSON — se null, LGBM non contribuisce.
+Sempre verificare `model` e `train_skipped` nel JSON: se `model` è null o
+`train_skipped` è true (exit 2), LGBM non contribuisce, `error_is_blocking` è
+false → il verdetto si compone dal fallback, nessun errore da segnalare.
+
+### Gate train-vs-skip (regola di governance)
+Quando `lgbm_predict` è indisponibile (no `.pkl`, ImportError, short_history,
+no-data) NON addestrare mai automaticamente. Il gate confronta la confidenza
+composita stimata con-LGBM vs baseline fallback {bali, tsmom, bakshi,
+factor_scan} e autorizza il training on-demand solo se l'uplift raggiunge la
+soglia (fonte unica: `lgbm_gate.uplift_threshold` in `weights_config.py`,
+default 5 pts; `uplift = conf_with − conf_without`, `c_best = max(c_i)`).
+Altrimenti prosegui col fallback. `--force-train` solo dopo autorizzazione
+esplicita dell'utente.
 
 ---
 
@@ -185,8 +193,12 @@ LightGBM 4.7.0 è già installato nel venv dell'MCP trading (`~/.local/share/ope
 Se il tool MCP `lgbm_predict()` restituisce errore, usa il fallback bash:
 ```bash
 source "$HOME/.local/share/opencode/trading-mcp-venv/bin/activate"
-python3 ~/.config/opencode/skills/lgbm-trader-skill/scripts/predict_or_train.py --ticker TICKER --json
+python3 ~/.config/opencode/skills/lgbm-trader-skill/scripts/predict_or_train.py \
+  --ticker TICKER --json \
+  --fallback-confidence '{"bali":B,"tsmom":T,"bakshi":K,"factor_scan":F}'
 ```
+Exit `2` (o `train_skipped: true`) = gate negato → usa il fallback e prosegui,
+NON ritentare il training. Exit `0` = predizione reale.
 Non serve alcun `pip install` — le dipendenze sono già nel venv.
 Poi passa lo score a `lgbm_postprocess(ticker, score)` per gli adjustment.
 
@@ -195,20 +207,14 @@ Poi passa lo score a `lgbm_postprocess(ticker, score)` per gli adjustment.
 - `get_macro_context()` è veloce (~3s) — se non sei sicuro del regime, fallo.
 - `analyze_stock` include già sentiment, tecnico, fondamentale — da solo copre molto.
 - I segnali quantitativi (Bali, TS-MOM, LGBM, Bakshi) sono **strumenti aggiuntivi**. Usali quando il verdict di analyze_stock non è sufficiente o vuoi una conferma indipendente.
-- **LGBM** ha un costo iniziale alto (30-60s se il modello non è addestrato). Tienilo a mente.
+- **LGBM**: se indisponibile (no .pkl, ImportError, short_history, no-data) MAI addestrare automaticamente. Il training on-demand scatta solo se l'uplift di confidenza composita raggiunge la soglia (`lgbm_gate.uplift_threshold`, default 5 pts) o con `--force-train` esplicito.
 - **Bakshi** è specifico per strategie con opzioni short/credit (ti dice se il premio è grasso abbastanza).
 
 Decidi tu la combinazione in base alla domanda dell'utente, al ticker, e alla confidenza che hai già dai primi step.
 
-**Se usi LGBM**, i pesi raccomandati sono:
-
-```
-Con LGBM:          Senza LGBM:
-  stock     40%      stock     50%
-  tsmom     20%      tsmom     25%
-  bali      20%      bali      25%
-  lgbm      20%
-```
+**Se usi LGBM**, i pesi raccomandati sono quelli della fonte unica
+(`mcp/src/trading_mcp/weights_config.py`): usa il `composite_score` restituito da
+`analyze_stock` senza ricalcolare i pesi; LGBM è una conferma aggiuntiva.
 
 E verifica che il JSON di LGBM abbia `model` non nullo — se null, LGBM non contribuisce.
 
@@ -258,12 +264,12 @@ Quando l'utente chiede "scansiona", "scan", "trova opportunità", "cosa c'è di 
    Non serve rifare analyze_stock — è già stato eseguito per ogni ticker.
 4. Sui top 3 aggiungi solo script extra:
    - Bali + TS-MOM per ognuno   (non analyze_stock — già fatto!)
-   - LGBM solo se modello già addestrato (fast path)
+   - LGBM solo se modello già addestrato (fast path); durante lo scan NON passare mai --force-train, lo skip del gate è il comportamento atteso
 5. Tabella comparativa dei 3 ticker
 ```
 
 Non fare analyze_stock dopo uno scan — è ridondante.
-Non fare LGBM training da zero durante uno scan (troppo lento).
+Non fare LGBM training da zero durante uno scan: il gate nega automaticamente e lo skip è il comportamento atteso.
 
 **Nota**: i risultati dello scan hanno un timestamp. Se è passato più di 1 giorno
 dallo scan, i dati tecnici potrebbero essere cambiati. In quel caso, rifai analyze_stock

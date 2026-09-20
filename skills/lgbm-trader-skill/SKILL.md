@@ -15,7 +15,7 @@ LightGBM Trading System — feature engineering, stacking ensemble, signal gener
 
 ## Utilizzo
 
-### Predizione live (con auto-training)
+### Predizione live (con gate train-vs-skip)
 
 ```bash
 source $HOME/.local/share/opencode/trading-mcp-venv/bin/activate
@@ -24,20 +24,47 @@ cd "$HOME/.config/opencode/skills/lgbm-trader-skill"
 # Uso diretto (fallisce se nessun modello)
 python scripts/predict_live.py --ticker GME
 
-# Uso consigliato: auto-allena se necessario
+# Uso consigliato: predice, e allena SOLO se il gate lo approva
 python scripts/predict_or_train.py --ticker NVDA
 
-# Output JSON (per trade agent)
-python scripts/predict_or_train.py --ticker AAPL --json
+# Output JSON (per trade agent) con le confidenze del fallback
+python scripts/predict_or_train.py --ticker AAPL --json \
+  --fallback-confidence '{"bali":80,"tsmom":30,"bakshi":40,"factor_scan":50}'
 
-# Specifica data di training (solo se nessun modello)
-python scripts/predict_or_train.py --ticker TSLA --json --start 2021-01-01
+# Override on-demand esplicito (solo con autorizzazione utente)
+python scripts/predict_or_train.py --ticker TSLA --json --force-train
 ```
 
-Se non c'è un modello per il ticker, `predict_or_train.py` allena automaticamente
-lo stacking ensemble prima di predire (30-60s). Non restituisce mai score=50
-silenziosamente — o restituisce una predizione reale (con `model` popolato)
-oppure un errore esplicito (con `score=50` e `error` descrittivo).
+Se non c'è un modello per il ticker, `predict_or_train.py` NON allena
+automaticamente: il gate confronta la confidenza composita stimata con-LGBM
+vs baseline fallback e allena solo se l'uplift raggiunge la soglia (default 5
+pts). Se il gate nega, restituisce uno skip esplicito (`train_skipped: true`,
+`available: false`, `score: null`) e il chiamante prosegue col fallback.
+Exit code: `0` = predizione reale, `2` = gate-skip, `1` = errore.
+
+## Gate train-vs-skip
+
+Quando `lgbm_predict` è indisponibile (nessun `.pkl`, ImportError,
+short_history, no-data) il workflow NON addestra automaticamente. Decide se
+addestrare on-demand solo se l'addestramento migliora in modo significativo la
+confidenza composita (0-100).
+
+- `conf_without = Σ w_i^without · c_i` sui segnali fallback
+  {bali, tsmom, bakshi, factor_scan}
+- `c_best = max(c_i)` (stima ottimistica: LGBM concorde col segnale fallback
+  più forte — è un bound superiore, documentato)
+- `conf_with = Σ w_i^with · c_i + w_lgbm^with · c_best`
+- `uplift = conf_with − conf_without`; si allena se `uplift >= soglia`
+- mappatura `c_i = 50 + |score_i − 50|` dagli score MCP 0-100
+
+Soglia (fonte unica): `LgbmGateWeights.uplift_threshold` in
+`mcp/src/trading_mcp/weights_config.py`, default **5.0 punti**, sovrascrivibile
+via `weights.json → lgbm_gate`. Razionale: il rumore di confidenza
+cross-segnale è ~±5 punti, quindi un uplift minore non è distinguibile dal
+rumore e non giustifica i 30-60s di training (né il rischio di overfit).
+
+Senza input di confidenza il gate nega (mai training silenzioso); deriva
+esplicita solo con `--force-train` (on-demand autorizzato dall'utente).
 
 ### Training
 
@@ -67,19 +94,23 @@ python scripts/tune_model.py --ticker AAPL --trials 50
 ## Integrazione con trade agent
 
 Il trade agent DEVE chiamare `predict_or_train.py --ticker X --json` invece di
-`predict_live.py`. Questo garantisce che ogni ticker abbia un modello allenato
-prima di contribuire al verdict.
+`predict_live.py`, passando `--fallback-confidence` con le confidenze dei
+segnali fallback (0-100). Questo NON garantisce più un modello allenato: il
+training è subordinato al gate.
 
-Dopo la chiamata, il trade agent DEVE controllare il campo `model`:
+Dopo la chiamata, il trade agent DEVE controllare `model` e `train_skipped`:
 - Se `model` è presente → usare `score` nel weighted average (20%).
-- Se `model` è `null`/assente → NON usare LGBM, ridistribuire i pesi:
+- Se `model` è `null`/`train_skipped` è `true` (o exit code `2`) → NON
+  ritentare il training: usare il fallback bali/tsmom/bakshi + factor scan e
+  ridistribuire i pesi sulla tabella `without_lgbm` di `weights_config.py`:
   ```python
   SE modello esiste:
       final = 0.40*stock + 0.20*bali + 0.20*tsmom + 0.20*lgbm
   ALTRIMENTI:
       final = 0.50*stock + 0.25*bali + 0.25*tsmom
-      log("⚠️ LGBM saltato per {ticker}: {error}")
+      log("LGBM non contribuisce (gate): {reason} — verdetto da fallback")
   ```
+- `--force-train` solo con autorizzazione esplicita dell'utente (on-demand).
 
 ### Esempio di parsing dal trade agent (bash + python)
 
