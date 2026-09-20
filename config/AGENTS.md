@@ -3,12 +3,12 @@
 ## Multi-Agent Architecture
 This OpenCode instance uses automatic model routing to save tokens:
 - **Router (agent router)**: deepseek-v4.1-flash — receives all requests, classifies, delegates
-- **@trade**: deepseek-v4-pro — trading, options, market analysis. Delega i task di codice e script personalizzati a @coder
-- **@coder**: deepseek-v4.1-flash esecutore guidato da @coder_planner (glm-5.3) per decomposizione atomica — complex coding, refactoring, multi-file changes
-- **@coder_planner**: glm-5.3 — definisce la lista di azioni atomiche per @coder (unico utilizzo consentito di GLM-5.3 per minimizzare i token)
-- **@graphify_helper**: deepseek-v4-flash — smart graphify orchestrator, builds/updates/queries knowledge graphs
-- **@skill_updater**: deepseek-v4-flash — updates skills that depend on -src submodules (graphify, book-to-skill, quant-mind, karpathy)
-- **@explore / @scout**: deepseek-v4-flash — code search / web research
+- **@trade**: deepseek-v4.1-flash — trading, options, market analysis. Delega i task di codice e script personalizzati a @coder
+- **@coder**: deepseek-v4.1-flash esecutore guidato da @coder_planner (qwen3.8-flash) per decomposizione atomica — complex coding, refactoring, multi-file changes
+- **@coder_planner**: qwen3.8-flash — definisce la lista di azioni atomiche per @coder (solo per task complessi: ≥2 file o >20 righe)
+- **@graphify_helper**: deepseek-v4.1-flash — smart graphify orchestrator, builds/updates/queries knowledge graphs
+- **@skill_updater**: deepseek-v4.1-flash — updates skills that depend on -src submodules (graphify, book-to-skill, quant-mind, karpathy)
+- **@explore**: deepseek-v4.1-flash — code search
 
 The router delegates based on keywords. Trading requests go to @trade, complex coding to @coder, skill updates to @skill_updater, graphify requests to @graphify_helper.
 Every subagent MUST end its response with a `## VERIFICA` section (confidenza, evidenza, non_verificato, escalation_consigliata). The router interprets this to decide whether to retry, escalate, or ask the user for clarification.
@@ -44,11 +44,11 @@ Skill reference (used by @trade):
 - Framework knowledge → `get_skill_knowledge` for Wyckoff, VPA, VP concepts
 
 ## Headroom Compression & Token Saving — AUTOMATIC & MANDATORY
-CRITICAL: OpenCode uses automatic middleware token compression (`auto-headroom.js`).
+CRITICAL: OpenCode uses automatic middleware token compression (`plugins/auto-headroom/index.js`).
 Every tool output (bash, read, grep, glob, webfetch) ≥800 chars is AUTOMATICALLY compressed in-process before entering your context window, eliminating double-trip token ingestion penalties.
 
 ### Automated Middleware Flow & Selective Retrieval
-1. **Automatic Ingestion**: When a tool result is ≥800 chars, `auto-headroom.js` saves the raw content into `~/.config/opencode/context-store/<hash>.txt` and generates `<hash>_index.json`.
+1. **Automatic Ingestion**: When a tool result is ≥800 chars, `plugins/auto-headroom/index.js` saves the raw content into `~/.config/opencode/context-store/<hash>.txt` and generates `<hash>_index.json`.
 2. **Context Delivery**: You receive a structured preview + reference hash (`hash=<hash>`).
 3. **Selective Retrieval (Chunking)**: When you need detailed lines, numbers, or specific sections:
    - Use `/read-chunk <hash> --chunk <N>` or `/read-chunk <hash> --lines <start> <end>`.

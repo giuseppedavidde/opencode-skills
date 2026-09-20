@@ -120,16 +120,6 @@ if [[ -d "$COMMANDS_SRC" ]]; then
     done
 fi
 
-# ─── Plugins (auto-discovery via .opencode/plugins) ───
-PLUGINS_SRC="$REPO_DIR/plugins"
-if [[ -d "$PLUGINS_SRC" ]]; then
-    echo "Installing plugins..."
-    mkdir -p "$CONFIG_DIR/.opencode/plugins"
-    for item in "$PLUGINS_SRC"/*; do
-        link_item "$item" "$CONFIG_DIR/.opencode/plugins/$(basename "$item")"
-    done
-fi
-
 # ─── Config (AGENTS.md, opencode.json) ───
 CONFIG_SRC="$REPO_DIR/config"
 if [[ -d "$CONFIG_SRC" ]]; then
@@ -141,6 +131,32 @@ if [[ -d "$CONFIG_SRC" ]]; then
         [[ "$name" == "secrets.env.enc" ]] && continue
         link_item "$item" "$CONFIG_DIR/$name"
     done
+fi
+
+# ─── Plugins (API V2: dichiarati in opencode.json → "plugins") ───
+# In V2 l'auto-discovery globale di .opencode/plugins non esiste più (è riservata
+# al progetto): i plugin globali vanno elencati in opencode.json con path assoluti.
+PLUGINS_SRC="$REPO_DIR/plugins"
+CONFIG_JSON="$CONFIG_DIR/opencode.json"
+if [[ -d "$PLUGINS_SRC" && -f "$CONFIG_JSON" ]]; then
+    if command -v node >/dev/null 2>&1; then
+        echo "Configuring plugins (opencode.json → plugins)..."
+        node - "$CONFIG_JSON" "$PLUGINS_SRC" <<'NODE'
+const fs = require("fs");
+const [cfg, src] = process.argv.slice(2);
+const names = fs
+  .readdirSync(src)
+  .filter((n) => fs.statSync(`${src}/${n}`).isDirectory())
+  .sort();
+const json = JSON.parse(fs.readFileSync(cfg, "utf8"));
+delete json.plugin;
+json.plugins = names.map((n) => ({ package: `${src}/${n}` }));
+fs.writeFileSync(cfg, `${JSON.stringify(json, null, 2)}\n`);
+console.log(`  OK    plugins → ${names.length} entries`);
+NODE
+    else
+        echo "  SKIP  plugins  (node non trovato: aggiorna 'plugins' in opencode.json)"
+    fi
 fi
 
 # ─── Routing Eval ───

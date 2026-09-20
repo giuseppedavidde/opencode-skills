@@ -1,8 +1,8 @@
 ---
 description: Updates skills that depend on a -src submodule. Fetches latest from the submodule remote, updates the working tree, and verifies symlinks. Use ONLY for skills following the src+symlink pattern (e.g. graphify/graphify-src, book-to-skill/src/book-to-skill-src).
 mode: subagent
-model: opencode-go/deepseek-v4-flash
-hidden: true
+model: opencode-go/deepseek-v4.1-flash
+hidden: false
 permission:
   bash:
     "*": allow

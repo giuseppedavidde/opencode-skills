@@ -8,6 +8,7 @@ the complete opencode configuration (agents, config, commands, MCP, plugins, ski
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -127,13 +128,8 @@ def build_plan(options: InstallOptions) -> InstallPlan:
             action.reason = "exists"
         actions.append(action)
 
-    # ── Plugins (auto-discovery via .opencode/plugins) ──
-    for source, rel in discover_files(repo_root / "plugins"):
-        dest = options.config_dir / ".opencode" / "plugins" / rel
-        action = FileAction(source=source, dest=dest, category="plugin")
-        if dest.exists() and not options.force:
-            action.reason = "exists"
-        actions.append(action)
+    # ── Plugins: API V2 → dichiarati in opencode.json ("plugins") ──
+    # Nessuna copia/symlink: configure_plugins() aggiorna la config dopo l'apply.
 
     # ── Scripts ──
     for source, rel in discover_files(repo_root / "scripts"):
@@ -231,6 +227,31 @@ def install_alphavantage(options: InstallOptions, repo_root: Path) -> None:
     os.chmod(src, 0o755)
     if options.verbose:
         print(f"  LINK  {src}  →  {dest}")
+
+
+def configure_plugins(repo_root: Path, options: InstallOptions) -> None:
+    """API V2: elenca i plugin in opencode.json ("plugins") con path assoluti.
+
+    In V2 i plugin locali non si caricano più via auto-discovery globale di
+    `.opencode/plugins` (riservata al progetto): vanno dichiarati in opencode.json.
+    """
+    plugins_src = repo_root / "plugins"
+    config_json = options.config_dir / "opencode.json"
+    if not plugins_src.is_dir() or not config_json.exists():
+        return
+
+    entries = [str(path) for path in sorted(plugins_src.iterdir()) if path.is_dir()]
+    if options.dry_run:
+        print(f"  PLAN  plugins → {len(entries)} entries in {config_json}")
+        return
+
+    data = json.loads(config_json.read_text(encoding="utf-8"))
+    data.pop("plugin", None)
+    data["plugins"] = [{"package": path} for path in entries]
+    config_json.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    print(f"  OK    plugins → {len(entries)} entries in opencode.json")
 
 
 def print_summary(plan: InstallPlan) -> None:
@@ -353,6 +374,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     plan = build_plan(options)
     execute_plan(plan)
     print_summary(plan)
+
+    # API V2: dichiara i plugin in opencode.json (dopo il symlink della config)
+    if not options.skip_config:
+        configure_plugins(repo_root, options)
 
     # Alphavantage bootstrap
     if not options.skip_alphavantage:

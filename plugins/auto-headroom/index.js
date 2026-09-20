@@ -1,8 +1,11 @@
 // auto-headroom — Middleware automatico di compressione token per OpenCode
-// Intercetta gli output dei tool (bash, read, grep, glob, webfetch, ecc.) con lunghezza >= 800 caratteri.
+// Intercetta gli output dei tool (shell, read, grep, glob, webfetch, ecc.) con lunghezza >= 800 caratteri.
 // Salva l'originale in context-store (~/.config/opencode/context-store/<hash>.txt) e genera l'indice dei blocchi (<hash>_index.json).
 // Restituisce all'LLM una versione compressa con anteprima strutturata + hash per il Selective Retrieval.
 // Previene il doppio inserimento dei token (Double-Trip Token Penalty) salvando fino al 90% di prompt token.
+//
+// API V2: Plugin.define è un helper identità; esportiamo direttamente la forma { id, setup }.
+// (Non importiamo "@opencode/plugin" perché il loader V2 non risolve bare specifiers per i plugin locali.)
 
 import { existsSync, mkdirSync, writeFileSync, renameSync, appendFileSync, readFileSync } from "fs";
 import { join } from "path";
@@ -33,31 +36,43 @@ function sha256(content) {
   return createHash("sha256").update(content, "utf-8").digest("hex").slice(0, 16);
 }
 
-function findToolName(input) {
-  return input && typeof input.tool === "string" ? input.tool : "";
-}
-
-function extractText(output) {
-  if (typeof output === "string") return { text: output, field: "direct" };
-  if (output && typeof output === "object") {
-    if (typeof output.text === "string") return { text: output.text, field: "text" };
-    if (typeof output.result === "string") return { text: output.result, field: "result" };
-    if (typeof output.output === "string") return { text: output.output, field: "output" };
-    return { text: JSON.stringify(output), field: "stringify" };
+// Estrae il testo consegnato all'LLM dal result V2 (Tool.Result: { output?, content?, metadata? }).
+// content è la forma canonica: stringa oppure array di parti { type:"text", text }.
+// Fallback su output / output.output per i tool strutturati (shell, read).
+function extractText(result) {
+  if (typeof result === "string") return { text: result, kind: "direct" };
+  if (!result || typeof result !== "object") return { text: String(result), kind: "string" };
+  const c = result.content;
+  if (typeof c === "string") return { text: c, kind: "content-string" };
+  if (Array.isArray(c)) {
+    const texts = c.filter(p => p && p.type === "text" && typeof p.text === "string").map(p => p.text);
+    if (texts.length > 0) return { text: texts.join("\n"), kind: "content-array" };
   }
-  return { text: String(output), field: "string" };
+  const o = result.output;
+  if (typeof o === "string") return { text: o, kind: "output" };
+  if (o && typeof o === "object" && typeof o.output === "string") return { text: o.output, kind: "output.output" };
+  return { text: JSON.stringify(result), kind: "stringify" };
 }
 
-function replaceOutputText(output, field, newText) {
-  if (field === "direct") return newText;
-  if (field === "text") { output.text = newText; return output; }
-  if (field === "result") { output.result = newText; return output; }
-  if (field === "output") { output.output = newText; return output; }
-  return newText;
+// Ritorna un NUOVO result con il testo sostituito (execute.after muta event.result, non i campi interni).
+function replaceResultText(result, kind, originalText, newText) {
+  if (kind === "direct") return newText;
+  let updated = result;
+  if (kind === "content-string") updated = { ...result, content: newText };
+  else if (kind === "content-array") updated = { ...result, content: [{ type: "text", text: newText }] };
+  else if (kind === "output") updated = { ...result, output: newText };
+  else if (kind === "output.output") updated = { ...result, output: { ...result.output, output: newText } };
+  else return newText;
+  // Mirror di robustezza: se output.output duplicava il testo, tienilo coerente.
+  if (updated && typeof updated === "object" && updated.output && typeof updated.output === "object"
+      && updated.output.output === originalText) {
+    updated = { ...updated, output: { ...updated.output, output: newText } };
+  }
+  return updated;
 }
 
 // Conta le righe "reali" di un testo in modo coerente con:
-//   - readlines() di Python e il read tool (start_line/end_line);
+//   - readlines() di Python e il read tool (offset/limit);
 //   - il contenuto verbatim su disco.
 // Un eventuale newline finale NON genera una riga vuota fantasma.
 // Definizione: n. segmenti di text.split("\n"), scartando l'ultimo se vuoto.
@@ -198,8 +213,8 @@ function buildSmartSummary(toolName, text, hash, totalBytes) {
   let tailCount = 10;
   let errorLines = [];
 
-  // Se è bash o log, cerca righe di errore/warning
-  if (toolName === "bash" || /log|test|build/i.test(toolName)) {
+  // Se è shell o log, cerca righe di errore/warning
+  if (toolName === "shell" || toolName === "bash" || /log|test|build/i.test(toolName)) {
     headCount = 12;
     tailCount = 12;
     errorLines = lines.filter(l =>
@@ -225,7 +240,7 @@ function buildSmartSummary(toolName, text, hash, totalBytes) {
   }
 
   if (omittedCount > 0) {
-    summary += `\n... [${omittedCount} righe omesse per risparmio token. Usa hash="${hash}" o fai read su ~/.config/opencode/context-store/${txtFile} con start_line/end_line] ...\n\n`;
+    summary += `\n... [${omittedCount} righe omesse per risparmio token. Usa hash="${hash}" o fai read su ~/.config/opencode/context-store/${txtFile} con offset/limit] ...\n\n`;
   }
 
   if (!canDedupe) {
@@ -233,44 +248,48 @@ function buildSmartSummary(toolName, text, hash, totalBytes) {
     summary += tailLines + "\n";
   }
   summary += `----------------------------------------------------\n`;
-  summary += `📌 Selective Retrieval: Per leggere chunk specifici, consulta ~/.config/opencode/context-store/${indexFile} e usa start_line e end_line.`;
+  summary += `📌 Selective Retrieval: Per leggere chunk specifici, consulta ~/.config/opencode/context-store/${indexFile} e usa offset/limit.`;
 
   return summary;
 }
 
-export const AutoHeadroomPlugin = async (ctx) => {
-  // Firma resiliente: compatibile con opencode ≤1.18.29 ({ directory })
-  // e ≥1.18.30 ({ client, ... }) — non dipende da nessuna property specifica.
-  const _directory = ctx && typeof ctx === "object" ? (ctx.directory ?? null) : null;
-  ensureDir();
+export default {
+  id: "auto-headroom",
+  async setup(ctx) {
+    ensureDir();
 
-  return {
-    "tool.execute.after": async (input, output) => {
+    await ctx.tool.hook("execute.after", (event) => {
       try {
-        const toolName = findToolName(input);
+        if (event.status !== "completed") return;
+        const toolName = typeof event.tool === "string" ? event.tool : "";
 
-        // Ignora i tool interni di gestione headroom e task (gestito da verifica-gate)
+        // Ignora i tool interni di gestione headroom e subagent (gestito da verifica-gate)
         if (!toolName ||
             toolName.includes("headroom_compress") ||
             toolName.includes("headroom_retrieve") ||
             toolName.includes("headroom_stats") ||
+            toolName === "subagent" ||
             toolName === "task") {
           return;
         }
 
-        // Estrai argomento e dettagli se tool === "read"
-        const args = input.args || input.arguments || {};
-        const filePathArg = typeof args.path === "string" ? args.path : "";
+        // Estrai argomenti (V2: event.input *è* l'oggetto args del tool)
+        const args = (event.input && typeof event.input === "object") ? event.input : {};
+        const filePathArg = typeof args.path === "string" ? args.path
+          : typeof args.filePath === "string" ? args.filePath
+          : typeof args.file_path === "string" ? args.file_path : "";
 
-        // Se l'agente sta già facendo selective retrieval (read con start_line/end_line su context-store), lascia passare
+        // Se l'agente sta già facendo selective retrieval (read con offset/limit o start_line/end_line
+        // su context-store), lascia passare senza ri-comprimere.
         if (toolName === "read" && filePathArg.includes("context-store")) {
-          if (typeof args.start_line === "number" || typeof args.StartLine === "number" ||
+          if (typeof args.offset === "number" || typeof args.limit === "number" ||
+              typeof args.start_line === "number" || typeof args.StartLine === "number" ||
               typeof args.end_line === "number" || typeof args.EndLine === "number") {
             return; // Permetti il recupero mirato del chunk senza ri-comprimere!
           }
         }
 
-        const { text, field } = extractText(output);
+        const { text, kind } = extractText(event.result);
         if (!text || text.length < COMPRESSION_THRESHOLD) {
           return; // Sotto la soglia, nessuna compressione necessaria
         }
@@ -290,12 +309,12 @@ export const AutoHeadroomPlugin = async (ctx) => {
         // Salva l'originale in context-store e sostituisci l'output
         saveToContextStore(hash, text);
         appendAutoHeadroomEvent(hash, totalBytes, compressedBytes);
-        return replaceOutputText(output, field, compressedText);
+        event.result = replaceResultText(event.result, kind, text, compressedText);
 
       } catch (err) {
         console.error(`[auto-headroom] Error: ${err.message}`);
         // Non bloccare mai l'esecuzione del tool in caso di errore
       }
-    },
-  };
+    });
+  },
 };

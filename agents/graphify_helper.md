@@ -1,8 +1,8 @@
 ---
 description: Smart graphify orchestrator — builds, updates, and queries knowledge graphs with minimal effort. Auto-detects existing graphs for incremental updates, chooses the right flags, and handles full pipeline from clone to query.
 mode: subagent
-model: opencode-go/deepseek-v4-flash
-hidden: true
+model: opencode-go/deepseek-v4.1-flash
+hidden: false
 permission:
   bash:
     "*": allow

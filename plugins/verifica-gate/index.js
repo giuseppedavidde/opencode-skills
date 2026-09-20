@@ -1,7 +1,8 @@
-// verifica-gate — Enforcement meccanico del blocco ## VERIFICA, Exit-Code Tracking e Task Output Pruning
+// verifica-gate — Enforcement meccanico del blocco ## VERIFICA, Exit-Code Tracking e Task Output Pruning (API V2)
 // Assicura che ogni subagent rispetti il contratto VERIFICA (router.md),
-// ancora la confidenza agli exit code reali dei comandi bash (pytest/pylint/mypy) e compatta l'output dei task lunghi.
-// Hook: "tool.execute.after" su input.tool === "task" | "bash"
+// ancora la confidenza agli exit code reali dei comandi shell (pytest/pylint/mypy) e compatta l'output dei task lunghi.
+// Hook V2: ctx.tool.hook("execute.after") sui tool "subagent" (V1: task) e "shell" (V1: bash).
+// Plugin.define è un helper identità; esportiamo direttamente { id, setup }.
 import { existsSync, mkdirSync, appendFileSync, statSync, openSync, readSync, closeSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
@@ -116,31 +117,51 @@ function ensureLogDir() {
   }
 }
 
-function extractText(output) {
-  if (typeof output === "string") return { text: output, field: "direct" };
-  if (output && typeof output === "object") {
-    if (typeof output.text === "string") return { text: output.text, field: "text" };
-    if (typeof output.result === "string") return { text: output.result, field: "result" };
-    if (typeof output.output === "string") return { text: output.output, field: "output" };
-    return { text: JSON.stringify(output), field: "stringify" };
+// Testo del result V2 (content stringa o array di parti text), con fallback su output.
+function extractText(result) {
+  if (typeof result === "string") return { text: result, kind: "direct" };
+  if (!result || typeof result !== "object") return { text: String(result), kind: "string" };
+  const c = result.content;
+  if (typeof c === "string") return { text: c, kind: "content-string" };
+  if (Array.isArray(c)) {
+    const texts = c.filter(p => p && p.type === "text" && typeof p.text === "string").map(p => p.text);
+    if (texts.length > 0) return { text: texts.join("\n"), kind: "content-array" };
   }
-  return { text: String(output), field: "string" };
+  if (typeof result.output === "string") return { text: result.output, kind: "output" };
+  if (result.output && typeof result.output === "object" && typeof result.output.output === "string") {
+    return { text: result.output.output, kind: "output.output" };
+  }
+  return { text: JSON.stringify(result), kind: "stringify" };
+}
+
+// Ritorna un NUOVO result con il testo sostituito (execute.after muta event.result).
+function replaceResultText(result, kind, originalText, newText) {
+  if (kind === "direct") return newText;
+  let updated = result;
+  if (kind === "content-string") updated = { ...result, content: newText };
+  else if (kind === "content-array") updated = { ...result, content: [{ type: "text", text: newText }] };
+  else if (kind === "output") updated = { ...result, output: newText };
+  else if (kind === "output.output") updated = { ...result, output: { ...result.output, output: newText } };
+  else return newText;
+  if (updated && typeof updated === "object" && updated.output && typeof updated.output === "object"
+      && updated.output.output === originalText) {
+    updated = { ...updated, output: { ...updated.output, output: newText } };
+  }
+  return updated;
 }
 
 function extractPromptSnippet(input) {
-  let prompt = "";
-  if (input.args && typeof input.args.prompt === "string") prompt = input.args.prompt;
-  else if (input.arguments && typeof input.arguments.prompt === "string") prompt = input.arguments.prompt;
+  const prompt = (input && typeof input.prompt === "string") ? input.prompt : "";
   return prompt.slice(0, 80);
 }
 
 function extractSubagentType(input) {
-  if (input.args && input.args.subagent_type) return input.args.subagent_type;
-  if (input.arguments && typeof input.arguments === "object"
-      && input.arguments.subagent_type) return input.arguments.subagent_type;
-  const argsStr = typeof input.arguments === "string"
-    ? input.arguments : JSON.stringify(input.arguments || input.args || {});
-  const match = argsStr.match(/"subagent_type"\s*:\s*"([\w-]+)"/);
+  if (input && typeof input === "object") {
+    if (typeof input.agent === "string") return input.agent;
+    if (typeof input.subagent_type === "string") return input.subagent_type;
+  }
+  const argsStr = JSON.stringify(input || {});
+  const match = argsStr.match(/"(?:agent|subagent_type)"\s*:\s*"([\w-]+)"/);
   return match ? match[1] : null;
 }
 
@@ -176,14 +197,6 @@ function logEvent(subagentType, caseType, confidenza, promptSnippet, extra) {
   }
 }
 
-function replaceOutputText(output, field, newText) {
-  if (field === "direct") return newText;
-  if (field === "text") { output.text = newText; return output; }
-  if (field === "result") { output.result = newText; return output; }
-  if (field === "output") { output.output = newText; return output; }
-  return newText;
-}
-
 function pruneTaskOutput(text) {
   // Prune long subagent outputs (>1500 chars) to prevent nested context explosion
   if (!text || text.length <= 1500) return text;
@@ -195,19 +208,35 @@ function pruneTaskOutput(text) {
   return `${head}\n\n... [Output intermedio di task compresso dal verifica-gate per risparmio token (${text.length - 1300} caratteri omessi)] ...\n\n${tail}`;
 }
 
-export const VerificaGatePlugin = async ({ directory: _directory }) => {
-  ensureLogDir();
-  initHeadroomOffset();
+// Estrae l'exit code dal result V2 (metadata.exit oppure output.exit).
+function extractExitCode(result) {
+  if (!result || typeof result !== "object") return null;
+  if (result.metadata && typeof result.metadata.exit === "number") return result.metadata.exit;
+  if (result.output && typeof result.output === "object" && typeof result.output.exit === "number") {
+    return result.output.exit;
+  }
+  return null;
+}
 
-  return {
-    "tool.execute.after": async (input, output) => {
+export default {
+  id: "verifica-gate",
+  async setup(ctx) {
+    ensureLogDir();
+    initHeadroomOffset();
+
+    await ctx.tool.hook("execute.after", (event) => {
       try {
-        // Track bash execution exit codes for verification tools (pytest, pylint, mypy, python3)
-        if (input.tool === "bash") {
-          const cmd = (input.args?.command || input.arguments?.command || "").toString();
+        const toolName = typeof event.tool === "string" ? event.tool : "";
+
+        // Track shell execution exit codes for verification tools (pytest, pylint, mypy, python3)
+        if (toolName === "shell" || toolName === "bash") {
+          const args = (event.input && typeof event.input === "object") ? event.input : {};
+          const cmd = (args.command || "").toString();
           const isVerificationCmd = /\b(pytest|pylint|mypy|python3|unittest|npm test)\b/i.test(cmd);
-          const { text } = extractText(output);
-          const isFailedExit = (output && typeof output.exitCode === "number" && output.exitCode !== 0) ||
+          const { text } = extractText(event.result);
+          const exitCode = extractExitCode(event.result);
+          const isFailedExit = event.status === "error" ||
+                               (exitCode !== null && exitCode !== 0) ||
                                /\b(FAILED|ERRORS|Exit code: [1-9]|command failed)\b/i.test(text);
 
           if (isVerificationCmd && isFailedExit) {
@@ -216,17 +245,16 @@ export const VerificaGatePlugin = async ({ directory: _directory }) => {
           return;
         }
 
-        if (input.tool !== "task") return;
+        if (toolName !== "subagent" && toolName !== "task") return;
 
-        const { text, field } = extractText(output);
+        const { text, kind } = extractText(event.result);
         const verifica = parseVerifica(text);
-        const subagentType = extractSubagentType(input);
-        const promptSnippet = extractPromptSnippet(input);
+        const subagentType = extractSubagentType(event.input);
+        const promptSnippet = extractPromptSnippet(event.input);
 
-        let processedText = text;
         let warning = "";
 
-        // Check if bash verification command failed in this session
+        // Check if shell verification command failed in this session
         const hasFailedBash = !!lastFailedBashCommand;
         if (hasFailedBash) {
           warning += `\n\n⚠️ [verifica-gate] EXIT CODE FAILURE: Il comando di verifica \`${lastFailedBashCommand.cmd}\` ha restituito un errore/exit-code != 0. Confidenza ancorata a <= 35.`;
@@ -261,13 +289,13 @@ export const VerificaGatePlugin = async ({ directory: _directory }) => {
         });
 
         // Prune + warning, poi inietta la riga token come ULTIMA riga (del ## VERIFICA o in coda)
-        const prunedText = pruneTaskOutput(processedText) + warning;
+        const prunedText = pruneTaskOutput(text) + warning;
         const finalText = appendTokenLine(prunedText, tokenLine);
-        return replaceOutputText(output, field, finalText);
+        event.result = replaceResultText(event.result, kind, text, finalText);
 
       } catch (_err) {
         // Non crashare mai il tool execution
       }
-    },
-  };
+    });
+  },
 };

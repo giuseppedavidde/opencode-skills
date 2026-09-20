@@ -16,13 +16,12 @@ opencode-skills/
 │   ├── router.md
 │   ├── trade.md
 │   ├── coder.md
-│   ├── general.md
 │   ├── graphify_helper.md
 │   ├── skill_updater.md
 │   └── book-to-skill-agent.md
 ├── command/                    # Slash commands
 │   └── routing-stats.md        # Routing telemetry /routing-stats
-├── plugins/                    # Auto-discovery plugins (.opencode/plugins/)
+├── plugins/                    # Plugin V2 (dichiarati in opencode.json → "plugins")
 │   ├── graphify.js
 │   ├── tokens-per-second.js
 │   ├── routing-stats.js
@@ -43,7 +42,7 @@ opencode-skills/
 ### Prerequisites
 
 - git, python3, opencode CLI installed
-- Node.js 18+ (optional — for plugin runtime via `@opencode-ai/plugin`)
+- Node.js 18+ (optional — for plugin runtime via `@opencode/plugin`, API V2)
 
 ### 1. Clone the repo
 
@@ -76,15 +75,15 @@ What gets installed:
 | skills     | `skills/`      | `~/.config/opencode/skills/`          |
 | agents     | `agents/`      | `~/.config/opencode/agents/`          |
 | commands   | `command/`     | `~/.config/opencode/command/`         |
-| plugins    | `plugins/`     | `~/.config/opencode/.opencode/plugins/` |
+| plugins    | `plugins/`     | dichiarati in `~/.config/opencode/opencode.json` (campo `plugins`, API V2) |
 | config     | `config/`      | `~/.config/opencode/` (symlinked)     |
 | routing-eval | `routing-eval/` | `~/.config/opencode/routing-eval` (symlinked) |
 | alphavantage | `scripts/`   | `~/.local/bin/alphavantage-mcp.sh`    |
 
 All items are symlinked — changes to the repo propagate immediately. The only
 exception is `alphavantage-mcp.sh` which is also symlinked into
-`~/.local/bin/`.  Plugins use **auto-discovery** via `.opencode/plugins/`
-(no `file://` paths in `opencode.json`).
+`~/.local/bin/`.  Plugins are declared in `opencode.json` under the V2 `plugins`
+field (absolute paths written by the installer).
 
 ### 3. Headroom (token compression)
 
@@ -144,9 +143,9 @@ The command needs `pydantic` in the command venv:
 
 - **`$HOME` expansion** — all MCP commands use `$HOME/.local/...` and are
   resolved at runtime by the shell. No manual path edits needed.
-- **Plugins auto-discovery** — plugins are loaded from
-  `{config}/.opencode/plugins/` (no machine-specific `file://` URLs).
-- **`verifica-gate` audit trail** — `plugins/verifica-gate.js` appends one JSON
+- **Plugins (API V2)** — plugins are declared in
+  `{config}/opencode.json` (campo `plugins`, path assoluti scritti dall'installer).
+- **`verifica-gate` audit trail** — `plugins/verifica-gate/index.js` appends one JSON
   line per flagged subagent result to
   `~/.config/opencode/stats/gate_events.jsonl` (write-only, no reader by
   design; forensic log for post-hoc inspection only).
@@ -161,7 +160,7 @@ The command needs `pydantic` in the command venv:
 | Symptom | Fix |
 |---------|-----|
 | Symlinks broken after moving the repo | `python3 install.py` (ripara i symlink rotti in sicurezza, senza `--force`) |
-| Plugins not loading after restart | Check `~/.config/opencode/.opencode/plugins/` has 5 symlinks |
+| Plugins not loading after restart | Check `~/.config/opencode/opencode.json` lists 6 entries in `plugins` |
 | MCP servers fail (`exec: ... not found`) | Run `./setup-headroom.sh` and/or `./setup-trading-mcp.sh` |
 | Submodule folders empty | `git submodule update --init --recursive` |
 | `alphavantage-mcp.sh: command not found` | Ensure `~/.local/bin` is in `$PATH` |

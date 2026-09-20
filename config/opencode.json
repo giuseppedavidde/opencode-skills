@@ -1,17 +1,14 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "model": "opencode-go/deepseek-v4.1-flash",
-  "small_model": "opencode-go/deepseek-v4-flash",
-  "subagent_depth": 2,
+  "small_model": "opencode-go/deepseek-v4.1-flash",
   "default_agent": "router",
+  "experimental": {
+    "subagent_depth": 3
+  },
   "agent": {
     "explore": {
-      "model": "opencode-go/deepseek-v4-flash",
-      "options": {},
-      "permission": {}
-    },
-    "scout": {
-      "model": "opencode-go/deepseek-v4-flash",
+      "model": "opencode-go/deepseek-v4.1-flash",
       "options": {},
       "permission": {}
     }
@@ -35,14 +32,14 @@
         "kimi-k2.6": {
           "name": "Kimi K2.6"
         },
-        "deepseek-v4-pro": {
-          "name": "DeepSeek V4 Pro"
-        },
         "deepseek-v4-flash": {
           "name": "DeepSeek V4 Flash"
         },
         "deepseek-v4-flash-vision-exp": {
           "name": "DeepSeek V4 Flash Vision Exp"
+        },
+        "deepseek-v4-pro": {
+          "name": "DeepSeek V4 Pro"
         },
         "mimo-v2.5": {
           "name": "MiMo-V2.5"
@@ -68,7 +65,26 @@
       }
     }
   },
-  "plugin": [],
+  "plugins": [
+    {
+      "package": "/home/giuseppe/Progetti/Github/opencode-skills/plugins/auto-headroom"
+    },
+    {
+      "package": "/home/giuseppe/Progetti/Github/opencode-skills/plugins/context-store"
+    },
+    {
+      "package": "/home/giuseppe/Progetti/Github/opencode-skills/plugins/graphify"
+    },
+    {
+      "package": "/home/giuseppe/Progetti/Github/opencode-skills/plugins/routing-stats"
+    },
+    {
+      "package": "/home/giuseppe/Progetti/Github/opencode-skills/plugins/tokens-per-second"
+    },
+    {
+      "package": "/home/giuseppe/Progetti/Github/opencode-skills/plugins/verifica-gate"
+    }
+  ],
   "permission": {
     "skill": {
       "*": "allow"

@@ -1,6 +1,8 @@
 // context-store — Persiste i contenuti compressi da headroom su disco
 // e genera un indice a blocchi <hash>_index.json per il Selective Retrieval.
-// Hook: "tool.execute.after" su headroom_compress e read tool
+// Hook V2: ctx.tool.hook("execute.after") sul tool headroom_compress
+//
+// API V2: Plugin.define è un helper identità; esportiamo direttamente { id, setup }.
 import { existsSync, mkdirSync, writeFileSync, renameSync } from "fs";
 import { join } from "path";
 import { createHash } from "crypto";
@@ -19,38 +21,41 @@ function ensureDir() {
   }
 }
 
-function findToolName(input) {
-  return input && typeof input.tool === "string" ? input.tool : "";
+// Testo del result V2 (content stringa o array di parti text), con fallback su output.
+function extractText(result) {
+  if (typeof result === "string") return result;
+  if (!result || typeof result !== "object") return "";
+  const c = result.content;
+  if (typeof c === "string") return c;
+  if (Array.isArray(c)) {
+    const texts = c.filter(p => p && p.type === "text" && typeof p.text === "string").map(p => p.text);
+    if (texts.length > 0) return texts.join("\n");
+  }
+  if (typeof result.output === "string") return result.output;
+  if (result.output && typeof result.output === "object") {
+    if (typeof result.output.output === "string") return result.output.output;
+    if (typeof result.output.hash === "string") return result.output.hash;
+  }
+  return JSON.stringify(result);
 }
 
 function extractContent(input) {
   if (!input) return "";
-
-  let args = null;
-  if (input.args && typeof input.args === "object") args = input.args;
-  else if (input.arguments && typeof input.arguments === "object") args = input.arguments;
-  else if (typeof input.arguments === "string") {
-    try { args = JSON.parse(input.arguments); } catch (_) { /* ignore */ }
-  }
-
-  if (args && typeof args.content === "string") return args.content;
-  if (args && typeof args === "string") return args;
-
+  if (typeof input.content === "string") return input.content;
   return "";
 }
 
-function extractHash(output) {
-  if (!output) return null;
-
-  if (output && typeof output.hash === "string" && output.hash.length > 0) {
-    return output.hash;
+function extractHash(result) {
+  if (result && typeof result === "object") {
+    if (typeof result.hash === "string" && result.hash.length > 0) return result.hash;
+    if (result.output && typeof result.output === "object"
+        && typeof result.output.hash === "string" && result.output.hash.length > 0) {
+      return result.output.hash;
+    }
   }
-
-  const outStr = typeof output === "string" ? output : JSON.stringify(output);
+  const outStr = extractText(result);
   const match = outStr.match(/hash=([a-zA-Z0-9_-]+)/);
-  if (match) return match[1];
-
-  return null;
+  return match ? match[1] : null;
 }
 
 function sha256(content) {
@@ -67,7 +72,7 @@ function generateIndex(hash, content) {
     const end = Math.min(i + chunkSize, totalLines);
     const chunkLines = lines.slice(i, end);
     const headings = chunkLines.filter(l => /^(#|##|###|\s*"(id|name|ticker|title)":)/i.test(l.trim())).map(l => l.trim().slice(0, 60));
-    
+
     chunks.push({
       chunk_index: Math.floor(i / chunkSize),
       start_line: i + 1,
@@ -87,18 +92,20 @@ function generateIndex(hash, content) {
   };
 }
 
-export const ContextStorePlugin = async ({ directory: _directory }) => {
-  ensureDir();
+export default {
+  id: "context-store",
+  async setup(ctx) {
+    ensureDir();
 
-  return {
-    "tool.execute.after": async (input, output) => {
-      const toolName = findToolName(input);
+    await ctx.tool.hook("execute.after", (event) => {
+      if (event.status !== "completed") return;
+      const toolName = typeof event.tool === "string" ? event.tool : "";
       if (!toolName.includes("headroom_compress")) return;
 
-      const content = extractContent(input);
+      const content = extractContent(event.input);
       if (!content || content.length === 0) return;
 
-      let hash = extractHash(output);
+      let hash = extractHash(event.result);
       if (!hash) {
         hash = sha256(content);
       }
@@ -123,6 +130,6 @@ export const ContextStorePlugin = async ({ directory: _directory }) => {
       } catch (err) {
         console.error(`[context-store] ERROR writing ${hash}: ${err.message}`);
       }
-    },
-  };
+    });
+  },
 };
