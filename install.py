@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import Optional
@@ -292,15 +293,18 @@ def print_next_steps(repo_root: Path) -> None:
     steps.append("2. Trading MCP (analisi mercati):")
     steps.append("   ./setup-trading-mcp.sh")
     steps.append("")
-    steps.append("3. Alphavantage API key:")
+    steps.append("3. Bladebro MCP (browser stealth, richiede Chrome/Chromium):")
+    steps.append("   ./setup-bladebro.sh")
+    steps.append("")
+    steps.append("4. Alphavantage API key:")
     steps.append("   echo 'YOUR_KEY' > ~/.config/opencode/alpha_vantage_key.txt")
     steps.append("   oppure: export ALPHA_VANTAGE_API_KEY='YOUR_KEY'")
     steps.append("")
-    steps.append("4. Segreti (FMP, altre chiavi):")
+    steps.append("5. Segreti (FMP, altre chiavi):")
     steps.append("   ./scripts/decrypt_secrets.sh")
     steps.append("   oppure crea: ~/.config/opencode/fmp_api_key.txt")
     steps.append("")
-    steps.append("5. Riavvia opencode per applicare la configurazione")
+    steps.append("6. Riavvia opencode per applicare la configurazione")
     steps.append("")
     steps.append("NOTA: routing-stats usa routing-eval incluso nella repo (symlink")
     steps.append("  ~/.config/opencode/routing-eval). Dipendenze:")
@@ -311,6 +315,23 @@ def print_next_steps(repo_root: Path) -> None:
     steps.append("  python3 install.py --config-dir ~/.config/opencode")
 
     print("\n".join(steps))
+
+
+def offer_bladebro(repo_root: Path) -> None:
+    """Offer to install the bladebro MCP (mirrors install.sh)."""
+    script = repo_root / "setup-bladebro.sh"
+    if not os.access(script, os.X_OK):
+        return
+    print()
+    print("Vuoi installare anche bladebro (browser stealth via MCP)?")
+    try:
+        answer = input("  [y/N] ")
+    except EOFError:
+        answer = ""
+    if answer.strip().lower() in {"y", "yes"}:
+        subprocess.run([str(script)], check=False)
+    else:
+        print("  Salta bladebro. Puoi installarlo dopo con: ./setup-bladebro.sh")
 
 
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
@@ -386,6 +407,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         install_alphavantage(options, repo_root)
 
     print_next_steps(repo_root)
+
+    if not options.dry_run:
+        offer_bladebro(repo_root)
+
     return 0 if plan.file_count > 0 else 1
 
 

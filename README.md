@@ -34,7 +34,8 @@ opencode-skills/
 ├── routing-eval/               # Router evaluation harness (telemetria /routing-stats)
 ├── skills/                     # Skill definitions (41, see below)
 ├── setup-headroom.sh           # Install headroom in venv
-└── setup-trading-mcp.sh        # Install trading-mcp in venv
+├── setup-trading-mcp.sh        # Install trading-mcp in venv
+└── setup-bladebro.sh           # Install bladebro (stealth browser) + Chrome link
 ```
 
 ## Portable Install (Full Flow)
@@ -108,7 +109,21 @@ is pre-configured with the MCP command
 Creates `~/.local/share/opencode/trading-mcp-venv/`, installs the MCP server
 from `mcp/` in editable mode. Pre-configured in `opencode.json`.
 
-### 5. API keys & secrets
+### 5. Bladebro MCP (stealth browser)
+
+```bash
+./setup-bladebro.sh
+```
+
+Installs `bladebro` via `npm` into the canonical dir
+`~/.local/share/opencode/bladebro-node/` and creates a **stable symlink**
+`~/.local/share/opencode/bladebro-node/chrome` pointing to the detected
+Chrome/Chromium binary (env `CHROME_PATH` → `PATH` → newest Playwright cache).
+`opencode.json` is pre-configured with the MCP command and
+`CHROME_PATH="$HOME/.local/share/opencode/bladebro-node/chrome"`, so it survives
+Playwright upgrades. Re-run idempotently after installing/upgrading Chrome.
+
+### 6. API keys & secrets
 
 ```bash
 # Alpha Vantage (required for the alphavantage MCP)
@@ -122,12 +137,12 @@ echo 'YOUR_FMP_KEY' > ~/.config/opencode/fmp_api_key.txt
 ./scripts/decrypt_secrets.sh
 ```
 
-### 6. Restart opencode
+### 7. Restart opencode
 
 Quit and restart opencode for the new config, agents, commands, plugins and
 MCP servers to take effect.
 
-### 7. Optional: routing-stats
+### 8. Optional: routing-stats
 
 The `/routing-stats` slash command uses `routing-eval/`, which is now bundled in
 this repo and installed automatically as a symlink to
@@ -162,6 +177,7 @@ The command needs `pydantic` in the command venv:
 | Symlinks broken after moving the repo | `python3 install.py` (ripara i symlink rotti in sicurezza, senza `--force`) |
 | Plugins not loading after restart | Check `~/.config/opencode/opencode.json` lists 6 entries in `plugins` |
 | MCP servers fail (`exec: ... not found`) | Run `./setup-headroom.sh` and/or `./setup-trading-mcp.sh` |
+| bladebro MCP fails (`Could not launch Chrome`) | Run `./setup-bladebro.sh` (or ensure Chrome/Chromium is installed) |
 | Submodule folders empty | `git submodule update --init --recursive` |
 | `alphavantage-mcp.sh: command not found` | Ensure `~/.local/bin` is in `$PATH` |
 | `routing-stats` shows "not found" | Rilancia `python3 install.py` per ricreare il symlink; verifica `pip install -r routing-eval/requirements.txt` |
@@ -175,6 +191,7 @@ Mappa dei virtual environment usati dal repo (nessun venv è committato: i
 |------|-----------|-------|
 | `~/.local/share/opencode/trading-mcp-venv` | `./setup-trading-mcp.sh` | Trading MCP server (pandas, yfinance, lightgbm, scikit-learn) |
 | `~/.local/share/opencode/headroom-venv` | `./setup-headroom.sh` | Tool headroom (compressione token) |
+| `~/.local/share/opencode/bladebro-node` | `./setup-bladebro.sh` | Bladebro MCP server (browser stealth, Node/npm) + symlink `chrome` |
 | `/tmp/opencode/.venv` | manuale | Venv condiviso temporaneo per lavoro NON-trading (routing-eval, script generici) |
 
 Ricreazione del venv temporaneo condiviso:
@@ -191,6 +208,7 @@ Per ricreare un venv canonico, rimuovilo e rilancia lo script relativo:
 ```bash
 rm -rf ~/.local/share/opencode/trading-mcp-venv && ./setup-trading-mcp.sh
 rm -rf ~/.local/share/opencode/headroom-venv && ./setup-headroom.sh
+rm -rf ~/.local/share/opencode/bladebro-node && ./setup-bladebro.sh
 ```
 
 ## Contents
@@ -243,8 +261,9 @@ rm -rf ~/.local/share/opencode/headroom-venv && ./setup-headroom.sh
 | `way-of-the-turtle` | Knowledge base from 'Way of the Turtle' by Curtis M. Faith (systematic trend following, position sizing) |
 | `wyckoff-2-0` | Knowledge base from 'Wyckoff 2.0' by Rubén Villahermosa Chaves (volume profile, order flow, Wyckoff Method) |
 | `config/AGENTS.md` | Global rules that load skills automatically + headroom compression mandatory |
-| `config/opencode.json` | Provider/model configuration + MCP servers (headroom, trading, alphavantage) |
+| `config/opencode.json` | Provider/model configuration + MCP servers (headroom, trading, bladebro, alphavantage) |
 | `setup-headroom.sh` | Installs headroom in a dedicated venv for token compression (60-95% savings) |
+| `setup-bladebro.sh` | Installs bladebro (stealth browser MCP) into `~/.local/share/opencode/bladebro-node` and links Chrome |
 
 ## Requires
 

@@ -208,15 +208,18 @@ PROSSIMI PASSI:
 2. Trading MCP (analisi mercati):
    ./setup-trading-mcp.sh
 
-3. Alphavantage API key:
+3. Bladebro MCP (browser stealth, richiede Chrome/Chromium):
+   ./setup-bladebro.sh
+
+4. Alphavantage API key:
    echo 'YOUR_KEY' > ~/.config/opencode/alpha_vantage_key.txt
    oppure: export ALPHA_VANTAGE_API_KEY='YOUR_KEY'
 
-4. Segreti (FMP, altre chiavi):
+5. Segreti (FMP, altre chiavi):
    ./scripts/decrypt_secrets.sh
    oppure crea: ~/.config/opencode/fmp_api_key.txt
 
-5. Riavvia opencode per applicare la configurazione
+6. Riavvia opencode per applicare la configurazione
 
 NOTA: routing-stats usa routing-eval incluso nella repo (symlink
   ~/.config/opencode/routing-eval). Dipendenze:
@@ -249,5 +252,18 @@ if [[ -x "$TRADING_MCP_SH" ]]; then
         "$TRADING_MCP_SH"
     else
         echo "  Salta trading-mcp. Puoi installarlo dopo con: ./setup-trading-mcp.sh"
+    fi
+fi
+
+# ─── Offer bladebro ───
+BLADEBRO_SH="$REPO_DIR/setup-bladebro.sh"
+if [[ -x "$BLADEBRO_SH" ]]; then
+    echo ""
+    echo "Vuoi installare anche bladebro (browser stealth via MCP)?"
+    read -r -p "  [y/N] " answer
+    if [[ "$answer" =~ ^[Yy]$ ]]; then
+        "$BLADEBRO_SH"
+    else
+        echo "  Salta bladebro. Puoi installarlo dopo con: ./setup-bladebro.sh"
     fi
 fi

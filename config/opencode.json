@@ -114,6 +114,18 @@
         "exec \"$HOME/.local/share/opencode/trading-mcp-venv/bin/trading-mcp\""
       ],
       "enabled": true
+    },
+    "bladebro": {
+      "type": "local",
+      "command": [
+        "bash",
+        "-c",
+        "exec \"$HOME/.local/share/opencode/bladebro-node/bin/bladebro\" mcp"
+      ],
+      "environment": {
+        "CHROME_PATH": "$HOME/.local/share/opencode/bladebro-node/chrome"
+      },
+      "enabled": true
     }
   },
   "shell": "/bin/zsh"
