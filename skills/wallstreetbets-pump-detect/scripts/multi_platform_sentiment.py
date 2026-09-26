@@ -11,16 +11,20 @@ import time
 import requests
 from pydantic import BaseModel
 
+import bladebro_client
+
 
 REDDIT_USER_AGENT = "wsb-pump-detect/1.0 (sentiment analysis bot)"
 
 BULLISH_PATTERNS = [
     r"\b(bullish|moon|tendies|calls|yolo|squeeze|breakout|rocket|long|buy|green|pump|rip higher)\b",
+    r"\b(accumulation|undervalued|gamma|squeezing|hodl|rip)\b",
     r"🚀|📈|💎|🙌|🔥|💪",
 ]
 
 BEARISH_PATTERNS = [
     r"\b(bearish|rug|dump|baghold|short|dead|rugpull|exit|sell|red|crash|tank|dip)\b",
+    r"\b(puts|overvalued|scam|bagholder|dilution|bankruptcy|delist|drill)\b",
     r"📉|💩|🤡|🐻|🔻",
 ]
 
@@ -85,23 +89,24 @@ def _classify_text(
 def _fetch_reddit(subreddit: str, endpoint: str, ticker: str, verbose: bool) -> SourceResult:  # pylint: disable=too-many-locals
     """Fetch sentiment from a Reddit subreddit."""
     url = f"https://www.reddit.com/{endpoint}"
-    headers = {"User-Agent": REDDIT_USER_AGENT}
     weight = REDDIT_SUBREDDITS[subreddit]["weight"]
     result = SourceResult(source=f"Reddit r/{subreddit}", weight=weight)
 
     try:
         if verbose:
             print(f"  Fetching {url} ...", file=sys.stderr)
-        resp = requests.get(url, headers=headers, timeout=15)
-        resp.raise_for_status()
-        data = resp.json()
-    except requests.RequestException as exc:
+        children, _source = bladebro_client.collect_reddit_children(
+            url,
+            REDDIT_USER_AGENT,
+            prefer_bladebro=(subreddit == "wallstreetbets"),
+            verbose=verbose,
+        )
+    except bladebro_client.CollectError as exc:
         result.error = str(exc)
         if verbose:
             print(f"  [SKIP] Reddit r/{subreddit}: {exc}", file=sys.stderr)
         return result
 
-    children = data.get("data", {}).get("children", [])
     result.total_posts = len(children)
     bullish_patterns, bearish_patterns = _compile_patterns()
     ticker_pattern_lower = ticker.lower()

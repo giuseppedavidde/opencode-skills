@@ -1,0 +1,9 @@
+{
+  "source": "nasdaqtrader.com SymDir nasdaqlisted.txt + otherlisted.txt",
+  "fetched": "2026-09-26",
+  "stocks": 7131,
+  "etfs": 5736,
+  "leverage": 1025,
+  "total": 12867,
+  "generator": "scripts/ticker_validation.py --refresh-snapshot"
+}

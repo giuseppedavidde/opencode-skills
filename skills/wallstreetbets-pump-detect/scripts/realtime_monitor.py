@@ -14,10 +14,13 @@ import sys
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 from typing import Any
 
-import requests
 from pydantic import BaseModel, Field
+
+import bladebro_client
+import ticker_validation
 
 
 STATE_FILE = "/tmp/opencode/wsb_monitor_state.json"
@@ -28,7 +31,9 @@ DEFAULT_ITERATIONS = 12  # 1 hour total
 VELOCITY_THRESHOLD = 3.0
 SENTIMENT_THRESHOLD = 0.6
 
-TICKER_PATTERN = re.compile(r"\$[A-Z]{1,5}|(?<!\$)\b[A-Z]{1,5}\b")
+TICKER_PATTERN = re.compile(r"\$[A-Za-z]{1,5}|(?<!\$)\b[A-Z]{1,5}\b")
+LOWER_WORD_PATTERN = re.compile(r"\b[a-z]{2,5}\b")
+WORD_PATTERN = re.compile(r"[a-z']{2,}")
 
 BLACKLIST = {
     "A", "I", "DD", "WSB", "YOLO", "ETF", "IPO", "CEO", "CFO", "USD", "AI",
@@ -38,18 +43,28 @@ BLACKLIST = {
     "PT", "RH", "TD", "FOMO", "LOL", "IMO", "TLDR", "EDIT", "GAINS", "LOSS",
     "ROPE", "BAN", "MODS", "DFV", "APES", "APE", "SHORT", "SQUEEZE", "MOASS",
     "MOON", "TENDIES", "DIAMOND", "HANDS", "PAPER", "ROCKET", "BAG", "HOLDER",
+    "AD", "AGO", "AIN", "AN", "AR", "ARE", "AS", "AWAY", "BY", "CAN", "COLD",
+    "DOWN", "EDGE", "END", "IN", "IS", "MORE", "NEVER", "OF", "ON", "SHOW",
+    "SMART", "TALKS", "BULL", "STONK", "BRO",
+    "EVER", "EYE", "FACT", "FAST", "FIVE", "FLY", "FUN", "GAME", "GAP",
+    "GLAD", "GOOD", "GROW", "HAS", "HELP", "HERE", "HIGH", "HIS", "HIT",
+    "HOPE", "JUST", "KNOW", "MADE", "MEME", "MID", "MUSE", "MUST", "OWN",
+    "SHE", "SPAM", "SUB", "SURE", "TILL", "TIME", "TIP", "USE", "WANT",
+    "WAR", "YEAR",
 }
 
 BULLISH_WORDS = {
     "bullish", "moon", "tendies", "calls", "yolo", "squeeze", "breakout",
     "rocket", "long", "buy", "green", "pump", "rip", "higher", "fire",
     "explode", "surge", "rally", "bounce", "uptrend", "accumulation",
+    "squeezing", "gamma", "undervalued", "load", "hodl",
 }
 
 BEARISH_WORDS = {
-    "bearish", "rug", "dump", "baghold", "short", "dead", "rugpull", "exit",
-    "sell", "red", "crash", "tank", "dip", "collapse", "plunge", "downtrend",
-    "manipulation", "dilution", "bankruptcy", "delist",
+    "bearish", "rug", "dump", "baghold", "bagholder", "short", "dead",
+    "rugpull", "exit", "sell", "red", "crash", "tank", "dip", "collapse",
+    "plunge", "downtrend", "manipulation", "dilution", "bankruptcy", "delist",
+    "puts", "overvalued", "scam", "drill",
 }
 
 
@@ -94,25 +109,74 @@ def _save_state(state: MonitorState) -> None:
         fh.write(json.dumps(state.model_dump(mode="json"), indent=2, default=str))
 
 
-def _extract_tickers(text: str) -> list[str]:
-    """Extract potential ticker symbols from text."""
-    candidates = TICKER_PATTERN.findall(text)
-    valid: list[str] = []
-    for c in candidates:
-        clean = c.lstrip("$").upper()
-        if clean in BLACKLIST:
-            continue
-        if len(clean) < 2:
-            continue
-        if not clean.isalpha():
-            continue
-        valid.append(clean)
-    return list(set(valid))
+def _get_universe() -> ticker_validation.TickerUniverse:
+    """Load the ticker universe once per process (bundled snapshot first)."""
+    return _load_universe_cached()
+
+
+@lru_cache(maxsize=1)
+def _load_universe_cached() -> ticker_validation.TickerUniverse:
+    """Cached loader for the Phase 2 Step B ticker universe."""
+    return ticker_validation.load_universe()
+
+
+def _yfinance_enabled() -> bool:
+    """Return True when the yfinance fallback is enabled for this process."""
+    return os.environ.get("WSB_TICKER_YFINANCE", "").lower() in {"1", "true", "yes"}
+
+
+def _is_candidate(symbol: str) -> bool:
+    """Return True for a plausible, non-blacklisted ticker symbol."""
+    return 2 <= len(symbol) <= 5 and symbol.isalpha() and symbol not in BLACKLIST
+
+
+def _extract_tickers(
+    text: str, universe: ticker_validation.TickerUniverse | None = None
+) -> list[str]:
+    """Extract potential ticker symbols, case-insensitively where meaningful."""
+    resolved = universe if universe is not None else _get_universe()
+    found: set[str] = set()
+    for raw in TICKER_PATTERN.findall(text):
+        symbol = raw.lstrip("$").upper()
+        if _is_candidate(symbol):
+            found.add(symbol)
+    for raw in LOWER_WORD_PATTERN.findall(text):
+        symbol = raw.upper()
+        if symbol not in BLACKLIST and resolved.contains(symbol):
+            found.add(symbol)
+    return sorted(found)
+
+
+def _validate_mentions(
+    mentions: dict[str, list[dict[str, Any]]],
+    universe: ticker_validation.TickerUniverse,
+    verbose: bool = False,
+) -> dict[str, list[dict[str, Any]]]:
+    """Run Phase 2 Step B validation on extracted candidates."""
+    validated = ticker_validation.validate_candidates(
+        mentions.keys(),
+        universe=universe,
+        use_yfinance=_yfinance_enabled(),
+    )
+    kept = {item.symbol for item in validated}
+    if verbose:
+        etfs = sorted(item.symbol for item in validated if item.is_etf)
+        leverage = sorted(item.symbol for item in validated if item.is_leverage)
+        print(
+            f"  Validated {len(kept)} tickers ({len(etfs)} ETF, "
+            f"{len(leverage)} leveraged)",
+            file=sys.stderr,
+        )
+        if etfs:
+            print(f"    ETFs: {', '.join(etfs[:10])}", file=sys.stderr)
+    return {
+        symbol: posts for symbol, posts in mentions.items() if symbol in kept
+    }
 
 
 def _compute_sentiment(text: str) -> float:
     """Compute a simple sentiment score (0-1) for a text."""
-    words = set(text.lower().split())
+    words = set(WORD_PATTERN.findall(text.lower()))
     bull_count = len(words & BULLISH_WORDS)
     bear_count = len(words & BEARISH_WORDS)
     total = bull_count + bear_count
@@ -129,29 +193,37 @@ def _notify_desktop(title: str, body: str) -> bool:
     return False
 
 
-def _poll_wsb(state: MonitorState, verbose: bool = False) -> list[DetectionAlert]:  # pylint: disable=too-many-locals,too-many-statements
+def _poll_wsb(state: MonitorState, verbose: bool = False) -> list[DetectionAlert]:  # pylint: disable=too-many-locals,too-many-statements,too-many-branches
     """Poll r/wallstreetbets new posts and detect pump signals."""
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
     cutoff_24h = now - timedelta(hours=24)
     cutoff_1h = now - timedelta(hours=1)
 
-    # Fetch new posts
-    headers = {"User-Agent": REDDIT_USER_AGENT}
+    # Fetch new posts (bladebro primary, Reddit public JSON fallback)
     try:
-        resp = requests.get(WSB_NEW_URL, headers=headers, timeout=15)
-        resp.raise_for_status()
-        data = resp.json()
-    except requests.RequestException as exc:
+        children, source = bladebro_client.collect_reddit_children(
+            WSB_NEW_URL, REDDIT_USER_AGENT, verbose=verbose
+        )
+    except bladebro_client.BladebroBlockedError as exc:
+        print(
+            f"  [BLOCKED] r/wallstreetbets feed unavailable, NOT counted as 0 posts: {exc}",
+            file=sys.stderr,
+        )
+        return []
+    except bladebro_client.CollectError as exc:
         if verbose:
             print(f"  [ERROR] Failed to fetch WSB: {exc}", file=sys.stderr)
         return []
 
-    children = data.get("data", {}).get("children", [])
     if verbose:
-        print(f"  Fetched {len(children)} posts from r/wallstreetbets/new", file=sys.stderr)
+        print(
+            f"  Fetched {len(children)} posts from r/wallstreetbets/new [{source}]",
+            file=sys.stderr,
+        )
 
     # Extract tickers and timestamps from current poll
+    universe = _get_universe()
     current_mentions: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for child in children:
         post_data = child.get("data", {})
@@ -161,7 +233,7 @@ def _poll_wsb(state: MonitorState, verbose: bool = False) -> list[DetectionAlert
         created_utc = post_data.get("created_utc", 0)
         post_time = datetime.fromtimestamp(created_utc, tz=timezone.utc)
 
-        tickers = _extract_tickers(combined)
+        tickers = _extract_tickers(combined, universe=universe)
         sentiment = _compute_sentiment(combined)
 
         for ticker in tickers:
@@ -171,6 +243,10 @@ def _poll_wsb(state: MonitorState, verbose: bool = False) -> list[DetectionAlert
             })
 
     # Update state with new mentions
+    current_mentions = defaultdict(
+        list,
+        _validate_mentions(dict(current_mentions), universe, verbose=verbose),
+    )
     for ticker, mentions in current_mentions.items():
         if ticker not in state.ticker_mention_history:
             state.ticker_mention_history[ticker] = []

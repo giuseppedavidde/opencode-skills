@@ -13,8 +13,12 @@ from typing import Any
 
 from pydantic import BaseModel
 
+import bladebro_client
+
 
 HISTORY_FILE = os.path.expanduser("~/Progetti/Github/Data_for_Analysis/pump_history.jsonl")
+REDDIT_USER_AGENT = "wsb-pump-detect/1.0 (history collection)"
+WSB_HOT_JSON_URL = "https://www.reddit.com/r/wallstreetbets/hot.json?limit=100"
 
 
 class PumpRecord(BaseModel):
@@ -75,14 +79,33 @@ def _write_record(record: PumpRecord) -> None:
         fh.write(json.dumps(record.model_dump(mode="json"), default=str) + "\n")
 
 
+def _count_mentions_via_bladebro(ticker: str, verbose: bool) -> int:
+    """Count current mentions of a ticker on r/wallstreetbets via bladebro."""
+    try:
+        children, source = bladebro_client.collect_reddit_children(
+            WSB_HOT_JSON_URL, REDDIT_USER_AGENT, verbose=verbose
+        )
+    except bladebro_client.CollectError as exc:
+        print(f"  [WARN] mention count unavailable: {exc}", file=sys.stderr)
+        return 0
+    count = bladebro_client.count_ticker_mentions(children, ticker)
+    if verbose:
+        print(f"  [mentions] {count} for ${ticker} via {source}", file=sys.stderr)
+    return count
+
+
 def cmd_record(args: argparse.Namespace) -> None:
-    """Record a new pump detection."""
+    """Record a new pump detection, optionally auto-counting WSB mentions."""
+    ticker = args.record.upper()
+    mentions = args.mentions
+    if args.auto_mentions:
+        mentions = _count_mentions_via_bladebro(ticker, args.verbose)
     record = PumpRecord(
-        ticker=args.ticker.upper(),
+        ticker=ticker,
         detected_at=datetime.now(timezone.utc).isoformat(),
         fomo_phase=args.fomo,
         hype_score=args.score,
-        mention_count=args.mentions,
+        mention_count=mentions,
         sentiment=0.0,
         price_at_detection=args.price,
     )
@@ -409,6 +432,7 @@ def main() -> None:
         epilog="""
 Examples:
   python3 pump_history.py --record GME --score 82 --fomo early --mentions 47 --price 24.50
+  python3 pump_history.py --record GME --score 82 --fomo early --auto-mentions --price 24.50
   python3 pump_history.py --learn
   python3 pump_history.py --predict GME
   python3 pump_history.py --stats
@@ -424,6 +448,10 @@ Examples:
                         help="Mention count (used with --record)")
     parser.add_argument("--price", type=float, default=0.0,
                         help="Price at detection (used with --record)")
+    parser.add_argument("--auto-mentions", action="store_true",
+                        help="Count current WSB mentions via bladebro (used with --record)")
+    parser.add_argument("--verbose", "-v", action="store_true",
+                        help="Verbose output for network/collection steps")
     parser.add_argument("--learn", action="store_true",
                         help="Analyze history and extract patterns")
     parser.add_argument("--predict", "-p", metavar="TICKER",
