@@ -11,7 +11,7 @@ import time
 import requests
 from pydantic import BaseModel
 
-import bladebro_client
+import reddit_client
 
 
 REDDIT_USER_AGENT = "wsb-pump-detect/1.0 (sentiment analysis bot)"
@@ -95,13 +95,12 @@ def _fetch_reddit(subreddit: str, endpoint: str, ticker: str, verbose: bool) -> 
     try:
         if verbose:
             print(f"  Fetching {url} ...", file=sys.stderr)
-        children, _source = bladebro_client.collect_reddit_children(
+        children, _source = reddit_client.collect_reddit_children(
             url,
             REDDIT_USER_AGENT,
-            prefer_bladebro=(subreddit == "wallstreetbets"),
             verbose=verbose,
         )
-    except bladebro_client.CollectError as exc:
+    except reddit_client.CollectError as exc:
         result.error = str(exc)
         if verbose:
             print(f"  [SKIP] Reddit r/{subreddit}: {exc}", file=sys.stderr)

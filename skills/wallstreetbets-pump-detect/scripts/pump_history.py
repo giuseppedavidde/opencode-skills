@@ -13,7 +13,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-import bladebro_client
+import reddit_client
 
 
 HISTORY_FILE = os.path.expanduser("~/Progetti/Github/Data_for_Analysis/pump_history.jsonl")
@@ -79,16 +79,16 @@ def _write_record(record: PumpRecord) -> None:
         fh.write(json.dumps(record.model_dump(mode="json"), default=str) + "\n")
 
 
-def _count_mentions_via_bladebro(ticker: str, verbose: bool) -> int:
-    """Count current mentions of a ticker on r/wallstreetbets via bladebro."""
+def _count_mentions_via_reddit(ticker: str, verbose: bool) -> int:
+    """Count current mentions of a ticker on r/wallstreetbets via Reddit."""
     try:
-        children, source = bladebro_client.collect_reddit_children(
+        children, source = reddit_client.collect_reddit_children(
             WSB_HOT_JSON_URL, REDDIT_USER_AGENT, verbose=verbose
         )
-    except bladebro_client.CollectError as exc:
+    except reddit_client.CollectError as exc:
         print(f"  [WARN] mention count unavailable: {exc}", file=sys.stderr)
         return 0
-    count = bladebro_client.count_ticker_mentions(children, ticker)
+    count = reddit_client.count_ticker_mentions(children, ticker)
     if verbose:
         print(f"  [mentions] {count} for ${ticker} via {source}", file=sys.stderr)
     return count
@@ -99,7 +99,7 @@ def cmd_record(args: argparse.Namespace) -> None:
     ticker = args.record.upper()
     mentions = args.mentions
     if args.auto_mentions:
-        mentions = _count_mentions_via_bladebro(ticker, args.verbose)
+        mentions = _count_mentions_via_reddit(ticker, args.verbose)
     record = PumpRecord(
         ticker=ticker,
         detected_at=datetime.now(timezone.utc).isoformat(),
@@ -449,7 +449,7 @@ Examples:
     parser.add_argument("--price", type=float, default=0.0,
                         help="Price at detection (used with --record)")
     parser.add_argument("--auto-mentions", action="store_true",
-                        help="Count current WSB mentions via bladebro (used with --record)")
+                        help="Count current WSB mentions via Reddit (used with --record)")
     parser.add_argument("--verbose", "-v", action="store_true",
                         help="Verbose output for network/collection steps")
     parser.add_argument("--learn", action="store_true",

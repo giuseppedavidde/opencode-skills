@@ -19,7 +19,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-import bladebro_client
+import reddit_client
 import ticker_validation
 
 
@@ -200,18 +200,12 @@ def _poll_wsb(state: MonitorState, verbose: bool = False) -> list[DetectionAlert
     cutoff_24h = now - timedelta(hours=24)
     cutoff_1h = now - timedelta(hours=1)
 
-    # Fetch new posts (bladebro primary, Reddit public JSON fallback)
+    # Fetch new posts (Reddit public JSON)
     try:
-        children, source = bladebro_client.collect_reddit_children(
+        children, source = reddit_client.collect_reddit_children(
             WSB_NEW_URL, REDDIT_USER_AGENT, verbose=verbose
         )
-    except bladebro_client.BladebroBlockedError as exc:
-        print(
-            f"  [BLOCKED] r/wallstreetbets feed unavailable, NOT counted as 0 posts: {exc}",
-            file=sys.stderr,
-        )
-        return []
-    except bladebro_client.CollectError as exc:
+    except reddit_client.CollectError as exc:
         if verbose:
             print(f"  [ERROR] Failed to fetch WSB: {exc}", file=sys.stderr)
         return []

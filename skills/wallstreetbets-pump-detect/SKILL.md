@@ -1,8 +1,8 @@
 ---
 name: wallstreetbets-pump-detect
 description: >
-  Renders r/wallstreetbets through the bladebro stealth browser (public JSON as
-  fallback) to find stocks/ETFs being pumped, scores hype level and squeeze
+  Fetches r/wallstreetbets through the Reddit public JSON endpoint to find
+  stocks/ETFs being pumped, scores hype level and squeeze
   potential, detects FOMO phase, then feeds into stock-crypto-analysis and
   options-strategy-suggestions for full entry evaluation (buy underlying or
   options strategy).
@@ -12,12 +12,11 @@ metadata:
 
 # WallStreetBets Pump Detect
 
-Detects stocks and ETFs being pumped on r/wallstreetbets by rendering the subreddit through the `bladebro` stealth browser (public JSON as fallback), scores hype on 5 dimensions, detects which FOMO phase the pump is in, then feeds qualified candidates into `stock-crypto-analysis` and `options-strategy-suggestions` for full entry evaluation.
+Detects stocks and ETFs being pumped on r/wallstreetbets by fetching the subreddit through the Reddit public JSON endpoint, scores hype on 5 dimensions, detects which FOMO phase the pump is in, then feeds qualified candidates into `stock-crypto-analysis` and `options-strategy-suggestions` for full entry evaluation.
 
 ## Skill Dependencies
 
 This skill loads and integrates:
-- `bladebro` — Stealth-browser CLI/MCP that renders r/wallstreetbets (feed + comment trees) and is the primary data source
 - `stock-crypto-analysis` — Unified verdict (Long-Term Invest / Short-Term Spec / Avoid), per-dimension scores, direction
 - `options-strategy-suggestions` — Options strategies including Synthetic Long 2:1
 - `market-data-fetch` — Current prices, volumes, short interest, borrow fee, fundamentals
@@ -32,71 +31,9 @@ This skill loads and integrates:
 
 ### Phase 1 — WSB Data Collection
 
-Fonte **primaria**: `bladebro` stealth-browser (CLI o MCP) — renderizza Reddit con un Chrome reale, quindi restituisce i contenuti anche quando l'endpoint JSON viene bloccato o rate-limitat. L'endpoint **pubblico JSON** di Reddit resta solo come **fallback**.
+Fonte unica: l'endpoint **pubblico JSON** di Reddit, letto via HTTP dal client Python `scripts/reddit_client.py` (nessun browser, CLI o daemon esterno — `urllib.request` della stdlib, nessun requisito d'ambiente).
 
-**Requisiti ambiente** (il client Python `scripts/bladebro_client.py` li imposta da solo):
-
-```
-BLADEBRO_BIN=/home/giuseppe/.local/share/opencode/bladebro-node/bin/bladebro   # opzionale, override
-CHROME_PATH=/home/giuseppe/.local/share/opencode/bladebro-node/chrome
-BLADE_HOME=/tmp/opencode/wsb-blade
-```
-
-**Comandi bladebro** (il daemon persiste tra le chiamate: un solo Chrome per tutte):
-
-Feed (hot / new / top):
-
-```
-bladebro see "https://www.reddit.com/r/wallstreetbets/hot/" extract auto --limit 100
-bladebro see "https://www.reddit.com/r/wallstreetbets/new/" extract auto --limit 100
-bladebro see "https://www.reddit.com/r/wallstreetbets/top/?t=day" extract auto --limit 100
-```
-
-L'output è la riga `extract auto:` seguita da un oggetto JSON:
-
-```json
-{"container":"reddit-feed","count":N,"items":[
-  {"title","author","score","comments","date","subreddit","domain","url","content_href","type"}
-]}
-```
-
-**Lazy render**: un singolo `extract auto` sul feed restituisce solo ~4 post perché Reddit renderizza il feed in modo lazy. Per un dataset pieno usare, in ordine:
-
-1. **Browser JSON** (preferito: include `upvote_ratio` e `link_flair_text`). Il browser bladebro scarica il listing `.json` e ne offloada il risultato su un artifact:
-   ```
-   bladebro act navigate "https://www.reddit.com/r/wallstreetbets/hot/"
-   bladebro act eval "fetch('https://www.reddit.com/r/wallstreetbets/hot.json?limit=100').then(r=>r.text())"
-   ```
-2. **`act collect`** (`--max N`): paginazione/scroll automatico, un solo artifact per l'intero feed.
-   ```
-   bladebro act collect "https://www.reddit.com/r/wallstreetbets/hot/" --max 100
-   ```
-3. **`act scroll` eased ripetuto** + `see extract auto`, accumulando i post finché non arrivano nuovi item.
-
-Deduplicare sempre per `content_href`/`id`. `bladebro_client.fetch_feed_bulk(...)` implementa i tre percorsi con un parametro `target` (default 100):
-```
-python3 bladebro_client.py --subreddit wallstreetbets --listing hot --target 100
-```
-
-Thread di commenti (per il sentiment sul testo reale):
-
-```
-bladebro see "<post_url>" extract auto --limit 100
-```
-
-```json
-{"container":"reddit-comments","post":{...},"count":N,"total":M,"items":[
-  {"id","author","score","date","depth","text","url"}
-]}
-```
-
-**Payloads >12KB**: bladebro offloads the extract to `$BLADE_HOME/artifacts/<id>.json` and stdout returns a `(N bytes) → path` reference plus a truncated preview; `bladebro_client.parse_extract_output` follows that reference and reads the full JSON automatically.
-
-**Retry JS-challenge**: la prima load di un URL reddit.com può restituire solo la pagina challenge. In tal caso eseguire `bladebro act wait settle 3000` e rileggere (`bladebro see extract auto`), fino a 2 tentativi — `bladebro_client` lo fa automaticamente.
-
-**Block / rate-limit**: Reddit può servire una interstitial di rate-limit (codici tipo `01a0de31…`, testi "rate limit" / "you've been blocked") oppure rispondere **403** al JSON pubblico. `bladebro_client` rileva URL e firme testuali e applica un **backoff esponenziale bounded**: prima ri-setta/re-wait, poi riprova ruotando eventualmente l'endpoint listing (`hot`/`new`/`top`). Se tutte le sorgenti risultano bloccate solleva `BladebroBlockedError` — **mai un dataset vuoto silenzioso**. I caller (`realtime_monitor`, `multi_platform_sentiment`) surfaceano l'errore invece di trattarlo come "zero post".
-
-**Fallback JSON** (se bladebro non è disponibile o restituisce feed vuoto):
+**Endpoint di listing** (hot / new / top):
 
 ```
 https://www.reddit.com/r/wallstreetbets/hot.json?limit=100
@@ -104,11 +41,30 @@ https://www.reddit.com/r/wallstreetbets/new.json?limit=100
 https://www.reddit.com/r/wallstreetbets/top.json?limit=100&t=day
 ```
 
+La risposta è un oggetto JSON con `data.children[]`; ogni child è `{"kind":"t3","data":{...}}` con i campi del post:
+
+```json
+{"kind":"t3","data":{
+  "title","author","score","upvote_ratio","num_comments","link_flair_text",
+  "selftext","created_utc","permalink","url","subreddit","id","domain"
+}}
+```
+
+Il client Python `scripts/reddit_client.py` espone:
+- `collect_reddit_children(url, user_agent, verbose=..., target=...)` → `(children, source)` con `source == "reddit_json"`
+- `fetch_feed_bulk(subreddit, listing, target=...)` → `RedditFeed`
+- `count_ticker_mentions(children, ticker)`
+
+Deduplicare sempre per `content_href`/`id` (lo fa `collect_reddit_children`/`fetch_feed_bulk`):
+```
+python3 reddit_client.py --subreddit wallstreetbets --listing hot --target 100
+```
+
+**Block / rate-limit**: Reddit può rispondere **403** o **429** al JSON pubblico. `reddit_client` solleva `CollectError` — **mai un dataset vuoto silenzioso**. I caller (`realtime_monitor`, `multi_platform_sentiment`) surfaceano l'errore invece di trattarlo come "zero post".
+
 Parse `data.children[]` → `title`, `score`, `upvote_ratio`, `num_comments`, `link_flair_text`, `selftext`, `created_utc`, `author`, `permalink`, `url`, `gilded`.
 
-Se anche il JSON è rate-limited, ultimo fallback: `websearch` per "most mentioned WSB stocks today 2026" e aggregatori (AltIndex, SwaggyStocks, WSB Tracker).
-
-I comment tree ora alimentano il **Sentiment Polarity reale** (Phase 3, dimensione 3): il sentiment va calcolato anche sul testo dei commenti, non solo sui titoli dei post.
+Se anche l'endpoint JSON è rate-limited, fallback: `websearch` per "most mentioned WSB stocks today 2026" e aggregatori (AltIndex, SwaggyStocks, WSB Tracker).
 
 ### Phase 2 — Ticker Extraction
 
@@ -142,7 +98,7 @@ Score each validated ticker across 5 dimensions:
 |---|-----------|:----:|---------|
 | 1 | **Mention Volume** | 25% | Numero post unici nelle ultime 24h, crescita rispetto al periodo precedente, commenti totali |
 | 2 | **Engagement** | 20% | Upvote ratio medio, score medio, award count, ratio commenti/posts |
-| 3 | **Sentiment Polarity** | 15% | Parole bullish (🚀, moon, tendies, calls, yolo, rip, squeeze, breakout, rocket) vs bearish (rug, dump, baghold, short, rip, dead, rugpull, exit) nei titoli **e nei commenti (comment tree bladebro)** |
+| 3 | **Sentiment Polarity** | 15% | Parole bullish (🚀, moon, tendies, calls, yolo, rip, squeeze, breakout, rocket) vs bearish (rug, dump, baghold, short, rip, dead, rugpull, exit) nei titoli e nel testo (`selftext`) dei post |
 | 4 | **Post Authority** | 15% | Percentuale di post con flair "DD" o "Technical Analysis" vs "Meme"/"Shitpost". Post di utenti con storia verificabile |
 | 5 | **Squeeze Setup** | 25% | Short interest %, borrow fee (utilizzo rate), days to cover. Volume spike vs media 20d. Prezzo % da 52w low |
 
@@ -167,7 +123,7 @@ hype_score = (
 )
 ```
 
-**Dati mancanti e rinormalizzazione dei pesi**: `upvote_ratio` e `link_flair_text` esistono solo se i post sono stati letti dal **browser JSON** (percorso 1); con `act collect`/scroll non sono esposti. **Engagement** (dim 2) è calcolabile solo se almeno un post ha `upvote_ratio`; **Post Authority** (dim 4) solo se almeno un post ha `flair`. Se una dimensione non ha dati reali viene marcata *UNAVAILABLE* e i pesi delle dimensioni disponibili vengono **rinormalizzati** (la somma torna a 1). Non si usa alcun default fittizio (niente `upvote_ratio=0.5`).
+**Dati mancanti e rinormalizzazione dei pesi**: `upvote_ratio` e `link_flair_text` sono esposti dall'endpoint JSON di Reddit, ma possono mancare (`None`) su alcuni post. **Engagement** (dim 2) è calcolabile solo se almeno un post ha `upvote_ratio`; **Post Authority** (dim 4) solo se almeno un post ha `flair`. Se una dimensione non ha dati reali viene marcata *UNAVAILABLE* e i pesi delle dimensioni disponibili vengono **rinormalizzati** (la somma torna a 1). Non si usa alcun default fittizio (niente `upvote_ratio=0.5`).
 
 **Squeeze Setup (dim 5)**: sono **market data**, non dati WSB. Recuperarli dal trading MCP (`fetch_stock_data` → `shortPercentOfFloat` e `shortRatio` = days to cover; `analyze_stock` → dimensione squeeze) o via `market-data-fetch`, e passarli esplicitamente. Il *borrow fee* spesso non è disponibile da yfinance: la dimensione usa allora i soli campi presenti e rinormalizza sui massimi dei campi disponibili (o risulta *UNAVAILABLE* se nessuno è presente).
 

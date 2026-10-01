@@ -28,7 +28,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-import bladebro_client
+import reddit_client
 
 WEIGHTS: dict[str, float] = {
     "mention_volume": 0.25,
@@ -148,11 +148,11 @@ def build_posts(
         flair = data.get("link_flair_text") or data.get("flair") or None
         posts.append(
             PostSignal(
-                score=bladebro_client.as_int(data.get("score")),
-                comments=bladebro_client.as_int(
+                score=reddit_client.as_int(data.get("score")),
+                comments=reddit_client.as_int(
                     data.get("num_comments", data.get("comments"))
                 ),
-                upvote_ratio=bladebro_client.as_float(data.get("upvote_ratio")),
+                upvote_ratio=reddit_client.as_float(data.get("upvote_ratio")),
                 flair=str(flair) if flair else None,
                 sentiment=text_sentiment(text),
             )
@@ -356,7 +356,7 @@ def _load_children(feed_json: str) -> list[dict[str, Any]]:
         if isinstance(entry, dict) and "data" in entry and "kind" in entry:
             children.append(entry)
         elif isinstance(entry, dict):
-            children.append(bladebro_client.RedditFeedItem.model_validate(entry).to_reddit_child())
+            children.append(reddit_client.RedditFeedItem.model_validate(entry).to_reddit_child())
     return children
 
 
@@ -403,7 +403,7 @@ Examples:
     parser.add_argument("--subreddit", "-s", default="wallstreetbets")
     parser.add_argument("--listing", "-l", default="hot",
                         choices=["hot", "new", "top", "rising"])
-    parser.add_argument("--target", "-n", type=int, default=bladebro_client.DEFAULT_TARGET,
+    parser.add_argument("--target", "-n", type=int, default=reddit_client.DEFAULT_TARGET,
                         help="Target post count to collect (default: 100)")
     parser.add_argument("--feed-json", default=None,
                         help="Use a saved feed JSON instead of fetching")
@@ -419,13 +419,13 @@ Examples:
         children = _load_children(args.feed_json)
     else:
         try:
-            children, source = bladebro_client.collect_reddit_children(
+            children, source = reddit_client.collect_reddit_children(
                 f"https://www.reddit.com/r/{args.subreddit}/hot.json?limit={args.target}",
-                bladebro_client.REDDIT_USER_AGENT,
+                reddit_client.REDDIT_USER_AGENT,
                 verbose=args.verbose,
                 target=args.target,
             )
-        except bladebro_client.CollectError as exc:
+        except reddit_client.CollectError as exc:
             print(f"fetch failed: {exc}", file=sys.stderr)
             sys.exit(2)
         if args.verbose:
