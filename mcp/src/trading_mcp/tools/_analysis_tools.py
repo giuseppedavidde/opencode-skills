@@ -20,6 +20,7 @@ from trading_mcp.analysis.scanner import (
     process_ticker,
     recompute_patterns,
 )
+from trading_mcp.analysis.gex import analyze_gex
 from trading_mcp.analysis.options_calc import analyze_options_position
 from trading_mcp.analysis.signal_engine import compute_action
 from trading_mcp.data.result_cache import result_cache
@@ -332,6 +333,48 @@ def register_analysis_tools(
 
         result = analyze_options_position(ticker, legs, expiry)
         result_cache.set("analyze_options", ticker, cache_params, result)
+        return result
+
+    @mcp_server.tool()
+    def gex_analysis(
+        ticker: str,
+        expiry: str | None = None,
+        max_expiries: int = 12,
+        top_n: int = 15,
+    ) -> dict[str, Any]:
+        """Compute Gamma Exposure (GEX) for a ticker's option chain.
+
+        Calculates dealer gamma exposure per strike (call GEX positive,
+        put GEX negative; GEX = gamma * OI * 100 * S^2 * 0.01, i.e. dollars
+        per 1% underlying move), the total net GEX, the strike-by-strike
+        profile, the zero-gamma / Gamma Flip level, the Call Wall and Put
+        Wall, and the prevailing gamma regime (long-gamma = mean-reverting /
+        pinning, short-gamma = volatility-amplifying).
+
+        Args:
+            ticker: Stock ticker symbol (e.g. 'SPY').
+            expiry: Optional 'YYYY-MM-DD' expiry. When None, chains up to
+                ``max_expiries`` listed expirations are aggregated.
+            max_expiries: Maximum number of expirations aggregated (default 12).
+            top_n: Number of strikes kept in the returned profile (default 15).
+
+        Returns:
+            GexResult payload with net GEX, gamma flip, walls, regime and
+            the top-|GEX| strikes.
+        """
+        cache_params: dict[str, Any] = {
+            "expiry": expiry,
+            "max_expiries": max_expiries,
+            "top_n": top_n,
+        }
+        cached = result_cache.get("gex_analysis", ticker, cache_params)
+        if cached is not None:
+            return cached
+
+        result = analyze_gex(
+            ticker, expiry=expiry, max_expiries=max_expiries, top_n=top_n
+        )
+        result_cache.set("gex_analysis", ticker, cache_params, result)
         return result
 
 

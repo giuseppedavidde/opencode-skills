@@ -32,3 +32,8 @@ trading-cli = "trading_mcp.trading_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+markers = [
+    "network: tests that require live network access (yfinance option chains)",
+]

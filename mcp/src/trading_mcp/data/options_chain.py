@@ -12,6 +12,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from pydantic import BaseModel, Field
 from scipy.stats import norm
 
 from trading_mcp.data.provider import data_provider
@@ -23,6 +24,19 @@ _CACHE_DIR = Path(os.environ.get("TRADING_CACHE_DIR", "/tmp/opencode/options_cac
 _MEM_CACHE: dict[str, dict[str, Any]] = {}
 _MEM_CACHE_TIMES: dict[str, float] = {}
 _MEM_CACHE_TTL: float = 300.0  # 5 minutes for intraday freshness
+
+# ── Robust IV-surface parameters ──────────────────────────────────────
+_IV_MIN: float = 0.01          # 1%  — below this an IV is not credible
+_IV_MAX: float = 5.0           # 500% — above this an IV is an outlier
+_IV_OUTLIER_Z: float = 3.5     # robust z threshold for MAD rejection
+_IV_REL_TOL: float = 0.75      # max |quote-smile|/smile to keep a real quote
+_IRLS_ITERS: int = 4           # robust reweighting iterations
+_SMILE_MIN_POINTS: int = 4     # minimum valid quotes to fit a smile
+_SMILE_DEGREE: int = 2         # quadratic smile in log-moneyness
+_IV_SRC_QUOTE = "quote"        # IV taken straight from a valid live quote
+_IV_SRC_SMILE = "smile"        # IV interpolated from the fitted smile
+_IV_SRC_FALLBACK = "fallback"  # no fit possible → flat fallback sigma
+
 
 def _is_weekend() -> bool:
     return date.today().weekday() >= 5
@@ -73,11 +87,12 @@ def _save_cached_chain(ticker: str, expiry: str | None, data: dict[str, Any]) ->
         logger.warning("Failed to save options cache for %s: %s", ticker, e)
 
 
-def fetch_options_chain(
+def fetch_options_chain(  # pylint: disable=too-many-locals,too-many-return-statements
     ticker: str,
     expiry: str | None = None,
     use_cache: bool = True,
     strike_window: int | None = 10,
+    full_chain: bool = False,
 ) -> dict[str, Any]:
     """Fetch options chain with Greeks and IV metrics.
 
@@ -91,10 +106,14 @@ def fetch_options_chain(
         strike_window: Number of strikes to keep around ATM on each side.
             Default 10 (±10 strikes) reduces payload by 70-90%. Pass None
             (or -1) to return the full chain explicitly.
+        full_chain: When True, force the full chain regardless of
+            ``strike_window`` (used by GEX so wing strikes are not lost).
     """
     # Sanitize: MCP may send the string "null" instead of JSON null
     if expiry is not None and isinstance(expiry, str) and expiry.strip().lower() in ("null", "none", ""):
         expiry = None
+
+    strike_window = None if full_chain else strike_window
 
     if use_cache:
         cached = _load_cached_chain(ticker, expiry)
@@ -147,19 +166,22 @@ def fetch_options_chain(
     # the returned strike lists to the ATM window (fix A3).
     iv_metrics = _compute_iv_metrics(calls_df, puts_df, spot)
 
-    calls_df = _filter_strike_window(calls_df, spot, strike_window)
-    puts_df = _filter_strike_window(puts_df, spot, strike_window)
-
     tte = _time_to_expiry(selected_expiry)
     sigma = live_iv or 0.3
     rate_snapshot = get_risk_free_rate()
     r = rate_snapshot.value
 
-    calls_greeks = _compute_chain_greeks(spot, calls_df, tte, r, sigma, "call")
-    puts_greeks = _compute_chain_greeks(spot, puts_df, tte, r, sigma, "put")
-
-    calls_list = _chain_to_list(calls_df, calls_greeks)
-    puts_list = _chain_to_list(puts_df, puts_greeks)
+    # Robust IV surface fitted on the FULL chain (wings included), so
+    # strikes with stale/missing quotes get an interpolated smile IV
+    # instead of a flat fallback sigma.
+    surface = _robust_iv_surface(calls_df, puts_df, spot, sigma)
+    calls_list, calls_res = _resolve_legs(
+        spot, calls_df, tte, r, sigma, "call", surface, strike_window
+    )
+    puts_list, puts_res = _resolve_legs(
+        spot, puts_df, tte, r, sigma, "put", surface, strike_window
+    )
+    iv_metrics.update(_iv_quality_metrics(surface, calls_res, puts_res))
 
     result = {
         "ticker": ticker,
@@ -202,10 +224,37 @@ def _fallback_response(ticker: str, spot: float, live_iv: Any, error_msg: str) -
             "put_call_ratio_vol": 0.0,
             "put_call_ratio_oi": 0.0,
             "term_structure": [],
+            "iv_coverage_pct": 0.0,
+            "num_quote_iv": 0,
+            "num_synthetic_iv": 0,
+            "num_fallback_iv": 0,
+            "smile_fitted": False,
         },
         "_source": "fallback",
         "_fallback_note": f"{error_msg}. {'Weekend: try Monday-Friday.' if _is_weekend() else 'Retry later.'}",
     }
+
+
+def _window_bounds(
+    df: pd.DataFrame, spot: float, window: int | None
+) -> tuple[int, int]:
+    """Return the half-open positional ``(lo, hi)`` slice around ATM.
+
+    Args:
+        df: Chain DataFrame with a ``strike`` column (sorted ascending).
+        spot: Underlying price used to locate the ATM strike.
+        window: Strikes to keep on each side of ATM. None → full chain.
+
+    Returns:
+        ``(0, len(df))`` for a full chain, else the ATM-centred bounds.
+    """
+    if window is None or window < 0 or df.empty or "strike" not in df.columns:
+        return 0, len(df)
+    strikes = df["strike"].to_numpy(dtype=float)
+    atm_idx = int(np.argmin(np.abs(strikes - spot)))
+    lo = max(0, atm_idx - window)
+    hi = min(len(df), atm_idx + window + 1)
+    return lo, hi
 
 
 def _filter_strike_window(
@@ -221,12 +270,9 @@ def _filter_strike_window(
     Returns:
         A filtered copy, or the original DataFrame when window is None.
     """
-    if window is None or window < 0 or df.empty or "strike" not in df.columns:
+    lo, hi = _window_bounds(df, spot, window)
+    if not lo and hi == len(df):
         return df
-    strikes = df["strike"].to_numpy(dtype=float)
-    atm_idx = int(np.argmin(np.abs(strikes - spot)))
-    lo = max(0, atm_idx - window)
-    hi = min(len(df), atm_idx + window + 1)
     return df.iloc[lo:hi]
 
 
@@ -261,27 +307,315 @@ def _time_to_expiry(expiry_str: str) -> float:
     return max(days, 1) / 365.0
 
 
-def _compute_chain_greeks(
+class IvSurface(BaseModel):
+    """Robust per-expiry IV smile fitted on log-moneyness ``ln(K/S)``."""
+
+    spot: float
+    coeffs: list[float] = Field(default_factory=list)
+    fallback_sigma: float = 0.3
+    fitted: bool = False
+    n_quote: int = 0
+    n_outliers: int = 0
+    residual_mad: float = 0.0
+
+    def predict(self, strikes: np.ndarray) -> np.ndarray:
+        """Evaluate the fitted smile at ``strikes`` (clipped to a sane range)."""
+        strikes = np.asarray(strikes, dtype=float)
+        if not self.fitted or not self.coeffs or self.spot <= 0:
+            return np.full(strikes.shape[0], self.fallback_sigma, dtype=float)
+        log_m = np.log(strikes / self.spot)
+        predicted = np.polyval(np.asarray(self.coeffs, dtype=float), log_m)
+        return np.clip(predicted, _IV_MIN, _IV_MAX)
+
+
+class IvResolution(BaseModel):
+    """IV actually used per strike, with provenance and quality counts."""
+
+    iv_used: list[float] = Field(default_factory=list)
+    sources: list[str] = Field(default_factory=list)
+    n_quote: int = 0
+    n_smile: int = 0
+    n_fallback: int = 0
+
+    @property
+    def coverage_pct(self) -> float:
+        """Share of strikes backed by a real quote (percent)."""
+        total = self.n_quote + self.n_smile + self.n_fallback
+        return round(100.0 * self.n_quote / total, 1) if total else 0.0
+
+
+def _collect_surface_points(
+    calls_df: pd.DataFrame, puts_df: pd.DataFrame
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Collect valid quotes ``(strikes, ivs, oi_weights)`` for the smile fit.
+
+    A quote is usable when it has a finite IV inside ``(_IV_MIN, _IV_MAX)``
+    and at least some market presence (a bid, ask, volume or open interest).
+    """
+    strikes: list[float] = []
+    ivs: list[float] = []
+    weights: list[float] = []
+    for frame in (calls_df, puts_df):
+        if frame is None or frame.empty:
+            continue
+        if "strike" not in frame.columns or "impliedVolatility" not in frame.columns:
+            continue
+        strike = frame["strike"].to_numpy(dtype=float)
+        iv = frame["impliedVolatility"].to_numpy(dtype=float)
+        rows = frame.shape[0]
+        bid = frame["bid"].to_numpy(dtype=float) if "bid" in frame.columns else np.zeros(rows)
+        ask = frame["ask"].to_numpy(dtype=float) if "ask" in frame.columns else np.zeros(rows)
+        oi = (
+            frame["openInterest"].to_numpy(dtype=float)
+            if "openInterest" in frame.columns
+            else np.zeros(rows)
+        )
+        vol = frame["volume"].to_numpy(dtype=float) if "volume" in frame.columns else np.zeros(rows)
+        bid = np.nan_to_num(bid)
+        ask = np.nan_to_num(ask)
+        oi = np.nan_to_num(oi)
+        vol = np.nan_to_num(vol)
+        mask = np.isfinite(iv) & (iv > _IV_MIN) & (iv < _IV_MAX) & (strike > 0)
+        mask &= (bid > 0) | (ask > 0) | (oi > 0) | (vol > 0)
+        for pos in np.nonzero(mask)[0]:
+            strikes.append(float(strike[pos]))
+            ivs.append(float(iv[pos]))
+            weights.append(max(float(oi[pos]), 1.0))
+    return (
+        np.asarray(strikes, dtype=float),
+        np.asarray(ivs, dtype=float),
+        np.asarray(weights, dtype=float),
+    )
+
+
+def _fit_robust_smile(
+    log_moneyness: np.ndarray,
+    ivs: np.ndarray,
+    weights: np.ndarray,
+    degree: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """IRLS (Cauchy) polynomial fit of IV on log-moneyness.
+
+    Re-weights observations down as their robust residual grows, so a few
+    bad quotes cannot bend the smile. Returns the coefficients and the
+    boolean inlier mask (``|robust z| <= _IV_OUTLIER_Z``).
+    """
+    coeffs = np.polyfit(log_moneyness, ivs, degree, w=np.sqrt(weights))
+    inliers = np.ones(ivs.shape[0], dtype=bool)
+    for _ in range(_IRLS_ITERS):
+        residual = ivs - np.polyval(coeffs, log_moneyness)
+        scale = 1.4826 * float(np.median(np.abs(residual - np.median(residual))))
+        if scale <= 0.0 or not np.isfinite(scale):
+            break
+        robust_z = np.abs(residual) / scale
+        inliers = robust_z <= _IV_OUTLIER_Z
+        if int(inliers.sum()) < max(_SMILE_MIN_POINTS, degree + 1):
+            break
+        cauchy = 1.0 / (1.0 + robust_z ** 2)
+        fit_w = np.sqrt(weights * cauchy)
+        coeffs = np.polyfit(log_moneyness, ivs, degree, w=fit_w)
+    return coeffs, inliers
+
+
+def _robust_iv_surface(
+    calls_df: pd.DataFrame,
+    puts_df: pd.DataFrame,
+    spot: float,
+    sigma_fallback: float,
+) -> IvSurface:
+    """Fit a robust IV smile on log-moneyness from all valid chain quotes.
+
+    Quotes are filtered by range, dropped when they lack any market
+    presence, and outliers are rejected with a MAD robust z-score before
+    a weighted (by open interest) polynomial fit of degree
+    ``_SMILE_DEGREE``. When too few points survive, ``fitted`` stays
+    ``False`` and consumers fall back to a flat ``sigma_fallback``.
+
+    Args:
+        calls_df: Call chain DataFrame.
+        puts_df: Put chain DataFrame.
+        spot: Underlying spot price (log-moneyness pivot).
+        sigma_fallback: Flat sigma used when no fit is possible.
+
+    Returns:
+        The fitted :class:`IvSurface` (``fitted=False`` if too few points).
+    """
+    surface = IvSurface(spot=spot, fallback_sigma=sigma_fallback)
+    strikes, ivs, weights = _collect_surface_points(calls_df, puts_df)
+    surface.n_quote = int(strikes.size)
+    if strikes.size < _SMILE_MIN_POINTS or spot <= 0:
+        return surface
+
+    log_m = np.log(strikes / spot)
+    degree = min(_SMILE_DEGREE, strikes.size - 1)
+    coeffs, inliers = _fit_robust_smile(log_m, ivs, weights, degree)
+    surface.n_outliers = int((~inliers).sum())
+
+    if _SMILE_MIN_POINTS <= int(inliers.sum()) < strikes.size:
+        log_m = log_m[inliers]
+        degree = min(_SMILE_DEGREE, int(inliers.sum()) - 1)
+        coeffs = np.polyfit(log_m, ivs[inliers], degree, w=np.sqrt(weights[inliers]))
+        residual = ivs[inliers] - np.polyval(coeffs, log_m)
+    else:
+        residual = ivs - np.polyval(coeffs, log_m)
+
+    surface.coeffs = [float(coeff) for coeff in coeffs]
+    surface.fitted = True
+    mad = float(np.median(np.abs(residual))) if residual.size else 0.0
+    surface.residual_mad = mad if np.isfinite(mad) else 0.0
+    logger.debug(
+        "IV surface: %d quotes, %d outliers, degree=%d",
+        surface.n_quote,
+        surface.n_outliers,
+        len(surface.coeffs) - 1,
+    )
+    return surface
+
+
+def _apply_iv_surface(
+    df: pd.DataFrame, surface: IvSurface, sigma_override: float
+) -> IvResolution:
+    """Resolve the IV to use per strike, tagging each with a provenance.
+
+    A strike keeps its raw quote when it is finite, inside the sane range,
+    and consistent with the fitted smile; otherwise it is replaced by the
+    smile interpolation, or by ``sigma_override`` when no fit exists.
+
+    Args:
+        df: Chain DataFrame (call or put side).
+        surface: Fitted IV surface from :func:`_robust_iv_surface`.
+        sigma_override: Flat sigma used as the last-resort fallback.
+
+    Returns:
+        An :class:`IvResolution` with per-strike ``iv_used`` + ``sources``.
+    """
+    if df is None or df.empty:
+        return IvResolution()
+    size = df.shape[0]
+    if "impliedVolatility" in df.columns:
+        raw = df["impliedVolatility"].to_numpy(dtype=float)
+    else:
+        raw = np.full(size, np.nan, dtype=float)
+    if "strike" in df.columns:
+        strikes = df["strike"].to_numpy(dtype=float)
+    else:
+        strikes = np.full(size, np.nan, dtype=float)
+    predicted = surface.predict(strikes)
+    tolerance = np.maximum(_IV_OUTLIER_Z * surface.residual_mad, _IV_REL_TOL * predicted)
+
+    iv_used: list[float] = []
+    sources: list[str] = []
+    for pos in range(size):
+        value = float(raw[pos])
+        is_quote = bool(
+            np.isfinite(value)
+            and _IV_MIN < value < _IV_MAX
+            and (not surface.fitted or abs(value - predicted[pos]) <= tolerance[pos])
+        )
+        if is_quote:
+            iv_used.append(value)
+            sources.append(_IV_SRC_QUOTE)
+        elif surface.fitted:
+            iv_used.append(float(predicted[pos]))
+            sources.append(_IV_SRC_SMILE)
+        else:
+            iv_used.append(float(sigma_override))
+            sources.append(_IV_SRC_FALLBACK)
+
+    return IvResolution(
+        iv_used=iv_used,
+        sources=sources,
+        n_quote=sources.count(_IV_SRC_QUOTE),
+        n_smile=sources.count(_IV_SRC_SMILE),
+        n_fallback=sources.count(_IV_SRC_FALLBACK),
+    )
+
+
+def _iv_quality_metrics(
+    surface: IvSurface, calls_res: IvResolution, puts_res: IvResolution
+) -> dict[str, Any]:
+    """Summarize IV provenance across both sides of the chain."""
+    n_quote = calls_res.n_quote + puts_res.n_quote
+    n_smile = calls_res.n_smile + puts_res.n_smile
+    n_fallback = calls_res.n_fallback + puts_res.n_fallback
+    total = n_quote + n_smile + n_fallback
+    return {
+        "iv_coverage_pct": round(100.0 * n_quote / total, 1) if total else 0.0,
+        "num_quote_iv": n_quote,
+        "num_synthetic_iv": n_smile,
+        "num_fallback_iv": n_fallback,
+        "smile_fitted": surface.fitted,
+        "smile_outliers_removed": surface.n_outliers,
+    }
+
+
+def _resolve_legs(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+    spot: float,
+    df: pd.DataFrame,
+    tte: float,
+    r: float,
+    sigma: float,
+    opt_type: str,
+    surface: IvSurface,
+    window: int | None,
+) -> tuple[list[dict[str, Any]], IvResolution]:
+    """Resolve IV, compute Greeks and serialize one side of the chain.
+
+    Applies the robust IV surface, trims the DataFrame to the ATM window
+    (keeping the resolved IV aligned), then computes Greeks and builds the
+    leg dictionaries, returning the resolution for quality accounting.
+    """
+    resolution = _apply_iv_surface(df, surface, sigma)
+    lo, hi = _window_bounds(df, spot, window)
+    iv_used = resolution.iv_used[lo:hi]
+    sources = resolution.sources[lo:hi]
+    trimmed = df.iloc[lo:hi]
+    greeks = _compute_chain_greeks(
+        spot, trimmed, tte, r, sigma, opt_type, iv_used=iv_used
+    )
+    legs = _chain_to_list(trimmed, greeks, iv_used, sources)
+    return legs, resolution
+
+
+def _compute_chain_greeks(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     spot: float,
     df: pd.DataFrame,
     tte: float,
     r: float,
     sigma_override: float,
     opt_type: str,
+    iv_used: np.ndarray | list[float] | None = None,
 ) -> pd.DataFrame:
     """Compute Greeks for a whole chain via vectorized numpy (fix M3).
 
     Numerically identical to the previous per-row loop, but 10-100x faster
     on chains with 200+ strikes.
+
+    Args:
+        spot: Underlying spot price.
+        df: Chain DataFrame (needs a ``strike`` column).
+        tte: Time to expiry in years.
+        r: Risk-free rate.
+        sigma_override: Flat sigma used where the resolved IV is unusable.
+        opt_type: ``"call"`` or ``"put"``.
+        iv_used: Optional pre-resolved per-strike IV (e.g. from the robust
+            IV surface). When omitted, the raw ``impliedVolatility`` column
+            is used with a flat fallback (legacy behaviour).
     """
     sqrt_t = np.sqrt(max(tte, 0.001))
 
     strikes = df["strike"].to_numpy(dtype=float)
-    if "impliedVolatility" in df.columns:
-        iv = df["impliedVolatility"].to_numpy(dtype=float)
-        iv = np.where(np.isnan(iv) | (iv <= 0), sigma_override, iv)
-    else:
-        iv = np.full(len(df), sigma_override, dtype=float)
+    resolved: np.ndarray | None = None
+    if iv_used is not None:
+        candidate = np.asarray(iv_used, dtype=float)
+        if candidate.shape[0] == strikes.shape[0]:
+            resolved = candidate
+    if resolved is None:
+        if "impliedVolatility" in df.columns:
+            resolved = df["impliedVolatility"].to_numpy(dtype=float)
+        else:
+            resolved = np.full(len(df), np.nan, dtype=float)
+    iv = np.where(np.isfinite(resolved) & (resolved > 0), resolved, sigma_override)
 
     with np.errstate(divide="ignore", invalid="ignore"):
         d1 = (np.log(spot / strikes) + (r + 0.5 * iv ** 2) * tte) / (iv * sqrt_t)
@@ -317,9 +651,27 @@ def _compute_chain_greeks(
     )
 
 
-def _chain_to_list(df: pd.DataFrame, greeks: pd.DataFrame) -> list[dict[str, Any]]:
+def _chain_to_list(  # pylint: disable=too-many-locals
+    df: pd.DataFrame,
+    greeks: pd.DataFrame,
+    iv_used: np.ndarray | list[float] | None = None,
+    iv_sources: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Serialize a chain DataFrame (with Greeks) into a list of leg dicts.
+
+    Args:
+        df: Chain DataFrame.
+        greeks: Greeks aligned with ``df`` (by index).
+        iv_used: Optional per-strike IV actually used for the Greeks.
+        iv_sources: Optional per-strike IV provenance labels.
+
+    Returns:
+        List of leg dictionaries including ``iv_used`` and ``iv_source``.
+    """
+    resolved = np.asarray(iv_used, dtype=float) if iv_used is not None else None
+    sources = list(iv_sources) if iv_sources is not None else None
     result = []
-    for idx, row in df.iterrows():
+    for pos, (idx, row) in enumerate(df.iterrows()):
         bid = row.get("bid", 0) or 0
         ask = row.get("ask", 0) or 0
         vol = row.get("volume", 0) or 0
@@ -337,6 +689,14 @@ def _chain_to_list(df: pd.DataFrame, greeks: pd.DataFrame) -> list[dict[str, Any
         if isinstance(ask, float) and np.isnan(ask):
             ask = 0.0
 
+        if resolved is not None and pos < resolved.shape[0]:
+            leg_iv = float(resolved[pos])
+        else:
+            leg_iv = float(iv)
+        leg_source = _IV_SRC_QUOTE if leg_iv > 0 else _IV_SRC_FALLBACK
+        if sources is not None and pos < len(sources):
+            leg_source = sources[pos]
+
         entry: dict[str, Any] = {
             "strike": float(row["strike"]),
             "bid": round(float(bid), 4),
@@ -344,6 +704,8 @@ def _chain_to_list(df: pd.DataFrame, greeks: pd.DataFrame) -> list[dict[str, Any
             "volume": int(vol),
             "openInterest": int(oi),
             "impliedVolatility": round(float(iv), 4),
+            "iv_used": round(leg_iv, 4),
+            "iv_source": leg_source,
         }
         if idx in greeks.index:
             entry["delta"] = round(float(greeks.loc[idx, "delta"]), 4)

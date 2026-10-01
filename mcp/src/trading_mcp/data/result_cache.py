@@ -46,6 +46,8 @@ TTL_CONFIG: dict[str, int | str] = {
                                        #       multi-leg standard
     "fetch_options_chain": 5 * 60,    # 5min — prezzi intraday, catena opzioni
                                        #        cambia rapidamente
+    "gex_analysis": 5 * 60,           # 5min — GEX deriva dalla catena opzioni,
+                                       #        OI/gamma cambiano intraday
     "bali_signals": "EOD",            # fino a mezzanotte — volatility spread
                                        # basato su RV daily, non cambia intraday
     "tsmom_signals": "EOD",           # fino a mezzanotte — momentum su daily,
