@@ -28,7 +28,38 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-CACHE_DIR = Path.home() / ".cache" / "trading_mcp"
+def _resolve_cache_dir() -> Path:
+    """Resolve the result-cache directory without depending on ``$HOME``.
+
+    Order: explicit ``TRADING_RESULT_CACHE_DIR`` override, then
+    ``$HOME/.cache/trading_mcp``, then ``Path.home()`` (robust when HOME is
+    unset), then a deterministic fallback under the shared cache dir.
+    """
+    env_dir = os.environ.get("TRADING_RESULT_CACHE_DIR")
+    if env_dir:
+        return Path(env_dir)
+
+    candidates: list[Path] = []
+    home_env = os.environ.get("HOME")
+    if home_env:
+        candidates.append(Path(home_env) / ".cache" / "trading_mcp")
+    try:
+        candidates.append(Path.home() / ".cache" / "trading_mcp")
+    except (RuntimeError, OSError):
+        pass
+    candidates.append(Path("/home/giuseppe/.cache/trading_mcp"))
+    candidates.append(Path("/tmp/opencode/trading_mcp_result_cache"))
+
+    for candidate in candidates:
+        try:
+            if candidate.exists():
+                return candidate
+        except OSError:
+            continue
+    return candidates[-1]
+
+
+CACHE_DIR = _resolve_cache_dir()
 CACHE_FILE = CACHE_DIR / "result_cache.json"
 MAX_ENTRIES = 500
 
@@ -145,7 +176,13 @@ class ResultCache:
 
     def _load(self) -> None:
         """Carica la cache da file. Se corrotto, inizializza vuoto."""
-        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            # Cache dir not writable (e.g. sandboxed/no HOME) → run memory-only.
+            sys.stderr.write(f"[result-cache] cache dir unavailable: {exc}\n")
+            sys.stderr.flush()
+            return
         if not CACHE_FILE.exists():
             return
         try:
@@ -171,7 +208,10 @@ class ResultCache:
         Chiamata dal delayed flush: solo quando c'e' un payload effettivamente
         sporco. L'fsync avviene una volta per flush, non per ogni ``set`` (fix L2).
         """
-        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return
         with self._lock:
             if not self._dirty:
                 return

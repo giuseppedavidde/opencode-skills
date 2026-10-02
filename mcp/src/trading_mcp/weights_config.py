@@ -12,16 +12,28 @@ from pydantic import BaseModel, Field, model_validator
 
 logger = logging.getLogger(__name__)
 
+def _default_weights_path() -> Path:
+    """Resolve the weights file path without depending on ``$HOME``."""
+    env_file = os.environ.get("TRADING_WEIGHTS_FILE")
+    if env_file:
+        return Path(env_file)
+    candidates: list[Path] = []
+    home_env = os.environ.get("HOME")
+    if home_env:
+        candidates.append(Path(home_env) / ".config" / "opencode" / "weights.json")
+    try:
+        candidates.append(Path.home() / ".config" / "opencode" / "weights.json")
+    except (RuntimeError, OSError):
+        pass
+    candidates.append(Path("/home/giuseppe/.config/opencode/weights.json"))
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0] if candidates else Path(".config/opencode/weights.json")
+
+
 # Default weights file path
-DEFAULT_WEIGHTS_PATH = Path(
-    os.environ.get(
-        "TRADING_WEIGHTS_FILE",
-        os.path.join(
-            os.environ.get("HOME", str(Path.home())),
-            ".config", "opencode", "weights.json",
-        ),
-    )
-)
+DEFAULT_WEIGHTS_PATH = _default_weights_path()
 
 
 class StockWeights(BaseModel):

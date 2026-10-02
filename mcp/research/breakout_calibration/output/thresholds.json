@@ -1,0 +1,45 @@
+{
+  "version": "1.0.0",
+  "generated_at": "2026-10-02T17:53:15.863146Z",
+  "breakout_lookback_days": 252,
+  "breakout_volume_mult": 2.0,
+  "breakout_requires_volume": true,
+  "max_extension_atr_above_sma50": null,
+  "require_close_above_sma200": true,
+  "require_market_above_sma200": false,
+  "min_momentum_12m": 0.0,
+  "atr_window": 14,
+  "stop_atr_mult": 2.0,
+  "holding_days_preferred": 120,
+  "holding_days_max": 120,
+  "expected_win_rate": 0.6102903718797759,
+  "expected_excess_return": 0.02408089814471122,
+  "mean_reversion_bias_warning": "Extension is NOT a fade signal for momentum names. On this sample the top 12m-momentum quintile has excess +0.23% and the top distance-from-SMA200 quintile has excess +0.15% at 20d, both POSITIVE: the most extended names do not mean-revert over 5-60 days. Mean-reversion logic must not be applied to a confirmed uptrend making fresh relative-strength highs.",
+  "gex_limitation": "No historical options/GEX dataset exists in this pipeline, so call walls / long-gamma magnet behaviour could NOT be backtested. GEX remains a qualitative, documented overlay only.",
+  "verified": [
+    "IS N252_vol2 h=5: n=4862, excess=-0.31%, hit=51% (baseline 56%), p=0.000",
+    "IS N252_vol2 h=10: n=4862, excess=-0.39%, hit=53% (baseline 58%), p=0.000",
+    "IS N252_vol2 h=20: n=4862, excess=-0.38%, hit=57% (baseline 60%), p=0.000",
+    "IS N252_vol2 h=60: n=4862, excess=-0.83%, hit=65% (baseline 66%), p=0.000",
+    "IS N252_vol2 h=120: n=4862, excess=-1.03%, hit=68% (baseline 70%), p=0.000",
+    "OOS N252_vol2 h=5: n=2093, excess=+0.25%, hit=53%",
+    "OOS N252_vol2 h=10: n=2089, excess=+0.37%, hit=54%",
+    "OOS N252_vol2 h=20: n=2085, excess=+0.50%, hit=55%",
+    "OOS N252_vol2 h=60: n=2053, excess=+1.48%, hit=59%",
+    "OOS N252_vol2 h=120: n=1963, excess=+2.41%, hit=61%"
+  ],
+  "assumptions": [
+    "Entries execute at the breakout day close (no slippage/costs).",
+    "Forward returns are close-to-close, auto-adjusted for dividends.",
+    "Baseline is the unconditional same-horizon return of all stock-days.",
+    "Point-in-time S&P 500 membership from the MCP universe CSV.",
+    "No raw breakout config beat the baseline in-sample; the recommended setup relies on regime conditioning and must be treated as unproven."
+  ],
+  "caveats": [
+    "Survivorship bias present: the universe CSV has only 4 explicit delistings, so most names that were removed/delisted are absent. Absolute returns are therefore mildly upward biased; the *relative* breakout-vs-baseline comparison is far less affected.",
+    "No breakout configuration had a positive in-sample excess return, so the breakout edge is NOT certified in-sample; the recommended configuration is selected by the sum of in-sample and out-of-sample excess (both required sample-ok), which means out-of-sample was used for selection and is not a fully independent confirmation.",
+    "Overlapping forward windows inflate the effective sample; the block bootstrap mitigates but does not fully remove the effect.",
+    "Thresholds are selected in-sample (<=2020-12-31) and validated out-of-sample (>=2021-01-01).",
+    "The preferred holding horizon is chosen from the tested set [5, 10, 20, 60, 120]; if it equals the maximum, longer horizons were not evaluated."
+  ]
+}

@@ -54,22 +54,26 @@ def _load_cached_chain(ticker: str, expiry: str | None) -> dict[str, Any] | None
         # Expired — remove from memory cache
         del _MEM_CACHE[cache_key]
         _MEM_CACHE_TIMES.pop(cache_key, None)
-    # Fall back to disk cache (7-day TTL for weekend/holiday use)
+    # Fall back to disk cache (7-day TTL for weekend/holiday use).
+    # Defensive read: a corrupted/partial file (concurrent writer) is ignored
+    # and treated as a miss instead of crashing the tool.
     cache_file = _CACHE_DIR / f"{ticker}_{expiry or 'auto'}.json"
     if cache_file.exists():
         try:
-            with open(cache_file, "r") as f:
+            with open(cache_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                cached_date = data.get("_cached_at", "")
-                if cached_date:
-                    days_old = (date.today() - date.fromisoformat(cached_date[:10])).days
-                    if days_old <= 7:
-                        _MEM_CACHE[cache_key] = data
-                        _MEM_CACHE_TIMES[cache_key] = time.time()
-                        logger.debug("Options cache hit (disk) for %s (%d days old)", ticker, days_old)
-                        return data
-        except Exception as e:
-            logger.warning("Failed to load options disk cache for %s: %s", ticker, e)
+            if not isinstance(data, dict):
+                raise ValueError("options cache payload non e' un dizionario")
+            cached_date = data.get("_cached_at", "")
+            if cached_date:
+                days_old = (date.today() - date.fromisoformat(cached_date[:10])).days
+                if days_old <= 7:
+                    _MEM_CACHE[cache_key] = data
+                    _MEM_CACHE_TIMES[cache_key] = time.time()
+                    logger.debug("Options cache hit (disk) for %s (%d days old)", ticker, days_old)
+                    return data
+        except (json.JSONDecodeError, ValueError, KeyError, TypeError, OSError) as e:
+            logger.warning("Ignoring corrupt options disk cache for %s: %s", ticker, e)
     return None
 
 
@@ -78,12 +82,25 @@ def _save_cached_chain(ticker: str, expiry: str | None, data: dict[str, Any]) ->
     data["_cached_at"] = date.today().isoformat()
     _MEM_CACHE[cache_key] = data
     _MEM_CACHE_TIMES[cache_key] = time.time()
+    # Atomic write (temp file in the same dir + os.replace) so parallel MCP
+    # processes never observe a partially-written cache file.
     try:
         _CACHE_DIR.mkdir(parents=True, exist_ok=True)
         cache_file = _CACHE_DIR / f"{cache_key}.json"
-        with open(cache_file, "w") as f:
-            json.dump(data, f, default=str)
-    except Exception as e:
+        tmp_file = _CACHE_DIR / f".{cache_key}.{os.getpid()}.tmp"
+        try:
+            with open(tmp_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, default=str)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_file, cache_file)
+        finally:
+            if tmp_file.exists():
+                try:
+                    tmp_file.unlink()
+                except OSError:
+                    pass
+    except (OSError, TypeError, ValueError) as e:
         logger.warning("Failed to save options cache for %s: %s", ticker, e)
 
 

@@ -5,12 +5,42 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-SKILLS_DIR: Path = Path(
-    os.environ.get(
-        "TRADING_SKILLS_DIR",
-        os.path.join(os.environ.get("HOME", str(Path.home())), ".config", "opencode", "skills"),
-    )
-)
+
+def _default_skills_dir() -> Path:
+    """Resolve the default skills directory without depending on ``$HOME``.
+
+    Resolution order (first existing/usable wins):
+      1. ``TRADING_SKILLS_DIR`` environment variable (explicit override).
+      2. ``$HOME/.config/opencode/skills`` (classic layout).
+      3. ``Path.home()/.config/opencode/skills`` (HOME-independent fallback;
+         ``Path.home()`` is robust even when ``$HOME`` is unset).
+      4. A well-known absolute path if it exists on this machine.
+
+    The function never raises: a missing HOME degrades to the default
+    ``.../.config/opencode/skills`` path so that import-time resolution is
+    always deterministic.
+    """
+    env_dir = os.environ.get("TRADING_SKILLS_DIR")
+    if env_dir:
+        return Path(env_dir)
+
+    candidates: list[Path] = []
+    home_env = os.environ.get("HOME")
+    if home_env:
+        candidates.append(Path(home_env) / ".config" / "opencode" / "skills")
+    try:
+        candidates.append(Path.home() / ".config" / "opencode" / "skills")
+    except (RuntimeError, OSError):
+        pass
+    candidates.append(Path("/home/giuseppe/.config/opencode/skills"))
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0] if candidates else Path(".config/opencode/skills")
+
+
+SKILLS_DIR: Path = _default_skills_dir()
 
 TICKERS_DIR: Path = Path(
     os.environ.get(

@@ -21,9 +21,14 @@ from trading_mcp.analysis.scanner import (
     recompute_patterns,
 )
 from trading_mcp.analysis.gex import analyze_gex
+from trading_mcp.analysis.breakout_context import (
+    build_breakout_context,
+    momentum_bias_warning,
+)
 from trading_mcp.analysis.options_calc import analyze_options_position
 from trading_mcp.analysis.signal_engine import compute_action
 from trading_mcp.data.result_cache import result_cache
+from trading_mcp.data.stocks import fetch_stock
 
 logger = logging.getLogger(__name__)
 
@@ -293,6 +298,15 @@ def register_analysis_tools(
             pass
         output["indicators"] = result.get("indicators", {})
         output["sentiment_breakdown"] = sbd
+
+        # ── Momentum bias guard (retrocompatible, informational) ────────
+        try:
+            warning = momentum_bias_warning(fetch_stock(ticker, period="2y"))
+            if warning is not None:
+                output["momentum_bias_warning"] = warning
+        except Exception:  # pylint: disable=broad-except
+            pass
+
         if include_options_context:
             output["options_context"] = options_context
 
@@ -376,6 +390,49 @@ def register_analysis_tools(
         )
         result_cache.set("gex_analysis", ticker, cache_params, result)
         return result
+
+    @mcp_server.tool()
+    def breakout_context(ticker: str, include_gex: bool = True) -> dict[str, Any]:
+        """Momentum bias-guard + conditional breakout trigger for a ticker.
+
+        Returns a structured payload with: momentum/extension metrics, an
+        explicit ``bias_guard`` that fires when a trending/momentum name would
+        otherwise be mis-read with mean-reversion logic, a *conditional and NOT
+        statistically certified* breakout trigger, a best-effort regime-aware
+        GEX overlay, ATR-based risk levels, and the honesty disclaimer.
+
+        The breakout trigger fires when the latest close is above the 252d high
+        with volume > 2x the 20d average AND price above SMA200. Phase 1
+        calibration proved that NO raw breakout configuration beat the baseline
+        in-sample, so ``evidence.edge_certified`` is always False.
+
+        Args:
+            ticker: Stock ticker symbol (e.g. 'HPE', 'AAPL').
+            include_gex: If True, include the best-effort GEX overlay.
+
+        Returns:
+            BreakoutContext payload (see :mod:`trading_mcp.analysis.
+            breakout_context`).
+        """
+        cache_params: dict[str, Any] = {"include_gex": include_gex}
+        cached = result_cache.get("breakout_context", ticker, cache_params)
+        if cached is not None:
+            return cached
+
+        try:
+            hist = fetch_stock(ticker, period="2y")
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.warning("breakout_context: fetch failed for %s: %s", ticker, exc)
+            return {
+                "ticker": ticker.upper(),
+                "error": f"Could not fetch data for '{ticker}': {exc}",
+            }
+
+        payload = build_breakout_context(
+            ticker, hist, include_gex=include_gex
+        ).model_dump()
+        result_cache.set("breakout_context", ticker, cache_params, payload)
+        return payload
 
 
 def _safe_process(fn, t_dict, symbol, fetch_news=True):

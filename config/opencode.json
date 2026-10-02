@@ -109,10 +109,18 @@
     "trading": {
       "type": "local",
       "command": [
-        "bash",
-        "-c",
-        "exec \"$HOME/.local/share/opencode/trading-mcp-venv/bin/trading-mcp\""
+        "/home/giuseppe/.local/share/opencode/trading-mcp-venv/bin/trading-mcp",
+        "--skills-dir",
+        "/home/giuseppe/.config/opencode/skills",
+        "--tickers-dir",
+        "/home/giuseppe/.config/opencode/skills/market-accumulation-scanner/data"
       ],
+      "environment": {
+        "TRADING_SKILLS_DIR": "/home/giuseppe/.config/opencode/skills",
+        "TRADING_TICKERS_DIR": "/home/giuseppe/.config/opencode/skills/market-accumulation-scanner/data",
+        "TRADING_CACHE_DIR": "/tmp/opencode/options_cache",
+        "TRADING_DATA_CACHE_DIR": "/home/giuseppe/.cache/trading_mcp/data"
+      },
       "enabled": true
     }
   },

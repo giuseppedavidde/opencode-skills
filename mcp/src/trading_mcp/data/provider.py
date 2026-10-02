@@ -36,12 +36,28 @@ logger = logging.getLogger(__name__)
 # Hist/info sono persistiti su disco con TTL per evitare ri-fetch al riavvio
 # del server. Si usa pickle (stdlib, zero dipendenze native) invece di parquet
 # perche' pyarrow/fastparquet non sono installati nel venv condiviso.
-_DATA_CACHE_DIR = Path(
-    os.environ.get(
-        "TRADING_DATA_CACHE_DIR",
-        str(Path.home() / ".cache" / "trading_mcp" / "data"),
-    )
-)
+def _resolve_data_cache_dir() -> Path:
+    """Resolve the provider data-cache dir without depending on ``$HOME``."""
+    env_dir = os.environ.get("TRADING_DATA_CACHE_DIR")
+    if env_dir:
+        return Path(env_dir)
+    candidates: list[Path] = []
+    home_env = os.environ.get("HOME")
+    if home_env:
+        candidates.append(Path(home_env) / ".cache" / "trading_mcp" / "data")
+    try:
+        candidates.append(Path.home() / ".cache" / "trading_mcp" / "data")
+    except (RuntimeError, OSError):
+        pass
+    candidates.append(Path("/home/giuseppe/.cache/trading_mcp/data"))
+    candidates.append(Path("/tmp/opencode/trading_mcp_data_cache"))
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[-1]
+
+
+_DATA_CACHE_DIR = _resolve_data_cache_dir()
 
 # TTL su disco per periodo/interval: i daily bar non cambiano intraday → 6h;
 # i bar intraday → 1h (allineato al TTL in-memory di default).
@@ -81,20 +97,44 @@ def _disk_load(kind: str, key: str, ttl: float) -> Any | None:
             return None
         with open(data_path, "rb") as fh:
             return pickle.load(fh)
-    except (OSError, ValueError, EOFError, pickle.PickleError):
+    except (OSError, ValueError, EOFError, pickle.PickleError, pickle.UnpicklingError, AttributeError):
+        # Corrupted/partial file (concurrent writer or interrupted read) →
+        # ignore the cache entry and let the caller re-fetch.
         return None
 
 
 def _disk_save(kind: str, key: str, data: Any) -> None:
-    """Persist a payload to disk with a sidecar timestamp."""
+    """Persist a payload to disk with a sidecar timestamp (atomic writes).
+
+    Both the payload and its metadata sidecar are written to a temp file in
+    the same directory and moved into place with :func:`os.replace`, so
+    parallel processes never read a half-written file.
+    """
     try:
         _DATA_CACHE_DIR.mkdir(parents=True, exist_ok=True)
         data_path = _disk_path(kind, key)
         meta_path = _disk_meta_path(kind, key)
-        with open(data_path, "wb") as fh:
-            pickle.dump(data, fh, protocol=pickle.HIGHEST_PROTOCOL)
-        with open(meta_path, "w", encoding="utf-8") as fh:
-            json.dump({"ts": time.time()}, fh)
+        pid = os.getpid()
+        data_tmp = data_path.with_name(f".{data_path.name}.{pid}.tmp")
+        meta_tmp = meta_path.with_name(f".{meta_path.name}.{pid}.tmp")
+        try:
+            with open(data_tmp, "wb") as fh:
+                pickle.dump(data, fh, protocol=pickle.HIGHEST_PROTOCOL)
+                fh.flush()
+                os.fsync(fh.fileno())
+            with open(meta_tmp, "w", encoding="utf-8") as fh:
+                json.dump({"ts": time.time()}, fh)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(data_tmp, data_path)
+            os.replace(meta_tmp, meta_path)
+        finally:
+            for tmp in (data_tmp, meta_tmp):
+                if tmp.exists():
+                    try:
+                        tmp.unlink()
+                    except OSError:
+                        pass
     except (OSError, pickle.PickleError) as exc:
         logger.warning("Disk cache save failed for %s: %s: %s", kind, type(exc).__name__, exc)
 
