@@ -355,6 +355,7 @@ def register_analysis_tools(
         expiry: str | None = None,
         max_expiries: int = 12,
         top_n: int = 15,
+        max_dte: int = 120,
     ) -> dict[str, Any]:
         """Compute Gamma Exposure (GEX) for a ticker's option chain.
 
@@ -371,6 +372,8 @@ def register_analysis_tools(
                 ``max_expiries`` listed expirations are aggregated.
             max_expiries: Maximum number of expirations aggregated (default 12).
             top_n: Number of strikes kept in the returned profile (default 15).
+            max_dte: Maximum days to expiry; 0DTE and longer-dated expirations
+                are excluded (default 120, matching the reference).
 
         Returns:
             GexResult payload with net GEX, gamma flip, walls, regime and
@@ -380,13 +383,18 @@ def register_analysis_tools(
             "expiry": expiry,
             "max_expiries": max_expiries,
             "top_n": top_n,
+            "max_dte": max_dte,
         }
         cached = result_cache.get("gex_analysis", ticker, cache_params)
         if cached is not None:
             return cached
 
         result = analyze_gex(
-            ticker, expiry=expiry, max_expiries=max_expiries, top_n=top_n
+            ticker,
+            expiry=expiry,
+            max_expiries=max_expiries,
+            top_n=top_n,
+            max_dte=max_dte,
         )
         result_cache.set("gex_analysis", ticker, cache_params, result)
         return result

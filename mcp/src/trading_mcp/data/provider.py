@@ -30,6 +30,9 @@ from typing import Any
 import pandas as pd
 import yfinance as yf
 
+from trading_mcp.data.backends.base import ChainData, OptionsBackend, chain_to_chaindata
+from trading_mcp.data.backends.registry import build_backends
+
 logger = logging.getLogger(__name__)
 
 # ── Disk persistence (M2: cold-start elimination) ────────────────────
@@ -323,12 +326,28 @@ class DataProvider:
         "options_chain": 60,   # 1 minute for option chains (intraday)
     }
 
-    def __init__(self, ttl_overrides: dict[str, float] | None = None) -> None:
+    def __init__(
+        self,
+        ttl_overrides: dict[str, float] | None = None,
+        backends: list[OptionsBackend] | None = None,
+    ) -> None:
         self._cache: dict[str, TickerCache] = {}
         self._global_lock = threading.RLock()
         self._ttl = dict(self.DEFAULT_TTL)
         if ttl_overrides:
             self._ttl.update(ttl_overrides)
+        # Backends are injected in tests or resolved lazily on first options
+        # call (feature-detection must not run at import time).
+        self._backends: list[OptionsBackend] | None = backends
+        self._backends_lock = threading.Lock()
+
+    def _resolve_backends(self) -> list[OptionsBackend]:
+        """Return the backend chain, building it once on first use."""
+        if self._backends is None:
+            with self._backends_lock:
+                if self._backends is None:
+                    self._backends = build_backends()
+        return self._backends
 
     # ── Public API ─────────────────────────────────────────────────────
 
@@ -454,7 +473,7 @@ class DataProvider:
         return info
 
     def get_options_expirations(self, symbol: str) -> list[str]:
-        """Fetch options expirations with 1-hour TTL cache."""
+        """Fetch options expirations from the backend chain (1h TTL cache)."""
         tc = self._ensure_ticker_cache(symbol)
 
         with tc.lock:
@@ -483,13 +502,28 @@ class DataProvider:
 
         return expirations
 
-    def get_options_chain(
-        self, symbol: str, expiry: str
-    ) -> tuple[pd.DataFrame, pd.DataFrame] | None:
-        """Fetch raw options chain (calls, puts) for a specific expiry.
+    def _fetch_options_expirations_from_backends(self, symbol: str) -> list[str]:
+        """Ask each available backend for expirations; first non-empty wins."""
+        for backend in self._resolve_backends():
+            try:
+                expirations = backend.get_expirations(symbol)
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                logger.warning("Backend %s expirations failed for %s: %s",
+                               backend.name, symbol, exc)
+                continue
+            if expirations:
+                logger.debug("Expirations for %s from %s", symbol, backend.name)
+                return list(expirations)
+        logger.warning("No backend returned expirations for %s", symbol)
+        return []
 
-        Returns the option_chain result (namedtuple with .calls and .puts).
-        Cached with 60-second TTL for intraday freshness.
+    def get_options_chain(self, symbol: str, expiry: str) -> ChainData | None:
+        """Fetch the options chain via the backend chain (60s TTL cache).
+
+        Iterates the available backends in priority order
+        (ThetaData -> Polygon -> MarketData.app -> yfinance) and returns the
+        first chain that resolves. The winning backend id travels in
+        ``ChainData.source`` (propagated downstream as ``data_source``).
         """
         tc = self._ensure_ticker_cache(symbol)
 
@@ -500,14 +534,8 @@ class DataProvider:
                              symbol, expiry, entry.age_seconds)
                 return entry.data
 
-        chain = None
-        try:
-            t = yf.Ticker(symbol)
-            chain = t.option_chain(expiry)
-            logger.debug("Fetched chain for %s/%s", symbol, expiry)
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            logger.warning("Failed to fetch chain for %s/%s: %s: %s",
-                           symbol, expiry, type(e).__name__, e)
+        chain_data = self._fetch_chain_from_backends(symbol, expiry)
+        if chain_data is None:
             with tc.lock:
                 if expiry in tc.options_chains and tc.options_chains[expiry].has_data:
                     tc.options_chains[expiry].stale = True
@@ -517,12 +545,26 @@ class DataProvider:
 
         with tc.lock:
             tc.options_chains[expiry] = CacheEntry(
-                data=chain,
+                data=chain_data,
                 timestamp=time.time(),
                 ttl=self._ttl["options_chain"],
             )
 
-        return chain
+        return chain_data
+
+    def _fetch_chain_from_backends(self, symbol: str, expiry: str) -> ChainData | None:
+        """Query each backend in priority order; first success wins."""
+        for backend in self._resolve_backends():
+            try:
+                chain = backend.get_chain(symbol, expiry)
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                logger.warning("Backend %s chain failed for %s/%s: %s",
+                               backend.name, symbol, expiry, exc)
+                continue
+            if chain is not None:
+                logger.debug("Chain %s/%s served by %s", symbol, expiry, backend.name)
+                return chain_to_chaindata(chain)
+        return None
 
     def get_macro_context(self) -> dict[str, Any]:
         """Fetch macro indicators: VIX, DXY, BTC price/dominance, Fear & Greed.
@@ -722,16 +764,8 @@ class DataProvider:
         return {}
 
     def _fetch_options_expirations(self, symbol: str) -> list[str]:
-        """Fetch options expiration dates from yfinance."""
-        try:
-            t = yf.Ticker(symbol)
-            expirations = list(t.options)
-            logger.debug("Fetched %d expirations for %s", len(expirations), symbol)
-            return expirations
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            logger.warning("Failed to fetch options for %s: %s: %s",
-                           symbol, type(e).__name__, e)
-            return []
+        """Fetch options expiration dates from the backend chain."""
+        return self._fetch_options_expirations_from_backends(symbol)
 
 
 # ── Module-level singleton ────────────────────────────────────────────

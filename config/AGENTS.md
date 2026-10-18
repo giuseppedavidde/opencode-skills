@@ -32,6 +32,11 @@ This includes:
 ## Graphify Knowledge Graph
 CRITICAL: Whenever you need to understand a codebase, project architecture, or file relationships, load the @skills/graphify skill and use `/graphify .` to build a knowledge graph. This turns any folder into a queryable graph with community detection, god nodes, and surprising connections.
 
+## REA MCP — quando usarlo
+REA (`mcp.rea`, `npx -y rea-agents@latest mcp`) è un server MCP di reverse engineering e analisi applicativa: APK Android, binari e codice compilato, browser automation, artifacts.
+CRITICAL: usa i tool REA (via `execute` su `tools["rea"]`) ogni volta che il task riguarda reverse engineering, decompilazione, ispezione di APK/binari, analisi statica o dinamica di app.
+NON usarlo per trading, ricerche web generiche o coding non correlato al reverse engineering.
+
 ## Trading Analysis
 For ALL market analysis tasks, delegate to @trade (subagent_type="trade"). See `agents/trade.md` for the complete trading workflow.
 All trading-specific rules (signals, execution, repair, papers) live in that file.

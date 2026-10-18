@@ -3,18 +3,25 @@
 from __future__ import annotations
 
 import asyncio
+import math
+from datetime import date, timedelta
 
 import pytest
+from scipy.stats import norm
 
 from trading_mcp.analysis.gex import (
+    GexLeg,
     StrikeGex,
     _extreme_strike,
     _iv_quality,
     _regime,
+    _select_expiries,
     aggregate_strikes,
     analyze_gex,
     build_profile,
+    collect_legs,
     find_gamma_flip,
+    net_gex_at_spot,
 )
 
 
@@ -54,24 +61,91 @@ def test_build_profile_net_gex() -> None:
     assert profile[0].net_gex == pytest.approx(200.0)
 
 
-def test_find_gamma_flip_interpolation() -> None:
-    """Gamma flip is linearly interpolated on the cumulative sign change."""
-    profile = [
-        StrikeGex(strike=90.0, call_gex=0.0, put_gex=-100.0, net_gex=-100.0),
-        StrikeGex(strike=110.0, call_gex=300.0, put_gex=0.0, net_gex=300.0),
+def test_find_gamma_flip_repriced_zero() -> None:
+    """Gamma flip is the spot where the repriced net GEX crosses zero."""
+    legs = [
+        GexLeg(strike=90.0, tte=1.0, rate=0.03, sigma=0.20, is_call=False, open_interest=1.0),
+        GexLeg(strike=110.0, tte=1.0, rate=0.03, sigma=0.20, is_call=True, open_interest=1.0),
     ]
-    flip = find_gamma_flip(profile)
+    flip = find_gamma_flip(legs, 100.0)
     assert flip is not None
-    assert flip == pytest.approx(90.0 + (100.0 / 300.0) * 20.0)
+    assert 90.0 < flip < 110.0
+    below = net_gex_at_spot(legs, flip - 1.0)
+    above = net_gex_at_spot(legs, flip + 1.0)
+    assert below * above < 0.0
 
 
-def test_find_gamma_flip_none_without_crossing() -> None:
-    """No flip is returned when cumulative GEX never crosses zero."""
-    profile = [
-        StrikeGex(strike=90.0, call_gex=10.0, put_gex=0.0, net_gex=10.0),
-        StrikeGex(strike=110.0, call_gex=20.0, put_gex=0.0, net_gex=20.0),
+def test_find_gamma_flip_none_without_sign_change() -> None:
+    """No flip when the repriced net GEX keeps one sign across the grid."""
+    calls_only = [
+        GexLeg(strike=100.0, tte=1.0, rate=0.03, sigma=0.20, is_call=True, open_interest=100.0)
     ]
-    assert find_gamma_flip(profile) is None
+    assert find_gamma_flip(calls_only, 100.0) is None
+    assert find_gamma_flip([], 100.0) is None
+
+
+def test_repricing_matches_profile_at_spot() -> None:
+    """Repriced net GEX at the current spot equals the per-strike profile sum."""
+    spot, rate, sigma = 100.0, 0.03, 0.20
+    tte = 30.0 / 365.0
+    expiry = (date.today() + timedelta(days=30)).strftime("%Y-%m-%d")
+
+    def leg_gamma(strike: float) -> float:
+        d1 = (math.log(spot / strike) + (rate + 0.5 * sigma ** 2) * tte) / (sigma * math.sqrt(tte))
+        return norm.pdf(d1) / (spot * sigma * math.sqrt(tte))
+
+    chain = {
+        "selected_expiry": expiry,
+        "risk_free_rate": {"value": rate},
+        "calls": [
+            {"strike": 105.0, "gamma": leg_gamma(105.0), "openInterest": 500, "iv_used": sigma}
+        ],
+        "puts": [
+            {"strike": 95.0, "gamma": leg_gamma(95.0), "openInterest": 300, "iv_used": sigma}
+        ],
+    }
+    profile_net = sum(point.net_gex for point in build_profile(aggregate_strikes([chain], spot)))
+    assert net_gex_at_spot(collect_legs([chain]), spot) == pytest.approx(profile_net, rel=1e-6)
+
+
+def _future(days: int) -> str:
+    return (date.today() + timedelta(days=days)).strftime("%Y-%m-%d")
+
+
+def test_select_expiries_excludes_0dte_and_far_dated() -> None:
+    """0DTE and expirations beyond max_dte are dropped; the rest are kept."""
+    first = {
+        "selected_expiry": _future(30),
+        "expirations": [
+            _future(0),
+            _future(3),
+            _future(10),
+            _future(30),
+            _future(60),
+            _future(120),
+            _future(200),
+        ],
+    }
+    picked = _select_expiries(first, None, 12, 120)
+    assert _future(0) not in picked
+    assert _future(200) not in picked
+    assert picked == [_future(3), _future(10), _future(30), _future(60), _future(120)]
+
+
+def test_select_expiries_spreads_across_term_structure() -> None:
+    """When capped, expirations span the window instead of clustering near-dated."""
+    dates = [_future(d) for d in range(1, 121)]
+    first = {"selected_expiry": dates[0], "expirations": dates}
+    picked = _select_expiries(first, None, 5, 120)
+    assert len(picked) == 5
+    assert dates[0] in picked
+    assert dates[-1] in picked
+
+
+def test_select_expiries_explicit_expiry_wins() -> None:
+    """An explicit expiry restricts the selection to that single chain."""
+    first = {"selected_expiry": _future(30), "expirations": [_future(3), _future(30)]}
+    assert _select_expiries(first, _future(3), 12, 120) == [_future(30)]
 
 
 @pytest.mark.parametrize(

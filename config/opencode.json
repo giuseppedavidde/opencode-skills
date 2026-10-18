@@ -122,6 +122,16 @@
         "TRADING_DATA_CACHE_DIR": "/home/giuseppe/.cache/trading_mcp/data"
       },
       "enabled": true
+    },
+    "rea": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "rea-agents@latest",
+        "mcp"
+      ],
+      "enabled": true
     }
   },
   "shell": "/bin/zsh"

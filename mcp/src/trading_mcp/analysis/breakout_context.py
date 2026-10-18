@@ -119,6 +119,7 @@ class GexOverlay(BaseModel):
     wall_interpretation: str = ""
     available: bool = False
     error: str | None = None
+    data_source: str | None = None
 
 
 class RiskBlock(BaseModel):
@@ -500,6 +501,7 @@ def build_gex_overlay(ticker: str, momentum: MomentumBlock) -> GexOverlay:
             put_wall=_safe_float(raw.get("put_wall")),
             gamma_flip=_safe_float(raw.get("gamma_flip")),
             available=True,
+            data_source=str(raw.get("data_source") or raw.get("source") or "unknown"),
         )
         if overlay.call_wall is not None:
             overlay.wall_interpretation = interpret_wall(regime, momentum)

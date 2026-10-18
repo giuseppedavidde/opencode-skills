@@ -36,6 +36,7 @@ _SMILE_DEGREE: int = 2         # quadratic smile in log-moneyness
 _IV_SRC_QUOTE = "quote"        # IV taken straight from a valid live quote
 _IV_SRC_SMILE = "smile"        # IV interpolated from the fitted smile
 _IV_SRC_FALLBACK = "fallback"  # no fit possible → flat fallback sigma
+_IV_SRC_VENDOR = "vendor"      # IV (and greeks) supplied natively by the backend
 
 
 def _is_weekend() -> bool:
@@ -104,7 +105,7 @@ def _save_cached_chain(ticker: str, expiry: str | None, data: dict[str, Any]) ->
         logger.warning("Failed to save options cache for %s: %s", ticker, e)
 
 
-def fetch_options_chain(  # pylint: disable=too-many-locals,too-many-return-statements
+def fetch_options_chain(  # pylint: disable=too-many-locals,too-many-return-statements,too-many-branches,too-many-statements
     ticker: str,
     expiry: str | None = None,
     use_cache: bool = True,
@@ -178,6 +179,8 @@ def fetch_options_chain(  # pylint: disable=too-many-locals,too-many-return-stat
 
     calls_df = chain.calls.copy()
     puts_df = chain.puts.copy()
+    backend_source = str(getattr(chain, "source", "yfinance") or "yfinance")
+    native_greeks = bool(getattr(chain, "greeks_are_native", False))
 
     # IV metrics on the FULL chain (ratios representative), then trim
     # the returned strike lists to the ATM window (fix A3).
@@ -198,6 +201,9 @@ def fetch_options_chain(  # pylint: disable=too-many-locals,too-many-return-stat
     puts_list, puts_res = _resolve_legs(
         spot, puts_df, tte, r, sigma, "put", surface, strike_window
     )
+    if native_greeks:
+        calls_list = _apply_native_greeks(calls_list, calls_df)
+        puts_list = _apply_native_greeks(puts_list, puts_df)
     iv_metrics.update(_iv_quality_metrics(surface, calls_res, puts_res))
 
     result = {
@@ -209,8 +215,10 @@ def fetch_options_chain(  # pylint: disable=too-many-locals,too-many-return-stat
         "calls": calls_list,
         "puts": puts_list,
         "iv_metrics": iv_metrics,
-        "_source": "live",
+        "_source": backend_source,
         "_fallback_note": None,
+        "data_source": backend_source,
+        "data_quality": "native-greeks" if native_greeks else "computed-greeks",
         "risk_free_rate": {
             "value": round(r, 6),
             "source": rate_snapshot.source_ticker,
@@ -249,7 +257,43 @@ def _fallback_response(ticker: str, spot: float, live_iv: Any, error_msg: str) -
         },
         "_source": "fallback",
         "_fallback_note": f"{error_msg}. {'Weekend: try Monday-Friday.' if _is_weekend() else 'Retry later.'}",
+        "data_source": "fallback",
+        "data_quality": "unavailable",
     }
+
+
+def _apply_native_greeks(
+    legs: list[dict[str, Any]], frame: pd.DataFrame
+) -> list[dict[str, Any]]:
+    """Prefer vendor-supplied greeks/IV over the locally computed ones.
+
+    When a backend exposes native greeks (ThetaData/Polygon/MarketData), the
+    per-leg ``delta/gamma/theta/vega`` and ``iv_used`` are overwritten with the
+    vendor values, keyed by strike. The local Black-Scholes numbers remain the
+    fallback for legs/backends without native greeks.
+    """
+    if frame is None or frame.empty or "gamma" not in frame.columns:
+        return legs
+    native = frame.dropna(subset=["gamma"]).drop_duplicates(subset="strike", keep="first")
+    if native.empty:
+        return legs
+    by_strike = native.set_index("strike")
+    greek_cols = [col for col in ("delta", "gamma", "theta", "vega") if col in frame.columns]
+    has_iv = "impliedVolatility" in frame.columns
+    for leg in legs:
+        strike = leg.get("strike")
+        if strike not in by_strike.index:
+            continue
+        row = by_strike.loc[strike]
+        for col in greek_cols:
+            value = row[col]
+            if value is not None and np.isfinite(value):
+                leg[col] = round(float(value), 4)
+        iv = row["impliedVolatility"] if has_iv else None
+        if iv is not None and np.isfinite(iv) and iv > 0:
+            leg["iv_used"] = round(float(iv), 4)
+            leg["iv_source"] = _IV_SRC_VENDOR
+    return legs
 
 
 def _window_bounds(
