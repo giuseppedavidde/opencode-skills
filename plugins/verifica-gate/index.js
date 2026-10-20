@@ -104,10 +104,11 @@ function appendTokenLine(text, tokenLine) {
   return text.includes("## VERIFICA") ? `${text}\n${tokenLine}` : `${text}\n\n${tokenLine}`;
 }
 
-// Session-level tracking for verification command outcomes (exit status != 0).
-// Solo i fallimenti REALI ancorano la confidenza; quelli infrastrutturali no.
-let lastFailedVerification = null;
-let lastIndeterminateVerification = null;
+// Stato di verifica del TASK corrente: una entry per comando normalizzato,
+// con l'ULTIMO esito osservato ("ultimo esito vince"). Solo i fallimenti REALI
+// ancora non smentiti da un successivo exit 0 ancorano la confidenza.
+// Reset all'inizio/alla fine di ogni subagent: nessun leakage tra task.
+let verificationState = createVerificationState();
 
 function ensureLogDir() {
   if (!existsSync(GATE_LOG_DIR)) {
@@ -341,7 +342,110 @@ function classifyVerificationOutcome(cmd, exitCode, status, text) {
   return { applicable: true, realFailure: false, reason: "exit != 0 senza evidenza di fallimento reale", exitCode: exit, envMode };
 }
 
-export { classifyVerificationOutcome, isVerificationCommand, fragileActivationTargets, hasDirectVenvBinary };
+// ── Stato di verifica per-task ──
+// Reducer puro (testabile senza hook): ogni comando di verifica normalizzato
+// conserva solo l'ULTIMO esito, così un fallimento transitorio seguito dallo
+// stesso comando rieseguito con exit 0 non ancora più la confidenza.
+
+const TEST_RUNNER_RE = /\b(?:pytest|pylint|mypy|unittest|jest|vitest|tsc)\b|\bnpm\s+test\b/i;
+// Snippet inline/heredoc ad-hoc: `python3 -c "..."`, `python3 - <<'EOF'`.
+const INLINE_PYTHON_RE = /\bpython3?\s+(?:-c(?:\s|$)|-\s*<<)/;
+
+function normalizeCommand(cmd) {
+  return (cmd || "").toString().trim().replace(/\s+/g, " ");
+}
+
+// Un comando esplorativo non verifica il deliverable: non è ancorabile.
+function isExploratoryCommand(cmd) {
+  const command = normalizeCommand(cmd);
+  if (!command) return false;
+  if (TEST_RUNNER_RE.test(command)) return false; // test runner esplicito: sempre ancorabile
+  return INLINE_PYTHON_RE.test(command);
+}
+
+function createVerificationState() {
+  return { entries: new Map(), seq: 0 };
+}
+
+function resetVerificationState(state) {
+  if (state && state.entries) state.entries.clear();
+  if (state) state.seq = 0;
+  return state;
+}
+
+/**
+ * Registra l'esito di un comando di verifica nello stato del task.
+ * @param {{entries:Map<string,object>, seq:number}} state
+ * @param {{command:string, exitCode:(number|null), status:string, text:string, outcome?:object, ts?:string}} event
+ * @returns {object} lo stesso state (mutato)
+ */
+function applyVerificationEvent(state, event) {
+  if (!state || !state.entries) return state;
+  const e = event || {};
+  const command = normalizeCommand(e.command);
+  if (!command || !isVerificationCommand(command)) return state;
+  if (isExploratoryCommand(command)) return state; // non ancorabile: non tocca lo stato
+
+  const outcome = e.outcome || classifyVerificationOutcome(command, e.exitCode, e.status, e.text);
+  const exit = typeof outcome.exitCode === "number" ? outcome.exitCode : null;
+
+  state.seq += 1;
+  state.entries.set(command, {
+    cmd: command,
+    cmdSnippet: command.slice(0, 80),
+    exitCode: exit,
+    realFailure: !!outcome.realFailure,
+    indeterminate: !!outcome.applicable && !outcome.realFailure && exit !== null && exit !== 0,
+    applicable: !!outcome.applicable,
+    reason: outcome.reason,
+    seq: state.seq,
+    ts: e.ts || new Date().toISOString(),
+  });
+  return state;
+}
+
+function latestEntry(entries, predicate) {
+  const hits = entries.filter(predicate);
+  if (hits.length === 0) return null;
+  return hits.reduce((a, b) => (b.seq >= a.seq ? b : a));
+}
+
+/**
+ * Verdetto finale del task: ancora SOLO se l'ultimo esito di un comando di
+ * verifica ancorabile è un fallimento reale non smentito da un successo.
+ * @returns {{anchored:boolean, failure:(object|null), indeterminate:(object|null)}}
+ */
+function finalVerdict(state) {
+  const entries = state && state.entries ? [...state.entries.values()] : [];
+  const failure = latestEntry(entries, x => x.realFailure);
+  const indeterminate = latestEntry(entries, x => x.indeterminate);
+  return {
+    anchored: !!failure,
+    failure,
+    indeterminate: failure ? null : indeterminate,
+  };
+}
+
+function evaluateVerificationState(events) {
+  const state = createVerificationState();
+  (events || []).forEach(ev => applyVerificationEvent(state, ev));
+  return finalVerdict(state);
+}
+
+export {
+  classifyVerificationOutcome,
+  isVerificationCommand,
+  fragileActivationTargets,
+  hasDirectVenvBinary,
+  isExploratoryCommand,
+  normalizeCommand,
+  createVerificationState,
+  resetVerificationState,
+  applyVerificationEvent,
+  finalVerdict,
+  evaluateVerificationState,
+};
+
 
 export default {
   id: "verifica-gate",
@@ -364,32 +468,25 @@ export default {
           const { text } = extractText(event.result);
           const exitCode = extractExitCode(event.result);
           const outcome = classifyVerificationOutcome(cmd, exitCode, event.status, text);
+          const exploratory = isExploratoryCommand(cmd);
 
           logEvent(null, "shell_verification", null, cmd.slice(0, 80), {
             command: cmd.slice(0, 200),
             exit_code: outcome.exitCode,
             applicable: outcome.applicable,
-            real_failure: outcome.realFailure,
+            real_failure: outcome.realFailure && !exploratory,
+            exploratory,
             env_mode: outcome.envMode,
             reason: outcome.reason,
           });
 
-          if (outcome.realFailure) {
-            lastFailedVerification = {
-              cmd: cmd.slice(0, 80),
-              exitCode: outcome.exitCode,
-              reason: outcome.reason,
-              ts: new Date().toISOString(),
-            };
-            lastIndeterminateVerification = null;
-          } else if (outcome.applicable && exitCode !== null && exitCode !== 0) {
-            lastIndeterminateVerification = {
-              cmd: cmd.slice(0, 80),
-              exitCode: outcome.exitCode,
-              reason: outcome.reason,
-              ts: new Date().toISOString(),
-            };
-          }
+          applyVerificationEvent(verificationState, {
+            command: cmd,
+            exitCode,
+            status: event.status,
+            text,
+            outcome,
+          });
           return;
         }
 
@@ -402,28 +499,32 @@ export default {
 
         let warning = "";
 
-        // Ancoraggio SOLO su fallimenti reali; gli esiti infrastrutturali/indeterminati
-        // producono un avviso informativo senza ancorare la confidenza.
-        const hasRealFailure = !!lastFailedVerification;
-        if (lastFailedVerification) {
-          warning += `\n\n⚠️ [verifica-gate] EXIT CODE FAILURE: il comando di verifica \`${lastFailedVerification.cmd}\` ha restituito exit-code ${lastFailedVerification.exitCode} (${lastFailedVerification.reason}). Confidenza ancorata a <= 35.`;
+        // Ancoraggio SOLO su fallimenti reali non smentiti: gli esiti
+        // infrastrutturali/indeterminati producono un avviso informativo.
+        // "Ultimo esito vince": un successo successivo dello stesso comando annulla il fallimento.
+        const verdict = finalVerdict(verificationState);
+        const hasRealFailure = verdict.anchored;
+        if (verdict.failure) {
+          const failed = verdict.failure;
+          warning += `\n\n⚠️ [verifica-gate] EXIT CODE FAILURE: il comando di verifica \`${failed.cmdSnippet}\` ha restituito exit-code ${failed.exitCode} (${failed.reason}). Confidenza ancorata a <= 35.`;
           logEvent(subagentType, "exit_code_failure", 35, promptSnippet, {
-            command: lastFailedVerification.cmd,
-            exit_code: lastFailedVerification.exitCode,
-            reason: lastFailedVerification.reason,
+            command: failed.cmdSnippet,
+            exit_code: failed.exitCode,
+            reason: failed.reason,
             anchored: true,
           });
-          lastFailedVerification = null; // reset
-        } else if (lastIndeterminateVerification) {
-          warning += `\n\n⚠️ [verifica-gate] VERIFICA NON CONCLUSA: il comando \`${lastIndeterminateVerification.cmd}\` ha restituito exit-code ${lastIndeterminateVerification.exitCode} senza evidenza di fallimento reale (${lastIndeterminateVerification.reason}). Nessun ancoraggio automatico: ricontrollare l'esito.`;
+        } else if (verdict.indeterminate) {
+          const pending = verdict.indeterminate;
+          warning += `\n\n⚠️ [verifica-gate] VERIFICA NON CONCLUSA: il comando \`${pending.cmdSnippet}\` ha restituito exit-code ${pending.exitCode} senza evidenza di fallimento reale (${pending.reason}). Nessun ancoraggio automatico: ricontrollare l'esito.`;
           logEvent(subagentType, "indeterminate_verification", null, promptSnippet, {
-            command: lastIndeterminateVerification.cmd,
-            exit_code: lastIndeterminateVerification.exitCode,
-            reason: lastIndeterminateVerification.reason,
+            command: pending.cmdSnippet,
+            exit_code: pending.exitCode,
+            reason: pending.reason,
             anchored: false,
           });
-          lastIndeterminateVerification = null; // reset
         }
+        // Fine task: azzera lo stato per evitare leakage nel task successivo.
+        resetVerificationState(verificationState);
 
         if (!verifica.present) {
           warning += "\n\n⚠️ [verifica-gate] Il subagent NON ha compilato il blocco ## VERIFICA. Non riassumere come verificato: ri-delega UNA volta chiedendo di compilare il blocco, oppure segnala all'utente che il risultato non e' verificato.";

@@ -8,6 +8,13 @@ import {
   isVerificationCommand,
   fragileActivationTargets,
   hasDirectVenvBinary,
+  isExploratoryCommand,
+  normalizeCommand,
+  createVerificationState,
+  resetVerificationState,
+  applyVerificationEvent,
+  finalVerdict,
+  evaluateVerificationState,
 } from "./index.js";
 
 test("isVerificationCommand: riconosce i tool di verifica", () => {
@@ -110,3 +117,93 @@ test("fragileActivationTargets estrae il path con tilde espanso", () => {
   assert.ok(targets[0].endsWith("/venv/bin/activate"));
   assert.equal(targets[0].startsWith("~"), false);
 });
+
+// ── Reducer "ultimo esito vince" ──
+
+const FAIL_CMD = "cd /tmp/opencode && python3 stx_greeks.py";
+
+test("normalizeCommand: trim + collapse whitespace", () => {
+  assert.equal(normalizeCommand("  cd  /tmp/opencode &&\n python3  x.py "), "cd /tmp/opencode && python3 x.py");
+  assert.equal(normalizeCommand(undefined), "");
+});
+
+test("isExploratoryCommand: python -c e heredoc non ancorabili, test runner si'", () => {
+  assert.equal(isExploratoryCommand('python3 -c "print(1)"'), true);
+  assert.equal(isExploratoryCommand("python3 - <<'EOF'\nprint(1)\nEOF"), true);
+  assert.equal(isExploratoryCommand("python3 -m pytest -q"), false);
+  assert.equal(isExploratoryCommand("pytest -q"), false);
+  assert.equal(isExploratoryCommand("python3 script.py"), false);
+});
+
+test("fallimento poi successo dello STESSO comando -> nessun ancoraggio", () => {
+  const v = evaluateVerificationState([
+    { command: FAIL_CMD, exitCode: 1, status: "error", text: "Traceback (most recent call last): boom" },
+    { command: FAIL_CMD, exitCode: 0, status: "success", text: "ok" },
+  ]);
+  assert.equal(v.anchored, false);
+  assert.equal(v.failure, null);
+  assert.equal(v.indeterminate, null);
+});
+
+test("fallimento poi fallimento -> ancoraggio si'", () => {
+  const v = evaluateVerificationState([
+    { command: FAIL_CMD, exitCode: 1, status: "error", text: "Traceback (most recent call last): boom" },
+    { command: FAIL_CMD, exitCode: 2, status: "error", text: "1 failed" },
+  ]);
+  assert.equal(v.anchored, true);
+  assert.equal(v.failure.exitCode, 2);
+});
+
+test("solo successi -> nessun ancoraggio", () => {
+  const v = evaluateVerificationState([
+    { command: "python3 -m pytest -q", exitCode: 0, status: "success", text: "5 passed" },
+    { command: "python3 -m pylint src", exitCode: 0, status: "success", text: "rated at 10.00/10" },
+  ]);
+  assert.equal(v.anchored, false);
+  assert.equal(v.indeterminate, null);
+});
+
+test("comando esplorativo python -c fallito -> non ancorabile", () => {
+  const v = evaluateVerificationState([
+    { command: 'python3 -c "import json; print(json.load(open(\'x.json\')))"', exitCode: 1, status: "error", text: "Traceback (most recent call last): FileNotFoundError" },
+  ]);
+  assert.equal(v.anchored, false);
+  assert.equal(v.failure, null);
+});
+
+test("heredoc esplorativo fallito -> non ancorabile", () => {
+  const v = evaluateVerificationState([
+    { command: "python3 - <<'EOF'\nprint(open('ctx.txt').read())\nEOF", exitCode: 1, status: "error", text: "FileNotFoundError: ctx.txt" },
+  ]);
+  assert.equal(v.anchored, false);
+});
+
+test("due task consecutivi: il fallimento del primo non trapela nel secondo", () => {
+  const state = createVerificationState();
+  applyVerificationEvent(state, { command: FAIL_CMD, exitCode: 1, status: "error", text: "Traceback (most recent call last): boom" });
+  assert.equal(finalVerdict(state).anchored, true);
+  resetVerificationState(state);
+  applyVerificationEvent(state, { command: "python3 -m pytest -q", exitCode: 0, status: "success", text: "3 passed" });
+  const v = finalVerdict(state);
+  assert.equal(v.anchored, false);
+  assert.equal(v.failure, null);
+});
+
+test("ordine invertito: successo poi fallimento -> ancoraggio si'", () => {
+  const v = evaluateVerificationState([
+    { command: FAIL_CMD, exitCode: 0, status: "success", text: "ok" },
+    { command: FAIL_CMD, exitCode: 1, status: "error", text: "AssertionError: nope" },
+  ]);
+  assert.equal(v.anchored, true);
+  assert.equal(v.failure.exitCode, 1);
+});
+
+test("fallimento reale + exit != 0 senza evidenza su comandi diversi -> ancora il reale", () => {
+  const state = createVerificationState();
+  applyVerificationEvent(state, { command: "python3 -m pytest -q", exitCode: 1, status: "error", text: "FAILED tests/test_a.py" });
+  applyVerificationEvent(state, { command: "python3 -m mypy src", exitCode: 2, status: "error", text: "oops generic failure" });
+  const v = finalVerdict(state);
+  assert.equal(v.anchored, true);
+  assert.match(v.failure.cmd, /pytest/);
+});
+
