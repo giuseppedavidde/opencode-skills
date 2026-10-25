@@ -109,27 +109,18 @@
     "trading": {
       "type": "local",
       "command": [
-        "/home/giuseppe/.local/share/opencode/trading-mcp-venv/bin/trading-mcp",
-        "--skills-dir",
-        "/home/giuseppe/.config/opencode/skills",
-        "--tickers-dir",
-        "/home/giuseppe/.config/opencode/skills/market-accumulation-scanner/data"
+        "bash",
+        "-c",
+        "export TRADING_SKILLS_DIR=\"$HOME/.config/opencode/skills\" TRADING_TICKERS_DIR=\"$HOME/.config/opencode/skills/market-accumulation-scanner/data\" TRADING_CACHE_DIR=/tmp/opencode/options_cache TRADING_DATA_CACHE_DIR=\"$HOME/.cache/trading_mcp/data\"; exec \"$HOME/.local/share/opencode/trading-mcp-venv/bin/trading-mcp\" --skills-dir \"$TRADING_SKILLS_DIR\" --tickers-dir \"$TRADING_TICKERS_DIR\""
       ],
-      "environment": {
-        "TRADING_SKILLS_DIR": "/home/giuseppe/.config/opencode/skills",
-        "TRADING_TICKERS_DIR": "/home/giuseppe/.config/opencode/skills/market-accumulation-scanner/data",
-        "TRADING_CACHE_DIR": "/tmp/opencode/options_cache",
-        "TRADING_DATA_CACHE_DIR": "/home/giuseppe/.cache/trading_mcp/data"
-      },
       "enabled": true
     },
     "rea": {
       "type": "local",
       "command": [
-        "npx",
-        "-y",
-        "rea-agents@latest",
-        "mcp"
+        "bash",
+        "-c",
+        "exec \"$HOME/.config/opencode/bin/rea-mcp.sh\""
       ],
       "enabled": true
     }

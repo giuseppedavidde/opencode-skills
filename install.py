@@ -143,6 +143,8 @@ def build_plan(options: InstallOptions) -> InstallPlan:
     # ── Config (AGENTS.md, opencode.json) ──
     if not options.skip_config:
         for source, rel in discover_files(repo_root / "config"):
+            if rel.endswith(".bak-portable"):
+                continue
             dest = options.config_dir / rel
             action = FileAction(source=source, dest=dest, category="config")
             if dest.exists() and not options.force:
@@ -175,9 +177,12 @@ def execute_plan(plan: InstallPlan) -> None:
     repo_root = Path(__file__).parent.resolve()
     for action in plan.actions:
         if action.reason == "exists":
-            if plan.options.verbose:
+            stale_link = action.dest.is_symlink() and os.path.realpath(
+                action.dest
+            ) != os.path.realpath(action.source)
+            if not stale_link:
                 print(f"  SKIP  {action.dest}  (already exists)")
-            continue
+                continue
 
         if plan.options.dry_run:
             print(f"  LINK  {action.source}  →  {action.dest}")
@@ -293,18 +298,21 @@ def print_next_steps(repo_root: Path) -> None:
     steps.append("2. Trading MCP (analisi mercati):")
     steps.append("   ./setup-trading-mcp.sh")
     steps.append("")
-    steps.append("3. Bladebro MCP (browser stealth, richiede Chrome/Chromium):")
+    steps.append("3. rea MCP (reverse engineering, richiede Node >= 22):")
+    steps.append("   ./setup-rea-mcp.sh   # clona+builda il repo rea separato")
+    steps.append("")
+    steps.append("4. Bladebro MCP (browser stealth, richiede Chrome/Chromium):")
     steps.append("   ./setup-bladebro.sh")
     steps.append("")
-    steps.append("4. Alphavantage API key:")
+    steps.append("5. Alphavantage API key:")
     steps.append("   echo 'YOUR_KEY' > ~/.config/opencode/alpha_vantage_key.txt")
     steps.append("   oppure: export ALPHA_VANTAGE_API_KEY='YOUR_KEY'")
     steps.append("")
-    steps.append("5. Segreti (FMP, altre chiavi):")
+    steps.append("6. Segreti (FMP, altre chiavi):")
     steps.append("   ./scripts/decrypt_secrets.sh")
     steps.append("   oppure crea: ~/.config/opencode/fmp_api_key.txt")
     steps.append("")
-    steps.append("6. Riavvia opencode per applicare la configurazione")
+    steps.append("7. Riavvia opencode per applicare la configurazione")
     steps.append("")
     steps.append("NOTA: routing-stats usa routing-eval incluso nella repo (symlink")
     steps.append("  ~/.config/opencode/routing-eval). Dipendenze:")

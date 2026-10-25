@@ -6,6 +6,7 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
 FORCE=false
+DRY_RUN=false
 
 usage() {
     cat <<EOF
@@ -16,6 +17,7 @@ bootstrap into ~/.config/opencode/ for a complete portable setup.
 
 Options:
   -f, --force       Overwrite existing files
+  -n, --dry-run     Show the symlink plan without changing anything
   -h, --help        Show this help
 EOF
     exit 0
@@ -24,10 +26,23 @@ EOF
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -f|--force) FORCE=true; shift ;;
+        -n|--dry-run) DRY_RUN=true; shift ;;
         -h|--help)  usage ;;
         *)          echo "Unknown option: $1"; usage ;;
     esac
 done
+
+# Dry-run: shadow the mutating commands so every mapping is printed but nothing
+# is created or rewritten (the plugins rewrite is guarded separately).
+if $DRY_RUN; then
+    echo "[dry-run] no changes will be made"
+    ln()    { echo "  DRY   ln $*"; }
+    mkdir() { echo "  DRY   mkdir $*"; }
+fi
+
+# Interactive opt-in prompts only on a tty (CI/dry-run must not block or fail).
+INTERACTIVE=false
+if [[ -t 0 ]] && ! $DRY_RUN; then INTERACTIVE=true; fi
 
 # ─── Submodule check ───
 check_submodules() {
@@ -127,9 +142,23 @@ if [[ -d "$CONFIG_SRC" ]]; then
     mkdir -p "$CONFIG_DIR"
     for item in "$CONFIG_SRC"/*; do
         name=$(basename "$item")
-        # Skip encrypted secrets file
+        # Skip encrypted secrets file, installer backups and dirs linked separately
         [[ "$name" == "secrets.env.enc" ]] && continue
+        [[ "$name" == *.bak-portable ]] && continue
+        [[ "$name" == "bin" ]] && continue
         link_item "$item" "$CONFIG_DIR/$name"
+    done
+fi
+
+# ─── Bin wrappers (rea-mcp.sh, ...) ───
+# ~/.config/opencode/bin/ è una directory reale: si linkano i file al suo interno,
+# mai la directory (che può contenere wrapper utente non versionati).
+BIN_SRC="$REPO_DIR/config/bin"
+if [[ -d "$BIN_SRC" ]]; then
+    echo "Installing bin wrappers..."
+    mkdir -p "$CONFIG_DIR/bin"
+    for item in "$BIN_SRC"/*; do
+        link_item "$item" "$CONFIG_DIR/bin/$(basename "$item")"
     done
 fi
 
@@ -138,7 +167,7 @@ fi
 # al progetto): i plugin globali vanno elencati in opencode.json con path assoluti.
 PLUGINS_SRC="$REPO_DIR/plugins"
 CONFIG_JSON="$CONFIG_DIR/opencode.json"
-if [[ -d "$PLUGINS_SRC" && -f "$CONFIG_JSON" ]]; then
+if [[ -d "$PLUGINS_SRC" && -f "$CONFIG_JSON" ]] && ! $DRY_RUN; then
     if command -v node >/dev/null 2>&1; then
         echo "Configuring plugins (opencode.json → plugins)..."
         node - "$CONFIG_JSON" "$PLUGINS_SRC" <<'NODE'
@@ -208,18 +237,21 @@ PROSSIMI PASSI:
 2. Trading MCP (analisi mercati):
    ./setup-trading-mcp.sh
 
-3. Bladebro MCP (browser stealth, richiede Chrome/Chromium):
+3. rea MCP (reverse engineering, richiede Node >= 22):
+   ./setup-rea-mcp.sh   # clona+builda il repo rea separato
+
+4. Bladebro MCP (browser stealth, richiede Chrome/Chromium):
    ./setup-bladebro.sh
 
-4. Alphavantage API key:
+5. Alphavantage API key:
    echo 'YOUR_KEY' > ~/.config/opencode/alpha_vantage_key.txt
    oppure: export ALPHA_VANTAGE_API_KEY='YOUR_KEY'
 
-5. Segreti (FMP, altre chiavi):
+6. Segreti (FMP, altre chiavi):
    ./scripts/decrypt_secrets.sh
    oppure crea: ~/.config/opencode/fmp_api_key.txt
 
-6. Riavvia opencode per applicare la configurazione
+7. Riavvia opencode per applicare la configurazione
 
 NOTA: routing-stats usa routing-eval incluso nella repo (symlink
   ~/.config/opencode/routing-eval). Dipendenze:
@@ -232,7 +264,7 @@ echo ""
 
 # ─── Offer headroom ───
 HEADROOM_SH="$REPO_DIR/setup-headroom.sh"
-if [[ -x "$HEADROOM_SH" ]]; then
+if [[ -x "$HEADROOM_SH" ]] && $INTERACTIVE; then
     echo "Vuoi installare anche headroom (compressione token 60-95%)?"
     read -r -p "  [y/N] " answer
     if [[ "$answer" =~ ^[Yy]$ ]]; then
@@ -244,7 +276,7 @@ fi
 
 # ─── Offer trading-mcp ───
 TRADING_MCP_SH="$REPO_DIR/setup-trading-mcp.sh"
-if [[ -x "$TRADING_MCP_SH" ]]; then
+if [[ -x "$TRADING_MCP_SH" ]] && $INTERACTIVE; then
     echo ""
     echo "Vuoi installare anche trading-mcp (analisi mercati via MCP)?"
     read -r -p "  [y/N] " answer
@@ -257,7 +289,7 @@ fi
 
 # ─── Offer bladebro ───
 BLADEBRO_SH="$REPO_DIR/setup-bladebro.sh"
-if [[ -x "$BLADEBRO_SH" ]]; then
+if [[ -x "$BLADEBRO_SH" ]] && $INTERACTIVE; then
     echo ""
     echo "Vuoi installare anche bladebro (browser stealth via MCP)?"
     read -r -p "  [y/N] " answer

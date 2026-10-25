@@ -11,6 +11,8 @@ opencode-skills/
 ├── config/
 │   ├── AGENTS.md               # Global rules referencing skills
 │   ├── opencode.json           # Provider/model/MCP configuration
+│   ├── bin/
+│   │   └── rea-mcp.sh          # Wrapper MCP rea (build on-change del repo rea locale)
 │   └── secrets.env.enc         # Encrypted API keys (decrypt with scripts/decrypt_secrets.sh)
 ├── agents/                     # Agent definitions (router, trade, coder, ...)
 │   ├── router.md
@@ -35,6 +37,7 @@ opencode-skills/
 ├── skills/                     # Skill definitions (41, see below)
 ├── setup-headroom.sh           # Install headroom in venv
 ├── setup-trading-mcp.sh        # Install trading-mcp in venv
+├── setup-rea-mcp.sh            # Clone + build the local rea repo (rea MCP)
 └── setup-bladebro.sh           # Install bladebro (stealth browser) + Chrome link
 ```
 
@@ -44,6 +47,10 @@ opencode-skills/
 
 - git, python3, opencode CLI installed
 - Node.js 18+ (optional — for plugin runtime via `@opencode/plugin`, API V2)
+- Node.js >= 22 (`^22.23.4 || ^24.22.1 || >=26.12.1`) **only if you use the `rea` MCP**
+  — rea lives in a **separate** repo ([morluto/rea](https://github.com/morluto/rea)),
+  cloned outside this one by `./setup-rea-mcp.sh` (default `$HOME/Progetti/Github/rea`,
+  override with `$REA_REPO` or by passing a path as first argument)
 
 ### 1. Clone the repo
 
@@ -109,7 +116,24 @@ is pre-configured with the MCP command
 Creates `~/.local/share/opencode/trading-mcp-venv/`, installs the MCP server
 from `mcp/` in editable mode. Pre-configured in `opencode.json`.
 
-### 5. Bladebro MCP (stealth browser)
+### 5. rea MCP (reverse engineering / app analysis)
+
+```bash
+./setup-rea-mcp.sh                  # default: $HOME/Progetti/Github/rea
+./setup-rea-mcp.sh /path/to/rea     # or point at an existing checkout
+REA_REPO=/path/to/rea ./setup-rea-mcp.sh
+```
+
+Clones [morluto/rea](https://github.com/morluto/rea) if missing, installs deps
+(`npm ci`), builds it (`npm run build`) and validates the wrapper
+`config/bin/rea-mcp.sh` (`--check`). The wrapper is symlinked into
+`~/.config/opencode/bin/rea-mcp.sh` by the installer and is declared in
+`opencode.json` as `bash -c 'exec "$HOME/.config/opencode/bin/rea-mcp.sh"'`, so it
+is the single source of truth and survives moving either repo. It rebuilds
+automatically only when the rea `HEAD` or its tracked working tree changes
+(log: `~/.cache/rea-mcp/build.log`).
+
+### 6. Bladebro MCP (stealth browser)
 
 ```bash
 ./setup-bladebro.sh
@@ -123,7 +147,7 @@ Chrome/Chromium binary (env `CHROME_PATH` → `PATH` → newest Playwright cache
 `CHROME_PATH="$HOME/.local/share/opencode/bladebro-node/chrome"`, so it survives
 Playwright upgrades. Re-run idempotently after installing/upgrading Chrome.
 
-### 6. API keys & secrets
+### 7. API keys & secrets
 
 ```bash
 # Alpha Vantage (required for the alphavantage MCP)
@@ -137,12 +161,12 @@ echo 'YOUR_FMP_KEY' > ~/.config/opencode/fmp_api_key.txt
 ./scripts/decrypt_secrets.sh
 ```
 
-### 7. Restart opencode
+### 8. Restart opencode
 
 Quit and restart opencode for the new config, agents, commands, plugins and
 MCP servers to take effect.
 
-### 8. Optional: routing-stats
+### 9. Optional: routing-stats
 
 The `/routing-stats` slash command uses `routing-eval/`, which is now bundled in
 this repo and installed automatically as a symlink to
@@ -156,8 +180,17 @@ The command needs `pydantic` in the command venv:
 
 ## Portability Notes
 
-- **`$HOME` expansion** — all MCP commands use `$HOME/.local/...` and are
-  resolved at runtime by the shell. No manual path edits needed.
+- **`$HOME` expansion** — every MCP command in `config/opencode.json` is
+  `$HOME`-relative and runs through `bash -c` (`headroom`, `trading`, `rea`), so
+  `$HOME` is expanded at runtime by the shell and no path is tied to this machine.
+  The trading `TRADING_*` variables are exported inside the same `bash -c` instead
+  of a literal `environment` block, for the same reason. Cloning the repo,
+  running `python3 install.py` and the `setup-*.sh` scripts is all that is needed:
+  - `./setup-headroom.sh` → `~/.local/share/opencode/headroom-venv`
+  - `./setup-trading-mcp.sh` → `~/.local/share/opencode/trading-mcp-venv`
+  - `./setup-rea-mcp.sh` → clones/builds the separate `rea` repo and validates
+    `config/bin/rea-mcp.sh` (symlinked to `~/.config/opencode/bin/rea-mcp.sh`)
+  - `./setup-bladebro.sh` → `~/.local/share/opencode/bladebro-node`
 - **Plugins (API V2)** — plugins are declared in
   `{config}/opencode.json` (campo `plugins`, path assoluti scritti dall'installer).
 - **`verifica-gate` audit trail** — `plugins/verifica-gate/index.js` appends one JSON
@@ -181,6 +214,8 @@ The command needs `pydantic` in the command venv:
 | Symlinks broken after moving the repo | `python3 install.py` (ripara i symlink rotti in sicurezza, senza `--force`) |
 | Plugins not loading after restart | Check `~/.config/opencode/opencode.json` lists 6 entries in `plugins` |
 | MCP servers fail (`exec: ... not found`) | Run `./setup-headroom.sh` and/or `./setup-trading-mcp.sh` |
+| `rea` MCP fails / `dist` missing / `npm` errors | Run `./setup-rea-mcp.sh` (clone + `npm ci` + `npm run build` + `--check`); verify `node --version` >= 22 |
+| MCP `rea` serves old code | It rebuilds on `HEAD`/dirty change; check `~/.cache/rea-mcp/build.log`, or force with `REA_MCP_SKIP_BUILD=0` (set `=1` to serve the existing `dist` without rebuilding) |
 | bladebro MCP fails (`Could not launch Chrome`) | Run `./setup-bladebro.sh` (or ensure Chrome/Chromium is installed) |
 | Submodule folders empty | `git submodule update --init --recursive` |
 | `alphavantage-mcp.sh: command not found` | Ensure `~/.local/bin` is in `$PATH` |
@@ -265,8 +300,10 @@ rm -rf ~/.local/share/opencode/bladebro-node && ./setup-bladebro.sh
 | `way-of-the-turtle` | Knowledge base from 'Way of the Turtle' by Curtis M. Faith (systematic trend following, position sizing) |
 | `wyckoff-2-0` | Knowledge base from 'Wyckoff 2.0' by Rubén Villahermosa Chaves (volume profile, order flow, Wyckoff Method) |
 | `config/AGENTS.md` | Global rules that load skills automatically + headroom compression mandatory |
-| `config/opencode.json` | Provider/model configuration + MCP servers (headroom, trading, bladebro, alphavantage) |
+| `config/opencode.json` | Provider/model configuration + MCP servers (headroom, trading, rea, bladebro, alphavantage) |
+| `config/bin/rea-mcp.sh` | Wrapper MCP `rea`: serves the local rea repo, rebuilds only on HEAD/dirty change (`REA_REPO`, `REA_MCP_SKIP_BUILD`, `--check`) |
 | `setup-headroom.sh` | Installs headroom in a dedicated venv for token compression (60-95% savings) |
+| `setup-rea-mcp.sh` | Clones + builds the separate [rea](https://github.com/morluto/rea) repo and validates the `rea` MCP wrapper |
 | `setup-bladebro.sh` | Installs bladebro (stealth browser MCP) into `~/.local/share/opencode/bladebro-node` and links Chrome |
 
 ## Requires
