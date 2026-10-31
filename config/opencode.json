@@ -120,7 +120,7 @@
       "command": [
         "bash",
         "-c",
-        "exec \"$HOME/.config/opencode/bin/rea-mcp.sh\""
+        "export PATH=\"$HOME/.local/share/rea/node/node-v24.22.1-linux-x64/bin:$PATH\"; export JAVA_HOME=\"$HOME/.local/share/rea/jdk/jdk-21.0.13+9\"; export PATH=\"$JAVA_HOME/bin:$PATH\"; export REA_JADX_MCP_JAR=\"$HOME/.local/share/rea/android/jadx-headless-mcp-0.7.1-all.jar\"; exec \"$HOME/.config/opencode/bin/rea-mcp.sh\""
       ],
       "enabled": true
     }
