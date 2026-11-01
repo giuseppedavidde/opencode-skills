@@ -202,6 +202,9 @@ python3 install-vscode.py --verify --workspace /path/to/workspace
 
 # Also list subagents (trade, coder, ...) in the VS Code agent picker
 python3 install-vscode.py --workspace /path/to/workspace --expose-subagents
+
+# Write MCP servers to the portable .mcp.json instead of .vscode/mcp.json
+python3 install-vscode.py --workspace /path/to/workspace --mcp-format portable
 ```
 
 | opencode | VS Code |

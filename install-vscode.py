@@ -105,6 +105,7 @@ class Options:
     verbose: bool = False
     verify: bool = False
     expose_subagents: bool = False
+    mcp_format: str = "vscode"
     actions: list[str] = field(default_factory=list)
 
     def log(self, message: str) -> None:
@@ -609,6 +610,17 @@ def mcp_servers_from_opencode() -> dict[str, dict]:
     return servers
 
 
+def install_mcp_workspace(workspace: Path, options: Options) -> None:
+    """Write MCP servers in the requested VS Code format(s)."""
+    if options.no_mcp:
+        options.log("SKIP mcp: disabled by --no-mcp")
+        return
+    if options.mcp_format in ("vscode", "both"):
+        install_mcp(workspace / ".vscode" / "mcp.json", "servers", options)
+    if options.mcp_format in ("portable", "both"):
+        install_mcp(workspace / ".mcp.json", "mcpServers", options)
+
+
 def install_mcp(path: Path, key: str, options: Options) -> None:
     """Write or merge MCP server definitions."""
     servers = mcp_servers_from_opencode()
@@ -775,8 +787,7 @@ def install_workspace(options: Options) -> None:
         github / "instructions" / "python.instructions.md", replacements, options
     )
 
-    if not options.no_mcp:
-        install_mcp(workspace / ".vscode" / "mcp.json", "servers", options)
+    install_mcp_workspace(workspace, options)
     install_hooks(github / "hooks", workspace, options)
 
     merge_json(
@@ -922,6 +933,28 @@ def verify_mcp(path: Path, key: str, problems: list[str], notes: list[str]) -> N
     notes.append(f"mcp: {len(expected)} servers configured ({', '.join(sorted(expected))})")
 
 
+def verify_mcp_workspace(workspace: Path, problems: list[str], notes: list[str]) -> None:
+    """Check whichever MCP format the workspace actually uses."""
+    candidates = [
+        (workspace / ".vscode" / "mcp.json", "servers", ".vscode/mcp.json"),
+        (workspace / ".mcp.json", "mcpServers", ".mcp.json"),
+    ]
+    present = [item for item in candidates if item[0].is_file()]
+    if not present:
+        problems.append(
+            "mcp: no MCP config found (.vscode/mcp.json or .mcp.json); "
+            "run the installer without --no-mcp"
+        )
+        return
+    for path, key, label in present:
+        verify_mcp(path, key, problems, notes)
+    if len(present) == 2:
+        notes.append(
+            "mcp: both .vscode/mcp.json and .mcp.json exist; keep one to avoid "
+            "duplicate servers (rerun with --mcp-format vscode|portable)"
+        )
+
+
 def verify_hooks(root: Path, problems: list[str], notes: list[str]) -> None:
     """Check the hook scripts and their configuration."""
     pairs = {
@@ -963,6 +996,21 @@ def verify_hooks(root: Path, problems: list[str], notes: list[str]) -> None:
                     problems.append(f"hook: {config_path} cwd does not exist: {cwd}")
         installed += 1
     notes.append(f"hooks: {installed}/{len(pairs)} installed with config")
+
+
+def migrated_prompts(github: Path) -> list[str]:
+    """Return prompt names that the Migrations panel converted into skills."""
+    skills_root = github / "skills"
+    prompts_root = github / "prompts"
+    if not skills_root.is_dir() or not prompts_root.is_dir():
+        return []
+    names: list[str] = []
+    for prompt in sorted(prompts_root.glob("*.prompt.md")):
+        stem = prompt.name[: -len(".prompt.md")]
+        candidate = skills_root / stem / "SKILL.md"
+        if candidate.is_file():
+            names.append(stem)
+    return names
 
 
 def stray_duplicates(workspace: Path) -> list[Path]:
@@ -1046,7 +1094,7 @@ def verify_workspace(options: Options) -> tuple[list[str], list[str]]:
         "python instructions",
         problems,
     )
-    verify_mcp(workspace / ".vscode" / "mcp.json", "servers", problems, notes)
+    verify_mcp_workspace(workspace, problems, notes)
     verify_hooks(github / "hooks", problems, notes)
 
     settings_path = workspace / ".vscode" / "settings.json"
@@ -1065,6 +1113,15 @@ def verify_workspace(options: Options) -> tuple[list[str], list[str]]:
         notes.append("settings: no .vscode/settings.json (defaults enable skills, hooks, AGENTS.md)")
     if (workspace / "AGENTS.md").is_file():
         notes.append("settings: a root AGENTS.md exists and VS Code will load it too")
+
+    migrated = migrated_prompts(github)
+    if migrated:
+        notes.append(
+            f"migration: {len(migrated)} prompt(s) also exist as skills "
+            f"({', '.join(migrated)}); the Migrations panel moved them, so the "
+            "generated prompts were replaced. Click Ignore instead, or delete the "
+            "skill copies to keep opencode-skills as the source of truth"
+        )
 
     strays = stray_duplicates(workspace)
     for stray in strays:
@@ -1191,6 +1248,15 @@ def parse_args(argv: list[str] | None = None) -> Options:
     parser.add_argument("--no-mcp", action="store_true", help="Skip MCP server generation")
     parser.add_argument("-v", "--verbose", action="store_true", help="Print every action")
     parser.add_argument(
+        "--mcp-format",
+        choices=("vscode", "portable", "both"),
+        default="vscode",
+        help=(
+            "Where to write MCP servers: 'vscode' = .vscode/mcp.json (default), "
+            "'portable' = .mcp.json, 'both' = keep both in sync"
+        ),
+    )
+    parser.add_argument(
         "--expose-subagents",
         action="store_true",
         help="Show subagents (trade, coder, ...) in the agent picker as well",
@@ -1212,6 +1278,7 @@ def parse_args(argv: list[str] | None = None) -> Options:
         verbose=args.verbose,
         verify=args.verify,
         expose_subagents=args.expose_subagents,
+        mcp_format=args.mcp_format,
     )
 
 

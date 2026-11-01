@@ -66,6 +66,29 @@ in `.github/copilot-instructions.md`, and a root `AGENTS.md` would be loaded
 by both VS Code and opencode. Enable it only if you keep a separate
 `AGENTS.md`.
 
+## The VS Code Migrations panel
+
+**Ignore both migrations.** They move generated files away from the
+opencode-skills source of truth.
+
+| Migration | What it does | Why to ignore it |
+|-----------|--------------|------------------|
+| Convert Prompt to Skills (3) | Deletes `.github/prompts/*.prompt.md` (to trash) and creates `.github/skills/<name>/SKILL.md` with `disable-model-invocation: true` | Prompts are generated from opencode `command/*.md`. After conversion the next installer run recreates the prompts, so you get a skill **and** a prompt with the same name. `/read-chunk` etc. keep working as prompts. |
+| MCP Servers (3) | Moves the servers from `.vscode/mcp.json` to `.mcp.json` (portable format) | Optional: both formats work. If you prefer the portable file, install with `--mcp-format portable` instead of migrating, so the next run does not recreate `.vscode/mcp.json`. |
+
+`--verify` detects a converted prompt (a skill whose name matches a generated
+prompt) and reports it, so a migration never passes unnoticed.
+
+### Choose the MCP format
+
+```bash
+python3 install-vscode.py --workspace /path/to/workspace                      # .vscode/mcp.json (default)
+python3 install-vscode.py --workspace /path/to/workspace --mcp-format portable # .mcp.json
+python3 install-vscode.py --workspace /path/to/workspace --mcp-format both     # keep both in sync
+```
+
+`--verify` accepts either file and warns when both exist.
+
 ## Workspace scope semantics
 
 `.github/skills`, `.github/agents`, `.github/prompts`, `.github/hooks` and
