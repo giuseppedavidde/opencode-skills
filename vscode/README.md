@@ -1,0 +1,186 @@
+# VS Code compatibility layer
+
+This directory contains the VS Code-native assets generated from the opencode
+definitions. The entry point is [`install-vscode.py`](../install-vscode.py) in
+the repository root.
+
+## Why
+
+opencode reads `~/.config/opencode/{skills,agents,command}` and
+`config/opencode.json`. VS Code Copilot Chat reads a different set of folders
+and file formats. The installer keeps opencode as the source of truth and
+generates the VS Code layer from it.
+
+## Mapping
+
+| opencode | VS Code | Notes |
+|----------|---------|-------|
+| `skills/<name>/SKILL.md` | `.github/skills/<name>/SKILL.md` | Symlink; the format is identical |
+| `agents/<name>.md` | `.github/agents/<name>.agent.md` | Frontmatter converted (`tools`, `model`, `user-invocable`); body preserved with a runtime preamble |
+| `command/<name>.md` | `.github/prompts/<name>.prompt.md` | Frontmatter converted (`agent: agent`) |
+| `config/AGENTS.md` | `.github/copilot-instructions.md` (workspace) / `~/.copilot/copilot-instructions.md` (user) | Rewritten for VS Code |
+| `config/opencode.json` → `mcp` | `.vscode/mcp.json` (workspace) / `~/.copilot/mcp-config.json` (user) | stdio servers |
+| `plugins/verifica-gate` | `.github/hooks/verifica-gate.json` + `hooks/verifica_gate.py` | `SubagentStop` hook, fail-open, audit to `~/.config/opencode/stats/gate_events.jsonl` |
+| `plugins/graphify` | `.github/hooks/graphify-reminder.json` + `hooks/graphify_reminder.py` | `PreToolUse` hook, injects the reminder once per session |
+| `plugins/auto-headroom` | — | No VS Code equivalent; use the `headroom` MCP server + `/read-chunk` |
+| `plugins/routing-stats`, `tokens-per-second` | — | Scripts remain available via prompts; telemetry only covers opencode sessions |
+
+## Install
+
+```bash
+# Current workspace (writes .github/, .vscode/, copilot-instructions.md)
+python3 install-vscode.py --workspace /path/to/workspace
+
+# User scope (all workspaces)
+python3 install-vscode.py --target user
+
+# Both scopes
+python3 install-vscode.py --target both --workspace /path/to/workspace
+
+# Non-default VS Code profile (prompts folder)
+VSCODE_USER_PROMPTS_FOLDER="$HOME/.config/Code/User/profiles/<id>/prompts" \
+  python3 install-vscode.py --target user
+
+# Preview without writing
+python3 install-vscode.py --workspace /path/to/workspace --dry-run -v
+
+# Overwrite existing files/symlinks
+python3 install-vscode.py --workspace /path/to/workspace --force
+```
+
+The installer:
+
+- validates every skill (`name` matches the folder, matches
+  `[a-z0-9-]{1,64}`, description present and at most 1024 chars);
+- symlinks skills so edits propagate immediately;
+- regenerates agents/prompts with a "do not edit" header;
+- writes MCP, settings, and hooks without clobbering existing user values;
+- skips an existing `copilot-instructions.md` unless `--force`.
+
+Generated agents, prompts, and hook files are refreshed on every run. `--force`
+is only needed for skill symlinks, the instructions file, MCP conflicts, and
+settings conflicts.
+
+`chat.useAgentsMdFile` is set to `false`: the generated always-on rules live
+in `.github/copilot-instructions.md`, and a root `AGENTS.md` would be loaded
+by both VS Code and opencode. Enable it only if you keep a separate
+`AGENTS.md`.
+
+## Workspace scope semantics
+
+`.github/skills`, `.github/agents`, `.github/prompts`, `.github/hooks` and
+`.github/copilot-instructions.md` are resolved **relative to the workspace
+root only**. VS Code does not descend into subfolders, so a nested
+`sub/.github` is never read.
+
+Consequence: one installation per workspace root you actually open.
+
+| Opened folder | Layer read |
+|---------------|-----------|
+| `~/Progetti` | `~/Progetti/.github` |
+| `~/Progetti/Github` | `~/Progetti/Github/.github` |
+
+`--verify` reports nested copies that are inside the workspace but ignored, so
+duplicates are easy to spot and delete.
+
+To avoid per-workspace copies entirely, use `--target user`: one installation
+in `~/.copilot/` applies to every workspace.
+
+## Agent picker visibility
+
+`mode: primary` → `user-invocable: true`; `mode: subagent` → `user-invocable: false`.
+So by default the picker shows only `router`, exactly like opencode where the
+subagents are reached through delegation. The subagents stay available to the
+model because `disable-model-invocation: false` is set.
+
+To also list the specialists in the picker (direct `trade`, `coder`, ...):
+
+```bash
+python3 install-vscode.py --workspace /path/to/workspace --expose-subagents
+```
+
+Verify with the same flag, otherwise the check reports drift:
+
+```bash
+python3 install-vscode.py --verify --workspace /path/to/workspace --expose-subagents
+```
+
+## Verify the layer matches opencode
+
+```bash
+# Structural check: skills, agents, prompts, instructions, MCP, hooks
+python3 install-vscode.py --verify --workspace /path/to/workspace
+python3 install-vscode.py --verify --target user
+```
+
+Exit code `0` = no drift, `1` = something is missing or out of date. The output
+also reports two runtime counters (`verifica-gate` firings from VS Code and
+`graphify` hook sessions) that prove the hooks actually executed.
+
+The check compares generated files byte-for-byte with what the installer would
+produce now, so it also catches manual edits to `.github/agents/`,
+`.github/prompts/`, or the hooks.
+
+In-chat confirmation:
+
+| Signal | Where | Expected |
+|--------|-------|----------|
+| Skills | type `/` in chat | 46 skills (`/python-venv`, `/graphify`, ...) + 3 prompts |
+| Agents | agent picker in chat | `router`, `trade`, `coder`, `coder-planner`, `graphify-helper`, `pdf-reader`, `skill-updater`, `book-to-skill-agent` |
+| MCP | MCP view / tools list | `headroom`, `trading`, `rea` running |
+| Instructions | ask "which rules apply to Python files?" | cites `.github/instructions/python.instructions.md` |
+
+## Agent tool mapping
+
+| opencode | VS Code alias |
+|----------|---------------|
+| `bash` | `execute` |
+| `read` | `read` |
+| `glob`, `grep` | `search` |
+| `write`, `edit` | `edit` |
+| `webfetch` | `web` |
+| `task` | `agent` |
+| `todowrite` | `todo` |
+| `headroom_*` | `headroom/*` |
+| `trading_*` | `trading/*` |
+| `skill`, `external_directory` | — (skills load on demand; no path sandbox) |
+
+`permission`, `steps`, and `hidden` are opencode-only. Path-scoped permissions
+(for example the router's `write` allow-list) cannot be expressed in VS Code, so
+the router gets no `edit` tool.
+
+## Models
+
+`model` uses the display names from the OpenCode Go Copilot provider
+(`DeepSeek V4.1 Flash`, `Qwen3.8 Flash`). If that provider is not installed, VS
+Code falls back to the model selected in the picker.
+
+## Hooks
+
+Hooks require a trusted workspace and `chat.useHooks` (default `true`). Both
+scripts are fail-open: parse/runtime errors return `{}` and never block the
+chat.
+
+- `verifica_gate.py` (`SubagentStop`): reads `transcript_path`, finds the last
+  `assistant.message`, and blocks when `## VERIFICA` is missing. It honors
+  `stop_hook_active` to prevent loops.
+- `graphify_reminder.py` (`PreToolUse`): when `graphify-out/graph.json` exists
+  and a shell command is about to run, injects the `graphify query` reminder
+  once per session.
+
+## Limitations
+
+- `.opencode/` and `config/opencode.json` are ignored by VS Code; the generated
+  layer is the VS Code equivalent.
+- opencode plugin behavior (automatic compression, routing telemetry) is not
+  reproduced; see the mapping table.
+- Skill scripts that reference `~/.config/opencode/...` keep working because the
+  opencode install is present. On a machine without opencode, adjust the paths
+  or use `--target user`.
+- Hook commands contain absolute paths. Rerun the installer after moving or
+  renaming the workspace so the `cwd` and script paths stay valid.
+- Regenerate after editing `agents/`, `command/`, or `config/opencode.json`:
+
+  ```bash
+  python3 install-vscode.py --workspace /path/to/workspace
+  ```

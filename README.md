@@ -8,6 +8,8 @@ Custom skills and configuration for [opencode](https://opencode.ai).
 opencode-skills/
 ├── install.py                  # Python install script (recommended)
 ├── install.sh                  # Shell install script (quick alternative)
+├── install-vscode.py           # VS Code / Copilot Chat compatibility installer
+├── vscode/                     # VS Code-native templates (copilot-instructions.md, hooks, docs)
 ├── config/
 │   ├── AGENTS.md               # Global rules referencing skills
 │   ├── opencode.json           # Provider/model/MCP configuration
@@ -34,7 +36,7 @@ opencode-skills/
 │   └── decrypt_secrets.sh      # Decrypt secrets.env.enc → API keys
 ├── mcp/                        # Trading MCP server (pip install -e)
 ├── routing-eval/               # Router evaluation harness (telemetria /routing-stats)
-├── skills/                     # Skill definitions (41, see below)
+├── skills/                     # Skill definitions (46, see below)
 ├── setup-headroom.sh           # Install headroom in venv
 ├── setup-trading-mcp.sh        # Install trading-mcp in venv
 ├── setup-rea-mcp.sh            # Clone + build the local rea repo (rea MCP)
@@ -178,6 +180,48 @@ The command needs `pydantic` in the command venv:
 /tmp/opencode/.venv/bin/pip install -r routing-eval/requirements.txt
 ```
 
+## VS Code / Copilot Chat
+
+The opencode definitions can also be used from VS Code Copilot Chat. The
+installer keeps opencode as the source of truth and generates the VS Code-native
+layer (skills symlinks, `.agent.md`, `.prompt.md`, `.github/copilot-instructions.md`, `.vscode/mcp.json`,
+and hooks for the `verifica-gate` / `graphify` plugins):
+
+```bash
+# Workspace scope (writes .github/, .vscode/, copilot-instructions.md)
+python3 install-vscode.py --workspace /path/to/workspace
+
+# User scope (all VS Code workspaces)
+python3 install-vscode.py --target user
+
+# Preview
+python3 install-vscode.py --workspace /path/to/workspace --dry-run -v
+
+# Verify the installed layer matches the opencode sources (exit 1 = drift)
+python3 install-vscode.py --verify --workspace /path/to/workspace
+
+# Also list subagents (trade, coder, ...) in the VS Code agent picker
+python3 install-vscode.py --workspace /path/to/workspace --expose-subagents
+```
+
+| opencode | VS Code |
+|----------|---------|
+| `skills/<name>/SKILL.md` | `.github/skills/<name>/SKILL.md` (symlink) |
+| `agents/<name>.md` | `.github/agents/<name>.agent.md` |
+| `command/<name>.md` | `.github/prompts/<name>.prompt.md` |
+| `config/AGENTS.md` | `.github/copilot-instructions.md` / `~/.copilot/copilot-instructions.md` |
+| `config/opencode.json` → `mcp` | `.vscode/mcp.json` / `~/.copilot/mcp-config.json` |
+| `plugins/verifica-gate` | `.github/hooks/verifica-gate.json` |
+| `plugins/graphify` | `.github/hooks/graphify-reminder.json` |
+
+> VS Code resolves `.github/**` **relative to the opened workspace root only**
+> (no subfolder scan). One install per workspace root you open; use
+> `--target user` for a single copy in `~/.copilot/` that applies everywhere.
+
+See [`vscode/README.md`](vscode/README.md) for the full mapping, tool aliases,
+model names, hook behavior, and limitations. Start a **new chat** after
+installing so VS Code discovers the new skills and agents.
+
 ## Portability Notes
 
 - **`$HOME` expansion** — every MCP command in `config/opencode.json` is
@@ -305,11 +349,14 @@ rm -rf ~/.local/share/opencode/bladebro-node && ./setup-bladebro.sh
 | `setup-headroom.sh` | Installs headroom in a dedicated venv for token compression (60-95% savings) |
 | `setup-rea-mcp.sh` | Clones + builds the separate [rea](https://github.com/morluto/rea) repo and validates the `rea` MCP wrapper |
 | `setup-bladebro.sh` | Installs bladebro (stealth browser MCP) into `~/.local/share/opencode/bladebro-node` and links Chrome |
+| `install-vscode.py` | Generates the VS Code / Copilot Chat layer (skills symlinks, agents, prompts, MCP, hooks) |
+| `vscode/` | VS Code-native templates: `copilot-instructions.md`, Python instructions, verifica-gate / graphify hooks, docs |
 
 ## Requires
 
 - [opencode](https://opencode.ai) CLI installed
 - Python 3.10+ (for `install.py`)
+- VS Code 1.144+ with GitHub Copilot Chat (only for `install-vscode.py`)
 
 ## Prerequisites per skill
 
