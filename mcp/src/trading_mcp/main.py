@@ -56,11 +56,8 @@ def run_app(
 ) -> None:
     """Run the trading-mcp-server.
 
-    Exposes 13 MCP tools for stock/crypto market analysis:
-    fetch_stock_data, fetch_crypto_data, fetch_options_chain,
-    scan_market, analyze_stock, analyze_options,
-    get_macro_context, get_skill_knowledge, suggest_options_strategy,
-    bali_signals, tsmom_signals, bakshi_signals, lgbm_predict.
+    Exposes 17 MCP tools for stock/crypto market analysis; every tool
+    advertises a typed ``outputSchema`` (see trading_mcp.responses).
     """
     _configure_logging()
     logger = logging.getLogger(__name__)

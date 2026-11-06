@@ -1,0 +1,3441 @@
+{
+  "contract_version": "2.0.0",
+  "tools": {
+    "analyze_options": {
+      "description": "Analyze a multi-leg options position.\n\nComputes Greeks per leg and total, payoff scenarios at 100 price levels,\nbreak-even points, probabilities (ITM/OTM, profit), and strategy classification\nusing the Options Playbook framework.\n\nSupports multi-expiry positions (calendar spreads, diagonal spreads): each\nleg dict may carry an optional ``expiry`` key (YYYY-MM-DD). Per-leg expiry\ntakes precedence over the global ``expiry`` parameter.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "expiry": {
+            "description": "Global target expiry (YYYY-MM-DD). Used for legs without\n    per-leg expiry. REQUIRED — the tool rejects calls without it.",
+            "type": "string"
+          },
+          "legs": {
+            "description": "List of leg dicts with type, strike, qty, entry_premium.\n  Each leg can optionally include \"expiry\" (YYYY-MM-DD) for\n  multi-expiry positions (calendar spreads, diagonals).",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "ticker": {
+            "description": "Stock ticker symbol.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker",
+          "legs",
+          "expiry"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "description": "Output of ``analyze_options`` (multi-leg Greeks, payoff, probabilities).",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "breakevens": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "data_quality": {
+            "default": "mixed",
+            "type": "string"
+          },
+          "data_source": {
+            "default": "options",
+            "type": "string"
+          },
+          "dte": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_retryable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "estimated_costs": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "expiry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "leg_expiries": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "legs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "payoff_scenarios": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "pnl": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "position_greeks": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "probabilities": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "recommendations": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "risk_free_rate": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "schema_version": {
+            "default": "2.0.0",
+            "type": "string"
+          },
+          "strategy_classification": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "underlying_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "type": "object"
+      }
+    },
+    "analyze_stock": {
+      "description": "Deep single-stock analysis through all dimensions.\n\nReturns a comprehensive analysis including ``action_recommendation``\nwith an operational recommendation (BUY/HOLD/AVOID) based on\nevidence-based volume profile signals (180d horizon, OOS-validated).",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "fetch_news": {
+            "default": true,
+            "description": "If True, scrape yfinance/Finviz news for web sentiment.",
+            "type": "boolean"
+          },
+          "include_options_context": {
+            "default": false,
+            "description": "If True, fetch options chain data too.",
+            "type": "boolean"
+          },
+          "ticker": {
+            "description": "Stock ticker symbol (e.g. 'ENI.MI', 'AAPL').",
+            "type": "string"
+          },
+          "verbose": {
+            "default": false,
+            "description": "If True, include full detail strings and sub-scores.\n     Default False.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ticker"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "description": "Output of ``analyze_stock``.\n\n``verdict`` is a free-form operational label; ``composite_score`` and the\nvolume-profile semantics behind it live in the analysis code, not here.\nThe ``status=\"insufficient_data\"`` variant reports ``history_bars`` and\n``required_bars`` instead of scores.",
+        "properties": {
+          "action_recommendation": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "composite_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "data_freshness": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "data_quality": {
+            "default": "eod",
+            "type": "string"
+          },
+          "data_source": {
+            "default": "yfinance",
+            "type": "string"
+          },
+          "dimensions": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_retryable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "history_bars": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "indicators": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "last_data_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "modifiers": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "momentum_bias_warning": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "options_context": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "pattern": {
+            "default": "",
+            "type": "string"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "required_bars": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "schema_version": {
+            "default": "2.0.0",
+            "type": "string"
+          },
+          "sector": {
+            "default": "",
+            "type": "string"
+          },
+          "sentiment_breakdown": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "signal_alignment": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "type": "object"
+      }
+    },
+    "bakshi_signals": {
+      "description": "Bakshi & Kapadia (2003) volatility risk premium analysis.\n\nDelta-hedged gains and the negative market volatility risk premium.\nAnalizza il VRP corrente, expected P&L per vari strikes, e fornisce\nsuggerimenti operativi per VRP harvesting.\n\nUSA IL DATAPROVIDER per dati OHLCV e expirations.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "expiry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Data scadenza opzioni (YYYY-MM-DD). Auto-seleziona se None."
+          },
+          "ticker": {
+            "description": "Simbolo del titolo (es. 'SPY', 'AAPL').",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "description": "Output of ``bakshi_signals``.\n\n``calibrated`` is False unless a ticker-specific VRP history exists;\n``calibrated_vrp`` is then None instead of a misleading estimate.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "atm_call_iv": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "atm_iv": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "atm_put_iv": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "available_bars": {
+            "default": 0,
+            "type": "integer"
+          },
+          "calibrated": {
+            "default": false,
+            "type": "boolean"
+          },
+          "calibrated_vrp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "calibration_source": {
+            "default": "Bakshi & Kapadia (2003), Table 4 (S&P 500 only)",
+            "type": "string"
+          },
+          "calibration_status": {
+            "default": "not_calibrated",
+            "type": "string"
+          },
+          "data_quality": {
+            "default": "mixed",
+            "type": "string"
+          },
+          "data_source": {
+            "default": "yfinance+options",
+            "type": "string"
+          },
+          "dte": {
+            "default": 30,
+            "type": "integer"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_retryable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "estimated_costs": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "expiry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "paper_reference": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "rate_as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "rate_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "required_bars": {
+            "default": 0,
+            "type": "integer"
+          },
+          "schema_version": {
+            "default": "2.0.0",
+            "type": "string"
+          },
+          "spot": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "strikes_analysis": {
+            "items": {
+              "additionalProperties": true,
+              "description": "Delta-hedged P&L for one strike.",
+              "properties": {
+                "buyer_loss_per_option": {
+                  "type": "number"
+                },
+                "moneyness": {
+                  "type": "number"
+                },
+                "option_premium": {
+                  "type": "number"
+                },
+                "recommendation": {
+                  "type": "string"
+                },
+                "seller_profit_per_100_notional": {
+                  "type": "number"
+                },
+                "seller_profit_per_contract": {
+                  "type": "number"
+                },
+                "seller_profit_per_option": {
+                  "type": "number"
+                },
+                "strike": {
+                  "type": "number"
+                },
+                "vega": {
+                  "type": "number"
+                },
+                "vega_ratio": {
+                  "type": "number"
+                },
+                "vrp_pct_of_premium": {
+                  "type": "number"
+                },
+                "zone": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "strike",
+                "moneyness",
+                "option_premium",
+                "vega",
+                "vega_ratio",
+                "seller_profit_per_option",
+                "seller_profit_per_contract",
+                "buyer_loss_per_option",
+                "vrp_pct_of_premium",
+                "seller_profit_per_100_notional",
+                "zone",
+                "recommendation"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "ticker": {
+            "type": "string"
+          },
+          "vrp": {
+            "additionalProperties": true,
+            "description": "Variance risk premium estimate (Bakshi & Kapadia 2003).",
+            "properties": {
+              "description": {
+                "default": "",
+                "type": "string"
+              },
+              "regime": {
+                "default": "NORMAL_VOL",
+                "type": "string"
+              },
+              "vrp_annualized": {
+                "default": 0.0,
+                "type": "number"
+              },
+              "vrp_pct_of_premium": {
+                "default": 0.0,
+                "type": "number"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "ticker"
+        ],
+        "type": "object"
+      }
+    },
+    "bali_signals": {
+      "description": "Bali & Hovakimian (2009) volatility spread signals.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "period": {
+            "default": "1y",
+            "description": "Periodo per il calcolo della RV (default: '1y').",
+            "type": "string"
+          },
+          "ticker": {
+            "description": "Simbolo del titolo (es. 'AAPL', 'SPY').",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "description": "Output of ``bali_signals`` (Bali & Hovakimian 2009 volatility spreads).\n\n``available=False`` marks a failure path: ``composite_bali_score`` is then\n``None`` and ``error_is_blocking`` says whether the signal can be used.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "atm_call_iv": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "atm_put_iv": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "atm_straddle_iv": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "available": {
+            "default": false,
+            "type": "boolean"
+          },
+          "available_bars": {
+            "default": 0,
+            "type": "integer"
+          },
+          "composite_bali_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "cvol_pvol_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "cvol_pvol_spread": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "data_quality": {
+            "default": "mixed",
+            "type": "string"
+          },
+          "data_source": {
+            "default": "yfinance+options",
+            "type": "string"
+          },
+          "direction": {
+            "default": "unavailable",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_is_blocking": {
+            "default": false,
+            "type": "boolean"
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_retryable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "paper_reference": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "required_bars": {
+            "default": 50,
+            "type": "integer"
+          },
+          "rv": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "rvol_ivol_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "rvol_ivol_spread": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "schema_version": {
+            "default": "2.0.0",
+            "type": "string"
+          },
+          "spot": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ticker": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker"
+        ],
+        "type": "object"
+      }
+    },
+    "breakout_context": {
+      "description": "Momentum bias-guard + conditional breakout trigger for a ticker.\n\nReturns a structured payload with: momentum/extension metrics, an\nexplicit ``bias_guard`` that fires when a trending/momentum name would\notherwise be mis-read with mean-reversion logic, a *conditional and NOT\nstatistically certified* breakout trigger, a best-effort regime-aware\nGEX overlay, ATR-based risk levels, and the honesty disclaimer.\n\nThe breakout trigger fires when the latest close is above the 252d high\nwith volume > 2x the 20d average AND price above SMA200. Phase 1\ncalibration proved that NO raw breakout configuration beat the baseline\nin-sample, so ``evidence.edge_certified`` is always False.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "include_gex": {
+            "default": true,
+            "description": "If True, include the best-effort GEX overlay.",
+            "type": "boolean"
+          },
+          "ticker": {
+            "description": "Stock ticker symbol (e.g. 'HPE', 'AAPL').",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "description": "Output of ``breakout_context`` (bias guard, trigger, GEX overlay, risk).",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "bias_guard": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "breakout_triggers": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "data_quality": {
+            "default": "mixed",
+            "type": "string"
+          },
+          "data_source": {
+            "default": "yfinance+options",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_retryable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "evidence": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "gex": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "momentum": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "risk": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "schema_version": {
+            "default": "2.0.0",
+            "type": "string"
+          },
+          "ticker": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker"
+        ],
+        "type": "object"
+      }
+    },
+    "clear_macro_cache": {
+      "description": "Force clear the macro context cache. Next call will re-fetch fresh data.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "description": "Output of ``clear_macro_cache``.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "data_quality": {
+            "default": "derived",
+            "type": "string"
+          },
+          "data_source": {
+            "default": "core",
+            "type": "string"
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_retryable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "message": {
+            "default": "",
+            "type": "string"
+          },
+          "schema_version": {
+            "default": "2.0.0",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      }
+    },
+    "fetch_crypto_data": {
+      "description": "Fetch crypto data from CoinGecko and yfinance.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "coin_id": {
+            "description": "CoinGecko coin id (e.g. 'bitcoin', 'ethereum', 'solana').",
+            "type": "string"
+          },
+          "period": {
+            "default": "1y",
+            "description": "Data period for yfinance history.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "coin_id"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "description": "Output of ``fetch_crypto_data``.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "coin_id": {
+            "type": "string"
+          },
+          "current_price_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "data_quality": {
+            "default": "eod",
+            "type": "string"
+          },
+          "data_source": {
+            "default": "coingecko+yfinance",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_retryable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "market_cap": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ohlcv": {
+            "items": {
+              "additionalProperties": true,
+              "description": "One daily OHLCV bar.",
+              "properties": {
+                "close": {
+                  "type": "number"
+                },
+                "date": {
+                  "type": "string"
+                },
+                "high": {
+                  "type": "number"
+                },
+                "low": {
+                  "type": "number"
+                },
+                "open": {
+                  "type": "number"
+                },
+                "volume": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "date",
+                "open",
+                "high",
+                "low",
+                "close",
+                "volume"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "schema_version": {
+            "default": "2.0.0",
+            "type": "string"
+          },
+          "symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "total_volume": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "coin_id"
+        ],
+        "type": "object"
+      }
+    },
+    "fetch_options_chain": {
+      "description": "Fetch options chain with Greeks and IV metrics.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "expiry": {
+            "description": "Target expiry date (YYYY-MM-DD). REQUIRED — the tool rejects calls\n    without it. If the exact date is unavailable, snaps to the nearest\n    available expiry.",
+            "type": "string"
+          },
+          "strike_window": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 10,
+            "description": "Number of strikes to keep around ATM on each side\n    (default 10 → ±10 strikes, ~70-90% smaller payload). Pass None\n    or -1 to return the full chain."
+          },
+          "ticker": {
+            "description": "Stock ticker symbol.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker",
+          "expiry"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "description": "Output of ``fetch_options_chain``.\n\n``_source`` is ``live``, ``cache`` or ``fallback``; ``data_quality``\ntells whether Greeks are native or Black-Scholes computed locally.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "calls": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "data_quality": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "data_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dte": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_retryable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "expirations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "iv_metrics": {
+            "additionalProperties": true,
+            "description": "Implied-volatility aggregates for one chain.\n\n``iv_rank`` / ``iv_percentile`` are ``None`` when no historical IV series\nexists; ``iv_range_position`` is the within-chain position, not a rank.",
+            "properties": {
+              "atm_iv": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "iv_coverage_pct": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "iv_percentile": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "iv_range_position": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "iv_rank": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "num_fallback_iv": {
+                "default": 0,
+                "type": "integer"
+              },
+              "num_quote_iv": {
+                "default": 0,
+                "type": "integer"
+              },
+              "num_synthetic_iv": {
+                "default": 0,
+                "type": "integer"
+              },
+              "put_call_ratio_oi": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "put_call_ratio_vol": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "smile_fitted": {
+                "default": false,
+                "type": "boolean"
+              },
+              "term_structure": {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "puts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "risk_free_rate": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "schema_version": {
+            "default": "2.0.0",
+            "type": "string"
+          },
+          "selected_expiry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ticker": {
+            "type": "string"
+          },
+          "underlying_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "ticker"
+        ],
+        "type": "object"
+      }
+    },
+    "fetch_stock_data": {
+      "description": "Fetch complete stock data: OHLCV history, fundamentals, and indicators.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "period": {
+            "default": "1y",
+            "description": "Data period (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max).",
+            "type": "string"
+          },
+          "ticker": {
+            "description": "Stock ticker symbol (e.g. 'AAPL', 'ENI.MI').",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "description": "Output of ``fetch_stock_data``.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "current_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "data_quality": {
+            "default": "eod",
+            "type": "string"
+          },
+          "data_source": {
+            "default": "yfinance",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_retryable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "indicators": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "info": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "ohlcv": {
+            "items": {
+              "additionalProperties": true,
+              "description": "One daily OHLCV bar.",
+              "properties": {
+                "close": {
+                  "type": "number"
+                },
+                "date": {
+                  "type": "string"
+                },
+                "high": {
+                  "type": "number"
+                },
+                "low": {
+                  "type": "number"
+                },
+                "open": {
+                  "type": "number"
+                },
+                "volume": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "date",
+                "open",
+                "high",
+                "low",
+                "close",
+                "volume"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "schema_version": {
+            "default": "2.0.0",
+            "type": "string"
+          },
+          "ticker": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker"
+        ],
+        "type": "object"
+      }
+    },
+    "get_macro_context": {
+      "description": "Get current macro context: VIX, DXY, Fed rate, Fear & Greed, BTC dominance.\n\nFetches real-time macro indicators from yfinance and detects the\ncurrent market regime (CRISIS, HIGH_VOLATILITY, RANGE_BOUND,\nTRENDING_BULL, TRENDING_BEAR) with dynamic weight recommendations.\n\nResults are cached for 60 seconds to prevent yfinance rate limiting.\nUse clear_macro_cache() to force a refresh.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "description": "Output of ``get_macro_context``.\n\n``macro_window`` is derived from ``detected_regime`` so the two can never\ncontradict each other.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "btc_dominance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "btc_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "data_quality": {
+            "default": "eod",
+            "type": "string"
+          },
+          "data_source": {
+            "default": "yfinance",
+            "type": "string"
+          },
+          "detected_regime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dxy": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dxy_trend": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dynamic_weights_crypto": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object"
+          },
+          "dynamic_weights_stock": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object"
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_retryable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "fear_greed_index": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "fed_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "macro_window": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "schema_version": {
+            "default": "2.0.0",
+            "type": "string"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "vix": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "type": "object"
+      }
+    },
+    "get_skill_knowledge": {
+      "description": "Get knowledge from a specific trading skill (SKILL.md).\n\nRetrieve trading framework definitions on-demand without loading\nentire skill files into context. Use this when you need a specific\nconcept, pattern, or strategy definition.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional heading to return just that section (reduces tokens)."
+          },
+          "skill_name": {
+            "description": "Skill name (e.g. 'wyckoff-2-0', 'volume-profile',\n        'options-playbook', 'trading-against-the-crowd', etc.)",
+            "type": "string"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional topic to filter (e.g. 'spring', 'vah', 'iron condor')."
+          }
+        },
+        "required": [
+          "skill_name"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "description": "Output of ``get_skill_knowledge``.\n\n``content`` is capped (see ``truncated``) and ``sections`` lists the\navailable headings so the caller can re-query one section.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "data_quality": {
+            "default": "derived",
+            "type": "string"
+          },
+          "data_source": {
+            "default": "skill",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_retryable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "schema_version": {
+            "default": "2.0.0",
+            "type": "string"
+          },
+          "section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "sections": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "skill_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "truncated": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "gex_analysis": {
+      "description": "Compute Gamma Exposure (GEX) for a ticker's option chain.\n\nCalculates dealer gamma exposure per strike (call GEX positive,\nput GEX negative; GEX = gamma * OI * 100 * S^2 * 0.01, i.e. dollars\nper 1% underlying move), the total net GEX, the strike-by-strike\nprofile, the zero-gamma / Gamma Flip level, the Call Wall and Put\nWall, and the prevailing gamma regime (long-gamma = mean-reverting /\npinning, short-gamma = volatility-amplifying).",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "expiry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional 'YYYY-MM-DD' expiry. When None, chains up to\n``max_expiries`` listed expirations are aggregated."
+          },
+          "max_dte": {
+            "default": 120,
+            "description": "Maximum days to expiry; 0DTE and longer-dated expirations\nare excluded (default 120, matching the reference).",
+            "type": "integer"
+          },
+          "max_expiries": {
+            "default": 12,
+            "description": "Maximum number of expirations aggregated (default 12).",
+            "type": "integer"
+          },
+          "ticker": {
+            "description": "Stock ticker symbol (e.g. 'SPY').",
+            "type": "string"
+          },
+          "top_n": {
+            "default": 15,
+            "description": "Number of strikes kept in the returned profile (default 15).",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ticker"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "description": "Output of ``gex_analysis``.\n\n``net_gex`` is in dollars per 1% underlying move (per-share gamma\nconvention, see :mod:`trading_mcp.analysis.gex`).",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "call_wall": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "convention": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "data_quality": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "data_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "distance_to_flip_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_retryable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "expiries_used": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "gamma_flip": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "iv_coverage_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "n_strikes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "net_gex": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "profile": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "put_wall": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "regime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "regime_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "schema_version": {
+            "default": "2.0.0",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "spot_position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ticker": {
+            "type": "string"
+          },
+          "total_call_gex": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "total_put_gex": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "underlying_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ticker"
+        ],
+        "type": "object"
+      }
+    },
+    "lgbm_postprocess": {
+      "description": "Post-processing dello score LGBM con 8 skill-adjustments.\n\nApplica correzioni basate sulle skill di trading per affinare\nla confidenza dello score LGBM grezzo. NON usa LightGBM — solo\nnumpy, pandas, e DataProvider per i dati.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "lgbm_score": {
+            "default": 50.0,
+            "description": "Score LGBM grezzo 0-100 (default 50.0).",
+            "type": "number"
+          },
+          "ticker": {
+            "description": "Simbolo del titolo (es. 'AAPL', 'GME').",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "description": "Output of ``lgbm_postprocess``.",
+        "properties": {
+          "adjusted_score": {
+            "default": 50.0,
+            "type": "number"
+          },
+          "adjustments": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "object"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "data_quality": {
+            "default": "eod",
+            "type": "string"
+          },
+          "data_source": {
+            "default": "yfinance",
+            "type": "string"
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_retryable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "lgbm_raw_score": {
+            "default": 50.0,
+            "type": "number"
+          },
+          "schema_version": {
+            "default": "2.0.0",
+            "type": "string"
+          },
+          "ticker": {
+            "type": "string"
+          },
+          "total_adjustment": {
+            "default": 0,
+            "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ticker"
+        ],
+        "type": "object"
+      }
+    },
+    "lgbm_predict": {
+      "description": "LightGBM stacking ensemble prediction.\n\nCarica il modello LGBM pre-addestrato per il ticker e produce\nuno score 0-100 (stacking ensemble con meta-model).\n\nUSA IL DATAPROVIDER per i dati OHLCV e macro (cache hit garantito\nse analyze_stock e' stato chiamato prima).\n\nSe non esiste un modello pre-addestrato, restituisce un errore\nesplicativo. Per addestrare un modello:\n  python scripts/run_stacking.py --ticker {ticker} --start 2020-01-01",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "ticker": {
+            "description": "Simbolo del titolo (es. 'AAPL', 'GME').",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "description": "Output of ``lgbm_predict``.\n\nThe 0-100 score is not a probability: ``calibrated_probability`` stays\nNone until an out-of-sample calibration artifact is validated.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "available": {
+            "default": false,
+            "type": "boolean"
+          },
+          "available_bars": {
+            "default": 0,
+            "type": "integer"
+          },
+          "calibrated_probability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "calibration_status": {
+            "default": "not_calibrated",
+            "type": "string"
+          },
+          "data_quality": {
+            "default": "eod",
+            "type": "string"
+          },
+          "data_source": {
+            "default": "yfinance",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_is_blocking": {
+            "default": false,
+            "type": "boolean"
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_retryable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "individual_signals": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object"
+          },
+          "meta_weights": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "reason": {
+            "default": "",
+            "type": "string"
+          },
+          "required_bars": {
+            "default": 0,
+            "type": "integer"
+          },
+          "schema_version": {
+            "default": "2.0.0",
+            "type": "string"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "signal": {
+            "default": "unavailable",
+            "type": "string"
+          },
+          "ticker": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker"
+        ],
+        "type": "object"
+      }
+    },
+    "scan_market": {
+      "description": "Scan a market universe for accumulation patterns and rank by score.\n\nParallel scanning via ThreadPoolExecutor. 500 tickers in ~45s.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "fetch_news": {
+            "default": true,
+            "description": "If True, scrape Finviz/WSB for web sentiment.",
+            "type": "boolean"
+          },
+          "max_workers": {
+            "default": 8,
+            "description": "Parallel workers (default 8).",
+            "type": "integer"
+          },
+          "min_score": {
+            "default": 50.0,
+            "description": "Min score threshold (0-100).",
+            "type": "number"
+          },
+          "regime": {
+            "default": "NORMAL",
+            "description": "Macro window (FULL, NORMAL, SELECTIVE, DEFENSIVE).",
+            "type": "string"
+          },
+          "tickers": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Custom comma-separated list (overrides universe)."
+          },
+          "top_n": {
+            "default": 15,
+            "description": "Max results.",
+            "type": "integer"
+          },
+          "universe": {
+            "default": "us_large",
+            "description": "Market universe (us_large, us_tech, italy, germany, ...).",
+            "type": "string"
+          },
+          "verbose": {
+            "default": false,
+            "description": "If True, include full detail strings and sub-scores. Default False.",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "description": "Output of ``scan_market``.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "data_quality": {
+            "default": "eod",
+            "type": "string"
+          },
+          "data_source": {
+            "default": "yfinance",
+            "type": "string"
+          },
+          "elapsed_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_retryable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "failures": {
+            "default": 0,
+            "type": "integer"
+          },
+          "insufficient_data_count": {
+            "default": 0,
+            "type": "integer"
+          },
+          "insufficient_data_detail": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "min_score_threshold": {
+            "default": 0.0,
+            "type": "number"
+          },
+          "results": {
+            "items": {
+              "additionalProperties": true,
+              "description": "One ranked ticker inside a ``scan_market`` batch.",
+              "properties": {
+                "dimensions": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "final_score": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "flags": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "indicators": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "modifiers": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "pattern": {
+                  "default": "",
+                  "type": "string"
+                },
+                "price": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "sector": {
+                  "default": "",
+                  "type": "string"
+                },
+                "sentiment_breakdown": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": true,
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "ticker": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "ticker"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "schema_version": {
+            "default": "2.0.0",
+            "type": "string"
+          },
+          "tickers_passed": {
+            "default": 0,
+            "type": "integer"
+          },
+          "tickers_scanned": {
+            "default": 0,
+            "type": "integer"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "universe": {
+            "type": "string"
+          },
+          "universe_metadata": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "workers": {
+            "default": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "universe"
+        ],
+        "type": "object"
+      }
+    },
+    "suggest_options_strategy": {
+      "description": "Suggest an options strategy based on stock analysis verdict.\n\nCombines the verdict from analyze_stock with IV regime assessment\nto recommend a specific options strategy from the Options Playbook.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "composite_score": {
+            "description": "Score from analyze_stock (0-100).",
+            "type": "number"
+          },
+          "iv_rank": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "IV rank (0-100). Auto-fetched if None."
+          },
+          "risk_tolerance": {
+            "default": "medium",
+            "description": "'low', 'medium', or 'high'.",
+            "type": "string"
+          },
+          "ticker": {
+            "description": "Stock ticker symbol.",
+            "type": "string"
+          },
+          "verdict": {
+            "description": "Verdict from analyze_stock ('Long-Term Investment',\n     'Short-Term Speculation (Bullish)', 'Avoid / Wait').",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker",
+          "composite_score",
+          "verdict"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "description": "Output of ``suggest_options_strategy``.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "breakeven": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "data_quality": {
+            "default": "derived",
+            "type": "string"
+          },
+          "data_source": {
+            "default": "computed",
+            "type": "string"
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_retryable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "exit_plan": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "legs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "max_loss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "max_profit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "rationale": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "risk_reward_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "schema_version": {
+            "default": "2.0.0",
+            "type": "string"
+          },
+          "strategy_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ticker": {
+            "type": "string"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ticker"
+        ],
+        "type": "object"
+      }
+    },
+    "tsmom_signals": {
+      "description": "Moskowitz, Ooi & Pedersen (2012) time series momentum.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "lookback_months": {
+            "default": 12,
+            "description": "Mesi di lookback (default: 12).",
+            "type": "integer"
+          },
+          "skip_last_days": {
+            "default": 21,
+            "description": "Giorni da saltare (default: 21 ≈ 1 mese).",
+            "type": "integer"
+          },
+          "ticker": {
+            "description": "Simbolo del titolo (es. 'AAPL', 'SPY').",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "description": "Output of ``tsmom_signals`` (Moskowitz, Ooi & Pedersen 2012).",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "available": {
+            "default": false,
+            "type": "boolean"
+          },
+          "available_bars": {
+            "default": 0,
+            "type": "integer"
+          },
+          "cum_return_lookback": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "data_quality": {
+            "default": "eod",
+            "type": "string"
+          },
+          "data_source": {
+            "default": "yfinance",
+            "type": "string"
+          },
+          "direction": {
+            "default": "unavailable",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_is_blocking": {
+            "default": false,
+            "type": "boolean"
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_retryable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ewma_vol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "lookback_months": {
+            "default": 12,
+            "type": "integer"
+          },
+          "mom_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "paper_reference": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "pct_positive_months": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "position_size": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "required_bars": {
+            "default": 60,
+            "type": "integer"
+          },
+          "schema_version": {
+            "default": "2.0.0",
+            "type": "string"
+          },
+          "sharpe_lookback": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "signal": {
+            "default": 0,
+            "type": "integer"
+          },
+          "target_vol": {
+            "default": 0.4,
+            "type": "number"
+          },
+          "ticker": {
+            "type": "string"
+          },
+          "vol_scaling": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "ticker"
+        ],
+        "type": "object"
+      }
+    }
+  }
+}

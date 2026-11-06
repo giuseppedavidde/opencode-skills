@@ -1,0 +1,74 @@
+{
+  "schema_version": "2.0.0",
+  "data_source": "yfinance+options",
+  "data_quality": "mixed",
+  "as_of": null,
+  "error_kind": null,
+  "error_retryable": null,
+  "ticker": "AAPL",
+  "price": 342.37,
+  "momentum": {
+    "ret_12m": 0.2721,
+    "tsmom_signal": null,
+    "tsmom_direction": "unavailable",
+    "dist_sma200_pct": 14.68,
+    "dist_sma50_pct": 1.89,
+    "rsi14": 51.46,
+    "atr14": 9.0171,
+    "is_extended": false,
+    "extension_atr_above_sma50": 0.7
+  },
+  "bias_guard": {
+    "flag": true,
+    "reason": "MOMENTUM BIAS GUARD (strong): 12m return +27.2%, +14.7% above SMA200, +1.9% above SMA50, RSI14 51, +0.7 ATR above SMA50. This is a trending / momentum name, NOT a mean-reversion candidate. Do NOT treat the extension as a fade signal, and do NOT treat a GEX call wall as a hard ceiling: in a long-gamma regime a call wall acts as a price ATTRACTOR/pin rather than resistance, and in a short-gamma regime hedging flow amplifies the trend. Avoid setting a bearish bias based solely on 'overbought' readings for this profile.",
+    "momentum_strength": "strong"
+  },
+  "breakout_triggers": {
+    "lookback_days": 252,
+    "level": 349.51,
+    "volume_avg20": 48649383.05,
+    "volume_mult": 2.0,
+    "volume_today": 43750861.0,
+    "fired": false,
+    "confirmations": {
+      "close_above_level": false,
+      "volume_ok": false,
+      "above_sma200": true
+    },
+    "status": "not fired: missing close_above_level, volume_ok"
+  },
+  "gex": {
+    "regime": "unavailable",
+    "call_wall": null,
+    "put_wall": null,
+    "gamma_flip": null,
+    "wall_interpretation": "",
+    "available": false,
+    "error": "gex disabled",
+    "data_source": null
+  },
+  "risk": {
+    "suggested_stop": 324.34,
+    "atr": 9.0171,
+    "atr_mult": 2.0,
+    "holding_days_preferred": 120
+  },
+  "evidence": {
+    "source": "research/breakout_calibration",
+    "edge_certified": false,
+    "expected_win_rate": 0.6102903718797759,
+    "expected_excess_return": 0.02408089814471122,
+    "caveats": [
+      "Survivorship bias present: the universe CSV has only 4 explicit delistings, so most names that were removed/delisted are absent. Absolute returns are therefore mildly upward biased; the *relative* breakout-vs-baseline comparison is far less affected.",
+      "No breakout configuration had a positive in-sample excess return, so the breakout edge is NOT certified in-sample; the recommended configuration is selected by the sum of in-sample and out-of-sample excess (both required sample-ok), which means out-of-sample was used for selection and is not a fully independent confirmation.",
+      "Overlapping forward windows inflate the effective sample; the block bootstrap mitigates but does not fully remove the effect.",
+      "Thresholds are selected in-sample (<=2020-12-31) and validated out-of-sample (>=2021-01-01).",
+      "The preferred holding horizon is chosen from the tested set [5, 10, 20, 60, 120]; if it equals the maximum, longer horizons were not evaluated."
+    ],
+    "artifact_version": "1.0.0",
+    "artifact_fingerprint": "33362de9e252b9982a94f996e0076a8dcfe81749e3f51358b77633f1a4b1fb01",
+    "artifact_verified": true,
+    "calibration_as_of": "2026-10-02T17:53:15.863146Z"
+  },
+  "error": null
+}

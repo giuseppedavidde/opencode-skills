@@ -147,8 +147,9 @@ class OptionsBackend(Protocol):
 4. **Tool** (`tools/_analysis_tools.py`): `gex_analysis` (`:353`) restituisce già il payload
    → nessuna firma nuova, ma il campo arriva; `breakout_context` (`:395`) espone l'overlay
    col campo. `options_context` (`:263`) mantiene `_source`.
-5. **schemas.py:284 `GexResult`** (modello legacy duplicato): allineare aggiungendo
-   `data_source` — o **deprecare** in favore di quello in `gex.py` (vedi rischi).
+5. **`GexResult` duplicato** — **risolto**: il modello legacy in `schemas.py` è stato
+   rimosso. Il modello live è `analysis/gex.py::GexResult`, esposto come output tipizzato
+   da `responses.GexAnalysisResponse` con il campo `data_source`.
 
 ---
 
@@ -203,8 +204,8 @@ fixture in `tests/fixtures/`):
 - **Dipendenze**: `requests` va **dichiarato** in `pyproject.toml`; eventuali SDK
   (`thetadata`, `alpaca-py`) come **optional-dependencies**
   `[project.optional-dependencies].options`.
-- **Duplicazione `GexResult`** (`gex.py` vs `schemas.py:284`): rischio di divergenza dei
-  campi provenienza.
+- **Duplicazione `GexResult`** — risolta: un solo modello in `gex.py`, contratto MCP in
+  `responses.py`; `schemas.py` resta il vocabolario condiviso delle skill.
 - **Ambiguità terminologica** `_source` (oggi `"live"`) vs `data_source` (backend id):
   definire una volta e documentare.
 

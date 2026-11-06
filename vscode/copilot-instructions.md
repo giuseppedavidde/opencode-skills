@@ -54,8 +54,29 @@ The `SubagentStop` hook in `{{HOOKS_DIR}}/verifica-gate.json` blocks a subagent
 that omits this block and appends an audit event to
 `~/.config/opencode/stats/gate_events.jsonl`.
 
+## Writing directive (ASD-STE100)
+
+Every agent writes all output text under ASD-STE100. The single source of truth
+is `{{SKILLS_DIR}}/asd-ste100/SKILL.md`; read it when you write or review a long
+report.
+
+1. Maximum 20 words per sentence in a procedure. Maximum 25 words in a description.
+2. One idea per sentence. One topic per paragraph, maximum 6 sentences.
+3. Active voice. Simple tenses. Use `use`, `calculate`, `check`, `close`. Do not
+   use `perform`, `provide`, `implement`.
+4. Use one term for one concept in the whole answer.
+5. Put procedures in numbered vertical lists. One action per step.
+6. No idiom, no metaphor, no slang. No semicolon between two clauses.
+7. Define each abbreviation at first use: `BE = break-even`.
+8. Give exact numbers with units: `−$3,383.54`. Never "about three thousand".
+9. The `## VERIFICA` block follows the same rules.
+
+Code, tool output, tickers, paths, and quoted document text are exempt.
+
 ## Mandatory skills
 
+- `asd-ste100` — the writing directive above; load it for the full rule set,
+  checklist, and rewrite examples.
 - `python-venv` — before **any** Python install, run, or test. Never
   `pip install` on the system Python. Use `/tmp/opencode/.venv` for temporary
   non-trading work and reuse `~/.local/share/opencode/trading-mcp-venv` for

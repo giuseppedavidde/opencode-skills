@@ -32,7 +32,11 @@ from typing import Any
 import pandas as pd
 from pydantic import BaseModel, Field
 
+from trading_mcp.calibration import evidence_block, load_artifact
+
 logger = logging.getLogger(__name__)
+
+_EVIDENCE_SOURCE = "research/breakout_calibration"
 
 # ── Threshold defaults (mirror the Phase 1 thresholds.json) ──────────────
 _BREAKOUT_LOOKBACK_DAYS = 252
@@ -134,11 +138,16 @@ class RiskBlock(BaseModel):
 class EvidenceBlock(BaseModel):
     """Provenance and honesty disclaimer."""
 
-    source: str = "research/breakout_calibration"
+    source: str = _EVIDENCE_SOURCE
     edge_certified: bool = False
     expected_win_rate: float | None = None
     expected_excess_return: float | None = None
     caveats: list[str] = Field(default_factory=list)
+    # Calibration provenance: which artifact produced these thresholds.
+    artifact_version: str | None = None
+    artifact_fingerprint: str | None = None
+    artifact_verified: bool | None = None
+    calibration_as_of: str | None = None
 
 
 class BreakoutContext(BaseModel):
@@ -557,11 +566,15 @@ def build_breakout_context(
         else GexOverlay(available=False, error="gex disabled")
     )
 
+    artifact = load_artifact(
+        _THRESHOLDS_PATH, name="breakout_thresholds", source=_EVIDENCE_SOURCE
+    )
     evidence = EvidenceBlock(
         edge_certified=False,
         expected_win_rate=_safe_float(cfg.get("expected_win_rate")),
         expected_excess_return=_safe_float(cfg.get("expected_excess_return")),
         caveats=list(cfg.get("caveats") or _DEFAULT_CAVEATS),
+        **evidence_block(artifact),
     )
 
     return BreakoutContext(

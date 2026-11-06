@@ -15,183 +15,35 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel, Field
-
 from fastmcp import FastMCP
 
 from trading_mcp.data.provider import data_provider
 from trading_mcp.data.risk_free import get_risk_free_rate
 from trading_mcp.data.result_cache import result_cache
+from trading_mcp.responses import (
+    typed,
+    VRP_CALIBRATION_SOURCE,
+    BakshiResult,
+    BakshiStrikeAnalysis,
+    BakshiVRP,
+    BaliResult,
+    LGBMResult,
+    PostProcessAdjustment,
+    PostProcessResult,
+    TSMomResult,
+)
 
 logger = logging.getLogger(__name__)
 
-# ── Pydantic output models ───────────────────────────────────────────
-
-class BaliResult(BaseModel):
-    """Output del tool bali_signals.
-
-    P0 Aug 2026: available, available_bars, required_bars, error_is_blocking
-    e composite_bali_score nullable. Default: available=False (failure path).
-    """
-    ticker: str
-    available: bool = False
-    spot: float | None = None
-    rv: float | None = None
-    atm_call_iv: float | None = None
-    atm_put_iv: float | None = None
-    atm_straddle_iv: float | None = None
-    rvol_ivol_spread: float | None = None
-    cvol_pvol_spread: float | None = None
-    rvol_ivol_score: float | None = None
-    cvol_pvol_score: float | None = None
-    composite_bali_score: float | None = None
-    direction: str = "unavailable"
-    error: str | None = None
-    error_is_blocking: bool = False
-    available_bars: int = 0
-    required_bars: int = 50
-    paper_reference: dict[str, Any] = Field(default_factory=dict)
-
-class TSMomResult(BaseModel):
-    """Output del tool tsmom_signals.
-
-    P0 Aug 2026: available, available_bars, required_bars, error_is_blocking
-    e mom_score nullable. Default: available=False (failure path).
-    """
-    ticker: str
-    available: bool = False
-    price: float | None = None
-    lookback_months: int = 12
-    cum_return_lookback: float | None = None
-    signal: int = 0
-    ewma_vol: float | None = None
-    vol_scaling: float | None = None
-    position_size: float | None = None
-    mom_score: float | None = None
-    direction: str = "unavailable"
-    pct_positive_months: float | None = None
-    sharpe_lookback: float | None = None
-    target_vol: float = 0.40
-    error: str | None = None
-    error_is_blocking: bool = False
-    available_bars: int = 0
-    required_bars: int = 60
-    paper_reference: dict[str, Any] = Field(default_factory=dict)
-
-class BakshiVRP(BaseModel):
-    """VRP estimate sub-model."""
-    vrp_annualized: float = 0.0
-    vrp_pct_of_premium: float = 0.0
-    regime: str = "NORMAL_VOL"
-    description: str = ""
-
-class BakshiStrikeAnalysis(BaseModel):
-    """Delta-hedged P&L per strike."""
-    strike: float
-    moneyness: float
-    option_premium: float
-    vega: float
-    vega_ratio: float
-    seller_profit_per_option: float
-    seller_profit_per_contract: float
-    buyer_loss_per_option: float
-    vrp_pct_of_premium: float
-    seller_profit_per_100_notional: float
-    zone: str
-    recommendation: str
-
-
-# ── Bakshi VRP constants (MUST be defined before BakshiResult) ────────
+# ── Output models ────────────────────────────────────────────────────
+# The wire contract lives in trading_mcp.responses so every tool advertises
+# its outputSchema from one place.
 
 # Bakshi & Kapadia (2003) — empirical params from Table 4, Figure 2.
 # WARNING: These are CALIBRATED on S&P 500 only.
 _VRP_SLOPE = 1.996
 _VRP_INTERCEPT = -12.34
-_VRP_CALIBRATION_SOURCE = "Bakshi & Kapadia (2003), Table 4 (S&P 500 only)"
-
-
-class BakshiResult(BaseModel):
-    """Output del tool bakshi_signals.
-
-    P0 Aug 2026: added available_bars, required_bars for explicit
-    short-history status.
-
-    P1 Aug 2026: added calibration_status, calibration_source,
-    calibrated flags. When no ticker-specific VRP history exists,
-    calibrated=False and calibrated_vrp=None.
-
-    P2 Aug 2026: added estimated_costs with per-contract commission
-    and slippage estimates for delta-hedged positions.
-    """
-    ticker: str
-    spot: float | None = None
-    expiry: str | None = None
-    dte: int = 30
-    atm_iv: float | None = None
-    atm_call_iv: float | None = None
-    atm_put_iv: float | None = None
-    vrp: BakshiVRP = Field(default_factory=BakshiVRP)
-    strikes_analysis: list[BakshiStrikeAnalysis] = Field(default_factory=list)
-    error: str | None = None
-    available_bars: int = 0
-    required_bars: int = 0
-    paper_reference: dict[str, Any] = Field(default_factory=dict)
-    calibration_status: str = "not_calibrated"
-    calibration_source: str = _VRP_CALIBRATION_SOURCE
-    calibrated: bool = False
-    calibrated_vrp: float | None = None
-    rate_source: str | None = None
-    rate_as_of: str | None = None
-    estimated_costs: dict[str, Any] | None = None
-
-class LGBMResult(BaseModel):
-    """Output del tool lgbm_predict.
-
-    Di default non disponibile (``available=False``, ``score=None``,
-    ``signal="unavailable"``). Solo i success path di ``lgbm_predict``
-    impostano ``available=True`` con uno score valido.
-
-    P0 August 2026: ``available_bars``, ``required_bars`` e ``reason``
-    rendono esplicito il motivo di ``available=False`` quando la storia
-    e' troppo corta per il lookback delle feature o per il modello.
-
-    P1 August 2026: ``calibrated_probability`` e ``calibration_status``
-    sono None/"not_calibrated" per default. Lo score 0-100 NON e'
-    una probabilita' senza artifact di calibrazione validato OOS.
-    """
-    ticker: str
-    available: bool = False
-    score: float | None = None
-    signal: str = "unavailable"
-    model: str | None = None
-    individual_signals: dict[str, float] = Field(default_factory=dict)
-    meta_weights: dict[str, float] = Field(default_factory=dict)
-    error: str | None = None
-    error_is_blocking: bool = False
-    available_bars: int = 0
-    required_bars: int = 0
-    reason: str = ""
-    calibrated_probability: float | None = None
-    calibration_status: str = "not_calibrated"
-
-
-class PostProcessAdjustment(BaseModel):
-    """Singolo adjustment calcolato da una skill."""
-    skill: str
-    delta: int = 0
-    confidence: str = "bassa"
-    reason: str = ""
-    data_available: bool = True
-
-class PostProcessResult(BaseModel):
-    """Risultato completo del post-processing LGBM."""
-    ticker: str
-    lgbm_raw_score: float = 50.0
-    adjusted_score: float = 50.0
-    total_adjustment: int = 0
-    adjustments: dict[str, dict[str, Any]] = Field(default_factory=dict)
-    warnings: list[str] = Field(default_factory=list)
-
+_VRP_CALIBRATION_SOURCE = VRP_CALIBRATION_SOURCE
 
 # LGBM model directory (relative to lgbm-trader-skill)
 _LGBM_SKILL_DIR = Path.home() / ".config" / "opencode" / "skills" / "lgbm-trader-skill"
@@ -761,7 +613,8 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
     # ── 1. Bali & Hovakimian (2009) Volatility Spread Signals ────
 
     @mcp_server.tool()
-    def bali_signals(ticker: str, period: str = "1y") -> dict[str, Any]:
+    @typed(BaliResult)
+    def bali_signals(ticker: str, period: str = "1y") -> BaliResult:
         """Bali & Hovakimian (2009) volatility spread signals.
 
         Calcola 2 segnali cross-sectional dal paper:
@@ -972,11 +825,12 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
     # ── 2. Moskowitz, Ooi & Pedersen (2012) TS-MOM ───────────────
 
     @mcp_server.tool()
+    @typed(TSMomResult)
     def tsmom_signals(
         ticker: str,
         lookback_months: int = 12,
         skip_last_days: int = 21,
-    ) -> dict[str, Any]:
+    ) -> TSMomResult:
         """Moskowitz, Ooi & Pedersen (2012) time series momentum.
 
         Calcola il TS-MOM signal:
@@ -1126,9 +980,10 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
     # ── 3. Bakshi & Kapadia (2003) VRP Analysis ──────────────────
 
     @mcp_server.tool()
+    @typed(BakshiResult)
     def bakshi_signals(
         ticker: str, expiry: str | None = None
-    ) -> dict[str, Any]:
+    ) -> BakshiResult:
         """Bakshi & Kapadia (2003) volatility risk premium analysis.
 
         Delta-hedged gains and the negative market volatility risk premium.
@@ -1375,7 +1230,8 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
     # ── 4. LGBM Stacking Ensemble Prediction ──────────────────────
 
     @mcp_server.tool()
-    def lgbm_predict(ticker: str) -> dict[str, Any]:
+    @typed(LGBMResult)
+    def lgbm_predict(ticker: str) -> LGBMResult:
         """LightGBM stacking ensemble prediction.
 
         Carica il modello LGBM pre-addestrato per il ticker e produce
@@ -1585,7 +1441,8 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
     # ── 5. LGBM Post-Processing Skill Adjustments ────────────────
 
     @mcp_server.tool()
-    def lgbm_postprocess(ticker: str, lgbm_score: float = 50.0) -> dict[str, Any]:
+    @typed(PostProcessResult)
+    def lgbm_postprocess(ticker: str, lgbm_score: float = 50.0) -> PostProcessResult:
         """Post-processing dello score LGBM con 8 skill-adjustments.
 
         Applica correzioni basate sulle skill di trading per affinare

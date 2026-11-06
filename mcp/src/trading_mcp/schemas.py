@@ -1,8 +1,15 @@
 """
-Unified JSON schemas for trading-mcp-server inter-skill communication.
+Shared analysis vocabulary for inter-skill communication.
 
-All trading and analysis tools use these Pydantic models to pass structured
-data. This file is adapted from stock-crypto-analysis/schemas.py v1.0.
+This module holds the *conceptual* analysis models (a unified verdict, macro
+score, dimension scores, sentiment sub-scores) that the trading skills speak.
+It is not the MCP wire contract: the shape each tool actually returns is
+defined in :mod:`trading_mcp.responses`, which is what FastMCP turns into the
+tool ``outputSchema``.
+
+Keeping one owner per concept avoids the divergence that had accumulated here:
+the legacy ``GexResult`` duplicate was removed in favour of the live model in
+:mod:`trading_mcp.analysis.gex`.
 """
 
 from __future__ import annotations
@@ -279,17 +286,6 @@ class IVTermStructureResult(BaseModel):
     regime: IVRegime
     shape: TermStructureShape
     expirations: list[dict] = Field(default_factory=list)
-
-
-class GexResult(BaseModel):
-    """Gamma Exposure analysis."""
-
-    total_gex: Optional[float] = None
-    regime: str = "unknown"
-    gamma_flip_point: Optional[float] = None
-    max_pain: Optional[float] = None
-    call_wall_strike: Optional[float] = None
-    put_wall_strike: Optional[float] = None
 
 
 class StrategySuggestion(BaseModel):

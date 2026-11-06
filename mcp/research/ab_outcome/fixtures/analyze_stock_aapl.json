@@ -1,0 +1,119 @@
+{
+  "schema_version": "2.0.0",
+  "data_source": "yfinance",
+  "data_quality": "eod",
+  "as_of": "2026-11-06",
+  "error_kind": null,
+  "error_retryable": null,
+  "ticker": "AAPL",
+  "timestamp": "2026-11-06T22:34:05.070074",
+  "composite_score": 79.3,
+  "verdict": "Long-Term Investment",
+  "confidence": "LOW",
+  "signal_alignment": {
+    "bullish": 5,
+    "total": 10,
+    "pct": 50.0
+  },
+  "dimensions": [
+    {
+      "name": "Wyckoff Phase",
+      "score": 90
+    },
+    {
+      "name": "Volume Profile",
+      "score": 30
+    },
+    {
+      "name": "Price Action",
+      "score": 35
+    },
+    {
+      "name": "Sentiment",
+      "score": 68
+    },
+    {
+      "name": "Fundamentals",
+      "score": 95
+    }
+  ],
+  "modifiers": {
+    "multi_timeframe": 50,
+    "sot_weis_wave": 65,
+    "squeeze_play": 50,
+    "earnings_surprise": 75,
+    "clue6_test": 65,
+    "market_structure": 65,
+    "structure_levels": null,
+    "volatility_hawkes": 25,
+    "vol_regime": null,
+    "vsa": 50,
+    "vsa_signals": null,
+    "meta_label": 60,
+    "meta_label_setup": null,
+    "taa_patterns": 66,
+    "taa_detailed": null
+  },
+  "flags": [],
+  "pattern": "Golden Cross Accumulation",
+  "sector": "Technology",
+  "price": 342.37,
+  "action_recommendation": {
+    "action": "LONG_TERM_BUY",
+    "horizon_days": 180,
+    "hit_rate_estimate": 0.57,
+    "volume_profile_score": 30,
+    "target_price": 273.73,
+    "target_type": "poc_convergence",
+    "poc_reference": 273.73,
+    "stop_price": 308.13,
+    "entry_zone": "inside VA",
+    "evidence": [
+      "Volume profile 30 (≤40): fair value basso — storicamente outperform a 6-12 mesi (IC −0.068 a 180gg, p<0.0001, 19.488 snapshot OOS)",
+      "Price $342.37 inside VA ($254.02-$344.12) — fair value",
+      "Target: POC $273.73 | Stop: $308.13 (180gg horizon)"
+    ],
+    "context": {
+      "composite_score": 79.3,
+      "sector": "Technology",
+      "pattern": "Golden Cross Accumulation"
+    },
+    "hit_rate_calibrated": 0.6424,
+    "hit_rate_source": "bucket_empirical_shrunk",
+    "calibration_status": "weak_calibrated",
+    "calibration_file": "/home/giuseppe/.config/opencode/calibrations/vp_calibration.json",
+    "calibration_warnings": [
+      "[medium] W1_BRIER_MARGINAL: Isotonic Brier (0.2403) marginally worse than naive (0.2329) Δ=+0.007443",
+      "[medium] W4_REGIME_DEPENDENT: VP signal is regime-dependent: flips sign between quarters and across tickers. Do not use standalone in strong trends. Calibrated hit rates are pooled cross-sectional averages, NOT per-ticker guarantees.",
+      "[medium] W5_HETEROGENEITY: Cross-sectional pooling masks per-ticker heterogeneity. Bucket hit rates are averages across 50 tickers; individual ticker outcomes may differ materially.",
+      "[medium] W6_OVERCONFIDENCE: Isotonic regression overestimates probabilities by 6-12pp in the most populated buckets. Use empirical bucket rates with shrinkage for operational decisions.",
+      "[low] W7_HORIZON: Calibration is on 180-day horizon only. Shorter horizons show weaker signal discrimination."
+    ],
+    "signal_limits": [
+      "VP signal is regime-dependent — flips sign between quarters and across tickers. Do NOT use standalone in strong trending markets without confirming signals.",
+      "Cross-sectional pooling masks per-ticker heterogeneity. Bucket hit rates are averages across 50+ tickers; individual outcomes may differ materially.",
+      "Calibration is on 180-day horizon. Shorter horizons show weaker signal discrimination."
+    ]
+  },
+  "data_freshness": "live",
+  "last_data_date": "2026-11-06",
+  "indicators": null,
+  "sentiment_breakdown": {
+    "short_interest": 50.0,
+    "options_sentiment": 65.0,
+    "institutional": 80.0,
+    "momentum": 80.0,
+    "earnings_quality": 70.0
+  },
+  "momentum_bias_warning": {
+    "flag": true,
+    "momentum_strength": "strong",
+    "reason": "MOMENTUM BIAS GUARD (strong): 12m return +27.2%, +14.7% above SMA200, +1.9% above SMA50, RSI14 51, +0.7 ATR above SMA50. This is a trending / momentum name, NOT a mean-reversion candidate. Do NOT treat the extension as a fade signal, and do NOT treat a GEX call wall as a hard ceiling: in a long-gamma regime a call wall acts as a price ATTRACTOR/pin rather than resistance, and in a short-gamma regime hedging flow amplifies the trend. Avoid setting a bearish bias based solely on 'overbought' readings for this profile."
+  },
+  "options_context": null,
+  "status": null,
+  "history_bars": null,
+  "required_bars": null,
+  "reason": null,
+  "error": null
+}

@@ -13,7 +13,6 @@ from fastmcp import FastMCP
 from trading_mcp.analysis.scanner import (
     apply_macro_regime,
     compute_dynamic_thresholds,
-    load_universe,
     load_universe_with_meta,
     parse_custom_tickers,
     process_crypto_ticker,
@@ -29,6 +28,15 @@ from trading_mcp.analysis.options_calc import analyze_options_position
 from trading_mcp.analysis.signal_engine import compute_action
 from trading_mcp.data.result_cache import result_cache
 from trading_mcp.data.stocks import fetch_stock
+from trading_mcp.responses import (
+    typed,
+    AnalyzeOptionsResponse,
+    AnalyzeStockResponse,
+    BreakoutContextResponse,
+    GexAnalysisResponse,
+    ScanMarketResponse,
+    error_payload,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +47,7 @@ def register_analysis_tools(
     """Register analysis tools with the MCP server."""
 
     @mcp_server.tool()
+    @typed(ScanMarketResponse)
     def scan_market(
         universe: str = "us_large",
         tickers: str | None = None,
@@ -48,7 +57,7 @@ def register_analysis_tools(
         max_workers: int = 8,
         fetch_news: bool = True,
         verbose: bool = False,
-    ) -> dict[str, Any]:
+    ) -> ScanMarketResponse:
         """Scan a market universe for accumulation patterns and rank by score.
 
         Parallel scanning via ThreadPoolExecutor. 500 tickers in ~45s.
@@ -192,12 +201,13 @@ def register_analysis_tools(
         return _apply_scan_verbose_filter(scan_result, verbose)
 
     @mcp_server.tool()
+    @typed(AnalyzeStockResponse)
     def analyze_stock(
         ticker: str,
         include_options_context: bool = False,
         fetch_news: bool = True,
         verbose: bool = False,
-    ) -> dict[str, Any]:
+    ) -> AnalyzeStockResponse:
         """Deep single-stock analysis through all dimensions.
 
         Returns a comprehensive analysis including ``action_recommendation``
@@ -226,33 +236,41 @@ def register_analysis_tools(
         t_dict = {"symbol": ticker, "name": ticker, "market": "US"}
         result = process_ticker(t_dict, fetch_news=fetch_news)
         if result is None:
-            return {"error": f"Could not analyze ticker '{ticker}'. Check symbol or try later."}
+            return error_payload(
+                f"Could not analyze ticker '{ticker}'. Check symbol or try later.",
+                retryable=True,
+                data_source="yfinance",
+                ticker=ticker,
+            )
 
         # ── P0 short-history guard ──────────────────────────────────
         if result.get("status") == "insufficient_data":
-            return {
-                "ticker": result["symbol"],
-                "timestamp": datetime.utcnow().isoformat(),
-                "composite_score": None,
-                "verdict": "insufficient_data",
-                "confidence": "N/A",
-                "signal_alignment": {"bullish": 0, "total": 0, "pct": 0.0},
-                "dimensions": [],
-                "modifiers": {},
-                "flags": [],
-                "pattern": "N/A",
-                "sector": "",
-                "price": 0.0,
-                "action_recommendation": {
+            return error_payload(
+                result.get("reason", "Dati insufficienti per l'analisi"),
+                kind="degraded",
+                data_source="yfinance",
+                ticker=result["symbol"],
+                timestamp=datetime.utcnow().isoformat(),
+                composite_score=None,
+                verdict="insufficient_data",
+                confidence="N/A",
+                signal_alignment={"bullish": 0, "total": 0, "pct": 0.0},
+                dimensions=[],
+                modifiers={},
+                flags=[],
+                pattern="N/A",
+                sector="",
+                price=0.0,
+                action_recommendation={
                     "action": "N/A",
                     "reason": result.get("reason", "Dati insufficienti per l'analisi"),
                     "confidence": "N/A",
                 },
-                "status": "insufficient_data",
-                "history_bars": result.get("history_bars", 0),
-                "required_bars": result.get("required_bars", 50),
-                "reason": result.get("reason", ""),
-            }
+                status="insufficient_data",
+                history_bars=result.get("history_bars", 0),
+                required_bars=result.get("required_bars", 50),
+                reason=result.get("reason", ""),
+            )
 
         options_context = None
         if include_options_context:
@@ -294,6 +312,7 @@ def register_analysis_tools(
             freshness_info = dp.get_data_freshness(ticker, data_type="stock")
             output["data_freshness"] = freshness_info.get("freshness")
             output["last_data_date"] = freshness_info.get("last_data_date")
+            output["as_of"] = freshness_info.get("last_data_date")
         except Exception:
             pass
         output["indicators"] = result.get("indicators", {})
@@ -314,11 +333,12 @@ def register_analysis_tools(
         return _apply_stock_verbose_filter(output, verbose)
 
     @mcp_server.tool()
+    @typed(AnalyzeOptionsResponse)
     def analyze_options(
         ticker: str,
         legs: list[dict[str, Any]],
         expiry: str,
-    ) -> dict[str, Any]:
+    ) -> AnalyzeOptionsResponse:
         """Analyze a multi-leg options position.
 
         Computes Greeks per leg and total, payoff scenarios at 100 price levels,
@@ -338,7 +358,11 @@ def register_analysis_tools(
                     per-leg expiry. REQUIRED — the tool rejects calls without it.
         """
         if not expiry or str(expiry).lower() in ("null", "none", ""):
-            return {"ticker": ticker, "error": "expiry is REQUIRED. Pass expiry='YYYY-MM-DD'."}
+            return error_payload(
+                "expiry is REQUIRED. Pass expiry='YYYY-MM-DD'.",
+                data_source="options",
+                ticker=ticker,
+            )
 
         cache_params: dict[str, Any] = {"legs": legs, "expiry": str(expiry)}
         cached = result_cache.get("analyze_options", ticker, cache_params)
@@ -350,13 +374,14 @@ def register_analysis_tools(
         return result
 
     @mcp_server.tool()
+    @typed(GexAnalysisResponse)
     def gex_analysis(
         ticker: str,
         expiry: str | None = None,
         max_expiries: int = 12,
         top_n: int = 15,
         max_dte: int = 120,
-    ) -> dict[str, Any]:
+    ) -> GexAnalysisResponse:
         """Compute Gamma Exposure (GEX) for a ticker's option chain.
 
         Calculates dealer gamma exposure per strike (call GEX positive,
@@ -400,7 +425,8 @@ def register_analysis_tools(
         return result
 
     @mcp_server.tool()
-    def breakout_context(ticker: str, include_gex: bool = True) -> dict[str, Any]:
+    @typed(BreakoutContextResponse)
+    def breakout_context(ticker: str, include_gex: bool = True) -> BreakoutContextResponse:
         """Momentum bias-guard + conditional breakout trigger for a ticker.
 
         Returns a structured payload with: momentum/extension metrics, an
@@ -431,10 +457,12 @@ def register_analysis_tools(
             hist = fetch_stock(ticker, period="2y")
         except Exception as exc:  # pylint: disable=broad-except
             logger.warning("breakout_context: fetch failed for %s: %s", ticker, exc)
-            return {
-                "ticker": ticker.upper(),
-                "error": f"Could not fetch data for '{ticker}': {exc}",
-            }
+            return error_payload(
+                f"Could not fetch data for '{ticker}': {exc}",
+                retryable=True,
+                data_source="yfinance",
+                ticker=ticker.upper(),
+            )
 
         payload = build_breakout_context(
             ticker, hist, include_gex=include_gex

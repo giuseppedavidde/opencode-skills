@@ -17,6 +17,14 @@ from trading_mcp.analysis.macro import (
 from trading_mcp.data.provider import data_provider
 from trading_mcp.knowledge.skill_bridge import SkillBridge
 from trading_mcp.data.result_cache import result_cache
+from trading_mcp.responses import (
+    typed,
+    ClearMacroCacheResponse,
+    MacroContextResponse,
+    SkillKnowledgeResponse,
+    StrategySuggestionResponse,
+    error_payload,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +119,8 @@ def register_knowledge_tools(mcp_server: FastMCP, skills_dir: str) -> None:
     skill_bridge = SkillBridge(skills_dir)
 
     @mcp_server.tool()
-    def get_macro_context() -> dict[str, Any]:
+    @typed(MacroContextResponse)
+    def get_macro_context() -> MacroContextResponse:
         """Get current macro context: VIX, DXY, Fed rate, Fear & Greed, BTC dominance.
 
         Fetches real-time macro indicators from yfinance and detects the
@@ -133,7 +142,8 @@ def register_knowledge_tools(mcp_server: FastMCP, skills_dir: str) -> None:
         return dict(_macro_cache)  # return a copy to prevent mutation
 
     @mcp_server.tool()
-    def clear_macro_cache() -> dict[str, str]:
+    @typed(ClearMacroCacheResponse)
+    def clear_macro_cache() -> ClearMacroCacheResponse:
         """Force clear the macro context cache. Next call will re-fetch fresh data."""
         global _macro_cache, _macro_cache_time
         _macro_cache = None
@@ -142,9 +152,10 @@ def register_knowledge_tools(mcp_server: FastMCP, skills_dir: str) -> None:
         return {"status": "ok", "message": "Macro cache cleared"}
 
     @mcp_server.tool()
+    @typed(SkillKnowledgeResponse)
     def get_skill_knowledge(
         skill_name: str, topic: str | None = None, section: str | None = None
-    ) -> dict[str, Any]:
+    ) -> SkillKnowledgeResponse:
         """Get knowledge from a specific trading skill (SKILL.md).
 
         Retrieve trading framework definitions on-demand without loading
@@ -208,16 +219,17 @@ def register_knowledge_tools(mcp_server: FastMCP, skills_dir: str) -> None:
                 "truncated": len(matched) > SECTION_CAP,
             }
         except ValueError as e:
-            return {"error": str(e)}
+            return error_payload(str(e), data_source="skill")
 
     @mcp_server.tool()
+    @typed(StrategySuggestionResponse)
     def suggest_options_strategy(
         ticker: str,
         composite_score: float,
         verdict: str,
         iv_rank: float | None = None,
         risk_tolerance: str = "medium",
-    ) -> dict[str, Any]:
+    ) -> StrategySuggestionResponse:
         """Suggest an options strategy based on stock analysis verdict.
 
         Combines the verdict from analyze_stock with IV regime assessment

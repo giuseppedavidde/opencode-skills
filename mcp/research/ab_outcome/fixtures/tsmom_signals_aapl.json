@@ -1,0 +1,38 @@
+{
+  "schema_version": "2.0.0",
+  "data_source": "yfinance",
+  "data_quality": "eod",
+  "as_of": null,
+  "error_kind": null,
+  "error_retryable": null,
+  "ticker": "AAPL",
+  "available": true,
+  "price": 342.37,
+  "lookback_months": 12,
+  "cum_return_lookback": 0.3322,
+  "signal": 1,
+  "ewma_vol": 0.2579,
+  "vol_scaling": 1.5508,
+  "position_size": 1.5508,
+  "mom_score": 83.2,
+  "direction": "bullish",
+  "pct_positive_months": 58.3,
+  "sharpe_lookback": 1.2869,
+  "target_vol": 0.4,
+  "error": null,
+  "error_is_blocking": false,
+  "available_bars": 316,
+  "required_bars": 60,
+  "paper_reference": {
+    "title": "Time series momentum",
+    "authors": [
+      "Tobias J. Moskowitz",
+      "Yao Hua Ooi",
+      "Lasse Heje Pedersen"
+    ],
+    "year": 2012,
+    "journal": "Journal of Financial Economics",
+    "signal_formula": "sign(return_{t-12:t-1}) con volatility scaling a target 40%",
+    "key_finding": "Sharpe ratio > 1.0 su portafoglio diversificato cross-asset, universale in 58 futures su 4 asset class"
+  }
+}

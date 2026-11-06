@@ -1,0 +1,120 @@
+{
+  "generated_at": "2026-11-06T22:34:41.522571+00:00",
+  "mode": "replay",
+  "tasks": [
+    {
+      "name": "analyze_stock_aapl",
+      "tool": "analyze_stock",
+      "status": "recorded",
+      "stable": null,
+      "diffs": [],
+      "cold": {
+        "verdict": "Long-Term Investment",
+        "composite_score": 79.3,
+        "confidence": "LOW",
+        "action_recommendation.action": "LONG_TERM_BUY"
+      },
+      "warm": null,
+      "note": "replay only; run with --record to compare cold vs warm"
+    },
+    {
+      "name": "scan_market_tech",
+      "tool": "scan_market",
+      "status": "recorded",
+      "stable": null,
+      "diffs": [],
+      "cold": {
+        "tickers_scanned": 6,
+        "tickers_passed": 5,
+        "results[0].ticker": "MSFT",
+        "results[0].final_score": 79.6
+      },
+      "warm": null,
+      "note": "replay only; run with --record to compare cold vs warm"
+    },
+    {
+      "name": "macro_context",
+      "tool": "get_macro_context",
+      "status": "recorded",
+      "stable": null,
+      "diffs": [],
+      "cold": {
+        "detected_regime": "high_volatility",
+        "macro_window": "SELECTIVE"
+      },
+      "warm": null,
+      "note": "replay only; run with --record to compare cold vs warm"
+    },
+    {
+      "name": "bali_signals_aapl",
+      "tool": "bali_signals",
+      "status": "recorded",
+      "stable": null,
+      "diffs": [],
+      "cold": {
+        "available": true,
+        "direction": "neutral",
+        "composite_bali_score": 53.5
+      },
+      "warm": null,
+      "note": "replay only; run with --record to compare cold vs warm"
+    },
+    {
+      "name": "tsmom_signals_aapl",
+      "tool": "tsmom_signals",
+      "status": "recorded",
+      "stable": null,
+      "diffs": [],
+      "cold": {
+        "available": true,
+        "signal": 1,
+        "direction": "bullish",
+        "mom_score": 83.2
+      },
+      "warm": null,
+      "note": "replay only; run with --record to compare cold vs warm"
+    },
+    {
+      "name": "breakout_context_aapl",
+      "tool": "breakout_context",
+      "status": "recorded",
+      "stable": null,
+      "diffs": [],
+      "cold": {
+        "bias_guard.flag": true,
+        "breakout_triggers.fired": false,
+        "breakout_triggers.status": "not fired: missing close_above_level, volume_ok",
+        "evidence.artifact_verified": true
+      },
+      "warm": null,
+      "note": "replay only; run with --record to compare cold vs warm"
+    },
+    {
+      "name": "bakshi_signals_aapl",
+      "tool": "bakshi_signals",
+      "status": "recorded",
+      "stable": null,
+      "diffs": [],
+      "cold": {
+        "calibrated": false,
+        "calibration_status": "not_calibrated",
+        "atm_iv": 0.2671,
+        "calibrated_vrp": null
+      },
+      "warm": null,
+      "note": "replay only; run with --record to compare cold vs warm"
+    }
+  ],
+  "summary": {
+    "tasks_total": 7,
+    "tasks_executed": 0,
+    "tasks_stable": 0,
+    "stability_pct": null
+  },
+  "limitations": [
+    "This harness executes the deterministic tool path, not a model.",
+    "The with-MCP vs without-MCP comparison requires the agent runtime (see README.md).",
+    "Cold means the result cache was cleared; upstream data caches are untouched.",
+    "Volatile fields (timestamps, elapsed time) are excluded via decision_fields."
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "policy": "Gates for CI. Values are the measured 2026-11-06 baseline plus ~15-20% headroom. Raising a limit is a reviewed change: it is how a payload regression becomes visible instead of silent.",
+  "max_payload_tokens": {
+    "analyze_stock": 1100,
+    "scan_market": 1300,
+    "bali_signals": 320
+  },
+  "max_schema_tokens": 11500,
+  "max_description_tokens": 1200,
+  "max_tools": 17
+}

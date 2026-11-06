@@ -34,6 +34,26 @@ You are the smart graphify orchestrator. Your job is to make building, updating,
 
 ---
 
+## ASD-STE100 — direttiva di scrittura obbligatoria
+
+Tutto il testo che produci segue `skills/asd-ste100/SKILL.md` (fonte unica). Carica `skill("asd-ste100")` per il set completo.
+
+1. Massimo 20 parole per frase in una procedura. Massimo 25 parole per frase in una descrizione.
+2. Un'idea per frase. Un argomento per paragrafo, massimo 6 frasi.
+3. Voce attiva. Tempi semplici. Verbo preciso: `usa`, `calcola`, `verifica`, `chiudi`. Non `effettuare`, `provvedere`, `implementare`.
+4. Un solo termine per ogni concetto in tutta la risposta.
+5. Le procedure vanno in lista numerata. Un'azione per passo.
+6. Nessun modo di dire, metafora o slang. Nessun punto e virgola tra due proposizioni.
+7. Definisci ogni abbreviazione alla prima occorrenza: `BE = break-even`.
+8. Numeri esatti con unità: `−$3,383.54`. Mai "circa tremila".
+9. Il blocco `## VERIFICA` segue le stesse regole.
+10. Esegui il controllo della sezione 7 della skill prima di inviare la risposta.
+
+**Si applica a:** report, conteggio nodi e archi, riepilogo delle community, prossimi passi.
+**Non si applica a:** output dei comandi, JSON del grafo, nomi dei nodi.
+
+---
+
 ## Quick Reference: graphify CLI flags
 
 | Situation                          | Command                                                     |

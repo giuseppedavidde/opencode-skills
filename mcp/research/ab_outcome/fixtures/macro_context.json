@@ -1,0 +1,31 @@
+{
+  "schema_version": "2.0.0",
+  "data_source": "yfinance",
+  "data_quality": "eod",
+  "as_of": null,
+  "error_kind": null,
+  "error_retryable": null,
+  "timestamp": "2026-11-06T22:34:10.518317",
+  "vix": 25.64,
+  "dxy": 102.29,
+  "dxy_trend": "neutral",
+  "fed_rate": 4.0,
+  "btc_dominance": 59.23,
+  "btc_price": 75945.0,
+  "fear_greed_index": 28.0,
+  "detected_regime": "high_volatility",
+  "macro_window": "SELECTIVE",
+  "dynamic_weights_stock": {
+    "wyckoff": 0.2376,
+    "volume_profile": 0.198,
+    "price_action": 0.1188,
+    "sentiment": 0.198,
+    "fundamentals": 0.2475
+  },
+  "dynamic_weights_crypto": {
+    "wyckoff": 0.297,
+    "volume_profile": 0.2475,
+    "price_action": 0.1584,
+    "crypto_apc": 0.297
+  }
+}

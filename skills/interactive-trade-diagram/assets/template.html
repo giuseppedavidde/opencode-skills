@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c232c; --line:#242c38;
+    --text:#e6edf3; --muted:#8b949e; --red:#f85149; --green:#3fb950;
+    --amber:#d29922; --blue:#58a6ff; --violet:#bc8cff;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:28px 20px 60px;background:var(--bg);color:var(--text);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1140px;margin:0 auto}
+  h1{font-size:24px;margin:0 0 6px;letter-spacing:-.3px}
+  h2{font-size:15px;margin:34px 0 12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 18px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 4px}
+  .chip{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:13px}
+  .chip b{font-family:var(--mono);font-weight:600}
+  .chip.pos b{color:var(--green)} .chip.neg b{color:var(--red)} .chip.warn b{color:var(--amber)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  @media(max-width:820px){.grid2,.grid3{grid-template-columns:1fr}}
+  .k{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+  .v{font-family:var(--mono);font-size:20px;font-weight:600;margin-top:2px}
+  .unit{font-size:12px;color:var(--muted);font-family:inherit;font-weight:400}
+  .green{color:var(--green)} .red{color:var(--red)} .amber{color:var(--amber)} .blue{color:var(--blue)} .muted{color:var(--muted)}
+  .mono{font-family:var(--mono)}
+  .pos2{color:var(--green)} .neg2{color:var(--red)}
+
+  .chartbox{position:relative}
+  .chartscroll{overflow-x:auto;overflow-y:hidden}
+  @media(max-width:760px){.chartscroll svg{min-width:700px}}
+  svg{display:block;width:100%;height:auto;touch-action:none}
+  .gridline{stroke:#1f2732;stroke-width:1}
+  .axis{fill:var(--muted);font-size:11px;font-family:var(--mono)}
+  .lbl{fill:var(--muted);font-size:10px;font-family:var(--mono);letter-spacing:.04em}
+  .payoff{fill:none;stroke:var(--blue);stroke-width:2.5}
+  .nowcurve{fill:none;stroke:var(--violet);stroke-width:2;stroke-dasharray:6 4;opacity:.9}
+  .fillpos{fill:rgba(63,185,80,.14)}
+  .fillneg{fill:rgba(248,81,73,.10)}
+  .refline{stroke:#3a4553;stroke-width:1;stroke-dasharray:3 3}
+  .refspot{stroke:var(--amber);stroke-width:1.5;stroke-dasharray:5 4;opacity:.85}
+  .cursor{stroke:#fff;stroke-width:1;opacity:.55}
+  .dot{fill:#fff;stroke:var(--blue);stroke-width:2}
+  .dotnow{fill:#fff;stroke:var(--violet);stroke-width:2}
+  .tip{position:absolute;pointer-events:none;background:#0f1620;border:1px solid #2c3644;
+    border-radius:8px;padding:9px 11px;font-size:12px;font-family:var(--mono);line-height:1.6;
+    box-shadow:0 8px 24px rgba(0,0,0,.55);white-space:nowrap;opacity:0;transition:opacity .12s;z-index:5}
+  .tip.show{opacity:1}
+  .tip .t1{color:var(--amber);font-weight:600}
+  .tip .row{display:flex;justify-content:space-between;gap:14px}
+
+  .controls{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:14px}
+  .slider{flex:1;min-width:240px;-webkit-appearance:none;height:6px;border-radius:3px;outline:none}
+  .slider::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;
+    background:#fff;border:3px solid var(--blue);cursor:grab}
+  .slider::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid var(--blue);cursor:grab}
+  .qval{font-family:var(--mono);font-size:15px;min-width:78px;text-align:right}
+  .btn{background:var(--panel2);color:var(--muted);border:1px solid var(--line);border-radius:8px;
+    padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit;transition:.15s}
+  .btn:hover{color:var(--text);border-color:#3a4553}
+  .btn.on{background:#1f6feb22;border-color:var(--blue);color:var(--blue)}
+
+  .readout{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:16px}
+  @media(max-width:700px){.readout{grid-template-columns:1fr 1fr}}
+  .ro{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 13px}
+  .ro .k{font-size:10px}
+  .ro .v{font-size:17px}
+
+  .tl{position:relative;padding-left:26px}
+  .tl::before{content:"";position:absolute;left:7px;top:8px;bottom:8px;width:2px;
+    background:linear-gradient(180deg,var(--blue),var(--violet))}
+  .step{position:relative;margin-bottom:16px;padding:12px 14px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:10px;cursor:pointer;transition:.15s}
+  .step:hover{border-color:#3a4553;transform:translateX(2px)}
+  .step::before{content:"";position:absolute;left:-24px;top:18px;width:10px;height:10px;border-radius:50%;
+    background:var(--bg);border:2px solid var(--blue)}
+  .step.close::before{border-color:var(--red)}
+  .step.open::before{border-color:var(--violet)}
+  .step .d{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.04em}
+  .step .a{font-size:14px;margin:3px 0}
+  .step .c{font-family:var(--mono);font-size:13px;color:var(--muted)}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th{text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+    font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line)}
+  td{padding:8px 10px;border-bottom:1px solid #1b222b;font-family:var(--mono)}
+  tr[data-price]{cursor:pointer;transition:.12s}
+  tr[data-price]:hover{background:#1f6feb14}
+  tr.hi{background:#1f6feb22}
+  td.n{text-align:right}
+  tbody tr:last-child td{border-bottom:none}
+
+  .bar{height:9px;background:#222b36;border-radius:5px;overflow:hidden;margin-top:7px}
+  .bar>span{display:block;height:100%;border-radius:5px}
+  .wf{display:flex;align-items:flex-end;gap:14px;height:auto;min-height:230px;padding-top:10px}
+  .wf .col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%}
+  .wf .bx{width:100%;min-height:3px;border-radius:3px 3px 0 0;transition:.4s}
+  .wf .cap{font-family:var(--mono);font-size:11px;margin-top:6px;color:var(--muted);text-align:center;line-height:1.25}
+  .wf .val{font-family:var(--mono);font-size:11px;margin-bottom:4px}
+  .legend{display:flex;gap:18px;font-size:12px;color:var(--muted);margin-top:6px;margin-bottom:8px;flex-wrap:wrap}
+  .legend span{display:inline-flex;align-items:center}
+  .legend i{display:inline-block;width:16px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+  .note{font-size:12px;color:var(--muted);margin-top:10px;border-left:2px solid var(--line);padding-left:10px}
+  .alert{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:9px;margin-bottom:8px}
+  .alert .lv{font-family:var(--mono);font-weight:600;min-width:78px}
+  .alert .ac{color:var(--muted);font-size:12.5px}
+  footer{margin-top:44px;color:#5c6673;font-size:11.5px;border-top:1px solid var(--line);padding-top:14px;line-height:1.7}
+  footer b{color:#8b949e}
+  .hide{display:none !important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 id="title"></h1>
+  <p class="sub" id="subtitle"></p>
+  <div class="chips" id="chips"></div>
+
+  <div id="sec1">
+    <h2 id="h1">1 · Payoff: dove guadagni e dove perdi</h2>
+    <div class="card chartbox" id="chartbox">
+      <div class="legend">
+        <span><i style="background:var(--blue)"></i><span id="legExpiry">P&amp;L a scadenza</span></span>
+        <span><i style="background:var(--violet)"></i>P&amp;L oggi (valore di mercato)</span>
+        <span><i style="background:var(--amber)"></i><span id="legSpot">Spot</span></span>
+      </div>
+      <div class="chartscroll">
+        <svg id="chart" viewBox="0 0 920 470" role="img" aria-label="Curva di payoff"></svg>
+      </div>
+      <div class="tip" id="tip"></div>
+      <div class="controls">
+        <input class="slider" id="slider" type="range" aria-label="Prezzo ipotetico del sottostante">
+        <div class="qval" id="qval"></div>
+        <div style="display:flex;gap:6px">
+          <button class="btn on" data-series="both">Entrambe</button>
+          <button class="btn" data-series="exp">Scadenza</button>
+          <button class="btn" data-series="now">Oggi</button>
+        </div>
+        <button class="btn" id="reset">Reset spot</button>
+      </div>
+      <div class="readout">
+        <div class="ro"><div class="k">Prezzo ipotetico</div><div class="v amber" id="rPrice"></div></div>
+        <div class="ro"><div class="k">P&amp;L a scadenza</div><div class="v" id="rExp"></div></div>
+        <div class="ro"><div class="k">P&amp;L oggi</div><div class="v" id="rNow"></div></div>
+        <div class="ro"><div class="k">Delta posizione</div><div class="v" id="rDelta"></div></div>
+      </div>
+    </div>
+    <div class="grid3" id="zoneCards" style="margin-top:14px"></div>
+  </div>
+
+  <div id="sec2">
+    <h2 id="h2">2 · Anatomia della posizione</h2>
+    <div class="grid2">
+      <div class="card" id="legsCard"></div>
+      <div class="card" id="econCard"></div>
+    </div>
+  </div>
+
+  <div id="sec3">
+    <h2 id="h3">3 · Da dove viene il P&amp;L</h2>
+    <div class="card" id="wfCard"><div class="wf" id="wf"></div><div class="note" id="wfNote"></div></div>
+  </div>
+
+  <div id="sec4">
+    <h2 id="h4">4 · Storia della posizione</h2>
+    <div class="grid2" id="tlWrap"><div class="tl" id="tl"></div><div class="card" id="tlSide"></div></div>
+  </div>
+
+  <div id="sec5">
+    <h2 id="h5">5 · Scenari: clicca una riga per vederla sul grafico</h2>
+    <div class="card">
+      <table>
+        <thead><tr><th>Prezzo a scadenza</th><th class="n">Gap vs spot</th><th class="n">P&amp;L a scadenza</th><th class="n">P&amp;L oggi</th><th style="padding-left:18px">Esito</th></tr></thead>
+        <tbody id="scen"></tbody>
+      </table>
+      <div class="note" id="scenNote"></div>
+    </div>
+  </div>
+
+  <div id="sec6">
+    <h2 id="h6">6 · Livelli da monitorare</h2>
+    <div class="card" id="alerts"></div>
+  </div>
+
+  <footer id="verifica"></footer>
+</div>
+
+<script>
+/* ============================================================================
+   MODIFICA SOLO QUESTO BLOCCO. Il motore sotto non si tocca.
+   ========================================================================== */
+const CONFIG = {
+  ticker: "STX",
+  title: "STX — Short Put 280 · 21.01.2028",
+  subtitle: "Dati del 05.11.2026 · spot $472.94 · 442 giorni alla scadenza.",
+  asOf: "05.11.2026",
+
+  spot: 472.94,
+  r: 0.04025,
+  expiryLabel: "21.01.2028",
+  expiryISO: "2028-01-21",
+  dte: 442,
+  ivToday: 0.754506,
+
+  /* realized = P&L già incassato sulle gambe chiuse. Sommato a ogni calcolo. */
+  realized: -1919,
+
+  legs: [
+    { kind: "put", side: "short", strike: 280, qty: 1, entry: 26.19, iv: 0.754506, mark: 40.83 }
+  ],
+
+  chips: [
+    { label: "Strike", value: "280" },
+    { label: "Entry", value: "+$26.19" },
+    { label: "Mark", value: "$40.83" },
+    { label: "P&L totale", value: "−$3,383.54", tone: "neg" },
+    { label: "BE", value: "$273.00", tone: "warn" },
+    { label: "Max profit", value: "+$700", tone: "pos" },
+    { label: "Max loss", value: "−$27,300", tone: "neg" },
+    { label: "DTE", value: "442" }
+  ],
+
+  /* zones: opzionale. Se manca, le card si generano dai dati. */
+  zones: null,
+
+
+  legsNote: "Credito incassato in data 04.11.2026. Il valore di mercato è il mark IBKR.",
+
+  greeks: [
+    { name: "Delta", value: "+0.1315", note: "13.15 azioni equivalenti" },
+    { name: "Theta", value: "+$6.51/g", note: "dato 04.11" },
+    { name: "Vega", value: "−$95.5/pt", note: "dato 04.11" },
+    { name: "IV", value: "72.0%", note: "RV30 72.9%" },
+    { name: "P(ITM)", value: "15–18%", note: "modello Black-Scholes" }
+  ],
+
+  bridge: [
+    { label: "Credito entry 490", value: 501, kind: "flow" },
+    { label: "Chiusura 490 (costo)", value: -2420, kind: "flow" },
+    { label: "Apertura 280 (credito)", value: 2619, kind: "flow" },
+    { label: "Credito cumulato", kind: "total" },
+    { label: "Valore put oggi", value: -4083, kind: "flow" },
+    { label: "P&L totale", kind: "total" }
+  ],
+  bridgeNote: "Il conto è lineare: credito cumulato +$700 − valore attuale $4,083 = −$3,383. Il credito cumulato non è il P&L.",
+
+  timeline: [
+    { date: "OTT 2026 · apertura", title: "SELL 1× put 490 · 18.12.2026",
+      detail: "+$5.01 / azione → credito +$501 · STX ≈ $750", price: 750, cls: "" },
+    { date: "04.11.2026 · chiusura", title: "BUY 1× put 490 · 18.12.2026",
+      detail: "−$24.20 / azione → realized −$1,919 · STX $565.69", price: 566, cls: "close" },
+    { date: "04.11.2026 · riapertura", title: "SELL 1× put 280 · 21.01.2028",
+      detail: "+$26.19 / azione → credito +$2,619 · STX $472.94", price: 473, cls: "open" }
+  ],
+  timelineSide: {
+    title: "Cosa ha cambiato il roll",
+    rows: [
+      ["Strike", "490 → 280", "pos"],
+      ["Esposizione", "−$21,000", "pos"],
+      ["Buffer", "13.4% → 40.8%", "pos"],
+      ["Scadenza", "44 → 442 giorni", "neg"]
+    ],
+    note: "Il roll ha ridotto il rischio di coda. In cambio ha allungato il tempo."
+  },
+
+  alerts: [
+    { level: "$300", meaning: "7% sopra lo strike", action: "Controlla il margine. Prepara il piano." },
+    { level: "$280", meaning: "Strike. Inizio ITM.", action: "Rivaluta tenere o chiudere." },
+    { level: "$273", meaning: "Break-even", action: "Sotto: la posizione chiude in perdita." }
+  ],
+
+  verifica: {
+    confidence: 88,
+    evidence: "Calcoli ricontrollati in Python e nel browser.",
+    unverified: "Mark è il prezzo IBKR, non il costo di chiusura.",
+    escalation: "no"
+  }
+};
+/* ========================================================================== */
+
+(function(){
+  "use strict";
+  const CFG = CONFIG;
+  const MULT = 100;
+  const T0 = (CFG.dte || 365) / 365;
+  const $ = id => document.getElementById(id);
+  const NS = "http://www.w3.org/2000/svg";
+
+  /* ---------- modello ---------- */
+  function normCdf(x){
+    const t = 1/(1 + 0.2316419*Math.abs(x));
+    const d = 0.3989423*Math.exp(-x*x/2);
+    const p = d*t*(0.3193815 + t*(-0.3565638 + t*(1.781478 + t*(-1.821256 + t*1.330274))));
+    return x > 0 ? 1 - p : p;
+  }
+  function legsIv(leg){ return leg.iv != null ? leg.iv : (CFG.ivToday || 0.5); }
+
+  function intrinsic(leg, S){
+    if (leg.kind === "stock") return S;
+    if (leg.kind === "put") return Math.max(0, leg.strike - S);
+    return Math.max(0, S - leg.strike);
+  }
+  function bsValue(leg, S, T){
+    if (leg.kind === "stock") return S;
+    const K = leg.strike, s = legsIv(leg), r = CFG.r || 0.04;
+    if (T <= 0) return intrinsic(leg, S);
+    const sT = s*Math.sqrt(T);
+    const d1 = (Math.log(S/K) + (r + s*s/2)*T)/sT;
+    const d2 = d1 - sT;
+    if (leg.kind === "put") return K*Math.exp(-r*T)*normCdf(-d2) - S*normCdf(-d1);
+    return S*normCdf(d1) - K*Math.exp(-r*T)*normCdf(d2);
+  }
+  function bsDelta(leg, S, T){
+    if (leg.kind === "stock") return 1;
+    const K = leg.strike, s = legsIv(leg), r = CFG.r || 0.04;
+    if (T <= 0) return (leg.kind === "put" ? (S < K ? -1 : 0) : (S > K ? 1 : 0));
+    const sT = s*Math.sqrt(T);
+    const d1 = (Math.log(S/K) + (r + s*s/2)*T)/sT;
+    return leg.kind === "put" ? normCdf(d1) - 1 : normCdf(d1);
+  }
+  const sideSign = leg => (leg.side === "short" ? -1 : 1);
+  const legMult = leg => (leg.kind === "stock" ? 1 : MULT);
+
+  function legPnl(leg, S, T){
+    const v = T > 0 ? bsValue(leg, S, T) : intrinsic(leg, S);
+    return sideSign(leg) * (v - leg.entry) * (leg.qty || 1) * legMult(leg);
+  }
+  const CARRY = CFG.realized || 0;
+  const pnlExp = S => CARRY + CFG.legs.reduce((a,l) => a + legPnl(l, S, 0), 0);
+  const pnlNow = S => CARRY + CFG.legs.reduce((a,l) => a + legPnl(l, S, T0), 0);
+  const deltaNow = S => CFG.legs.reduce((a,l) => a + sideSign(l)*(l.qty||1)*legMult(l)*bsDelta(l, S, T0), 0);
+
+  /* ---------- dominio ---------- */
+  const strikes = CFG.legs.filter(l => l.kind !== "stock").map(l => l.strike);
+  const anchorMin = Math.min(...[CFG.spot, ...strikes]);
+  const anchorMax = Math.max(...[CFG.spot, ...strikes]);
+  const X0 = CFG.xmin != null ? CFG.xmin : Math.max(1, Math.round(anchorMin*0.62/5)*5);
+  const X1 = CFG.xmax != null ? CFG.xmax : Math.round(anchorMax*1.32/5)*5;
+
+  function scanPnl(){
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i <= 400; i++){
+      const S = X0 + (X1-X0)*i/400;
+      const v = pnlExp(S);
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    }
+    return [lo, hi];
+  }
+  function roundTo(v, step, dir){
+    const q = v/step;
+    return (dir > 0 ? Math.ceil(q) : Math.floor(q))*step;
+  }
+  const [rawLo, rawHi] = scanPnl();
+  const stepY = Math.abs(rawHi - rawLo) > 40000 ? 10000
+              : Math.abs(rawHi - rawLo) > 12000 ? 2000
+              : Math.abs(rawHi - rawLo) > 5000 ? 1000 : 500;
+  const Y0 = Math.min(roundTo(rawLo*1.06, stepY, -1), -stepY);
+  const Y1 = Math.max(roundTo(rawHi + stepY*0.2, stepY, 1), stepY);
+
+  function breakevens(){
+    const out = [];
+    let prevS = X0, prev = pnlExp(X0);
+    for (let i = 1; i <= 800; i++){
+      const S = X0 + (X1-X0)*i/800;
+      const v = pnlExp(S);
+      if ((prev < 0 && v >= 0) || (prev > 0 && v <= 0)){
+        let a = prevS, b = S;
+        for (let k = 0; k < 60; k++){
+          const m = (a+b)/2;
+          if ((pnlExp(a) < 0) === (pnlExp(m) < 0)) a = m; else b = m;
+        }
+        out.push((a+b)/2);
+      }
+      prevS = S; prev = v;
+    }
+    return out;
+  }
+  const BES = breakevens();
+
+  /* ---------- formattazione ---------- */
+  const money = v => (v < 0 ? "−$" : "+$") + Math.abs(Math.round(v)).toLocaleString("en-US");
+  const moneyPlain = v => (v < 0 ? "−$" : "$") + Math.abs(Math.round(v)).toLocaleString("en-US");
+  const price2 = v => "$" + v.toFixed(2);
+  const num1 = v => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(1) + "%";
+  const tone = v => v >= 0 ? "pos2" : "neg2";
+
+  /* ---------- intestazione ---------- */
+  document.title = CFG.title;
+  $("title").textContent = CFG.title;
+  $("subtitle").textContent = CFG.subtitle;
+  $("legSpot").textContent = "Spot " + price2(CFG.spot);
+  $("legExpiry").textContent = "P&L a scadenza" + (CFG.expiryLabel ? " (" + CFG.expiryLabel + ")" : "");
+
+  const chips = $("chips");
+  (CFG.chips || []).forEach(c => {
+    const d = document.createElement("div");
+    d.className = "chip" + (c.tone ? " " + c.tone : "");
+    d.innerHTML = c.label + " <b>" + c.value + "</b>";
+    chips.appendChild(d);
+  });
+
+  /* ---------- grafico ---------- */
+  const W = 920, H = 470, PAD = {l:74, r:26, t:20, b:48};
+  const iw = W - PAD.l - PAD.r, ih = H - PAD.t - PAD.b;
+  const x = S => PAD.l + (S - X0)/(X1 - X0)*iw;
+  const y = v => PAD.t + (Y1 - v)/(Y1 - Y0)*ih;
+  const invX = px => X0 + (px - PAD.l)/iw*(X1 - X0);
+
+  const svg = $("chart"), tip = $("tip");
+  function el(tag, attrs, parent){
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  const defs = el("defs", {}, svg);
+  const cp = el("clipPath", {id:"plotclip"}, defs);
+  el("rect", {x:PAD.l, y:PAD.t, width:iw, height:ih}, cp);
+
+  const gGrid = el("g", {}, svg);
+  for (let v = Y0; v <= Y1; v += stepY){
+    el("line", {x1:PAD.l, y1:y(v), x2:PAD.l+iw, y2:y(v), class:"gridline"}, gGrid);
+    const t = el("text", {x:PAD.l-10, y:y(v)+4, "text-anchor":"end", class:"axis"}, gGrid);
+    t.textContent = (v > 0 ? "+$" : v < 0 ? "−$" : "$") + Math.abs(v).toLocaleString("en-US");
+  }
+  const stepX = (() => {
+    const span = X1 - X0;
+    return span > 700 ? 100 : span > 350 ? 50 : span > 140 ? 25 : 10;
+  })();
+  for (let s = Math.ceil(X0/stepX)*stepX; s <= X1; s += stepX){
+    el("line", {x1:x(s), y1:PAD.t, x2:x(s), y2:PAD.t+ih, class:"gridline"}, gGrid);
+    const t = el("text", {x:x(s), y:PAD.t+ih+20, "text-anchor":"middle", class:"axis"}, gGrid);
+    t.textContent = "$" + s;
+  }
+  const xl = el("text", {x:PAD.l+iw/2, y:H-8, "text-anchor":"middle", class:"lbl"}, svg);
+  xl.textContent = "PREZZO DEL SOTTOSTANTE A SCADENZA";
+  const yl = el("text", {x:14, y:PAD.t+ih/2, "text-anchor":"middle", class:"lbl",
+    transform:"rotate(-90 14 " + (PAD.t+ih/2) + ")"}, svg);
+  yl.textContent = "P&L (USD)";
+
+  el("line", {x1:PAD.l, y1:y(0), x2:PAD.l+iw, y2:y(0), stroke:"#4a5563", "stroke-width":1.2}, svg);
+
+  /* aree: verde dove il payoff a scadenza è positivo, rosso dove è negativo */
+  function splitAreas(){
+    const N = 800, out = {pos: [], neg: []};
+    let run = null, prev = null;
+    for (let i = 0; i <= N; i++){
+      const S = X0 + (X1-X0)*i/N, v = pnlExp(S);
+      if (!run) run = { sign: v >= 0 ? 1 : -1, pts: [[S, v]] };
+      else if (prev && (prev.v >= 0) !== (v >= 0)){
+        const t = prev.v/(prev.v - v);
+        const Sc = prev.S + (S - prev.S)*t;
+        run.pts.push([Sc, 0]);
+        out[run.sign > 0 ? "pos" : "neg"].push(run.pts);
+        run = { sign: v >= 0 ? 1 : -1, pts: [[Sc, 0], [S, v]] };
+      } else {
+        run.pts.push([S, v]);
+      }
+      prev = { S: S, v: v };
+    }
+    if (run) out[run.sign > 0 ? "pos" : "neg"].push(run.pts);
+    return out;
+  }
+  function polyPath(pts){
+    if (pts.length < 2) return "";
+    let d = "M" + x(pts[0][0]).toFixed(1) + "," + y(0).toFixed(1);
+    pts.forEach(pt => { d += "L" + x(pt[0]).toFixed(1) + "," + y(pt[1]).toFixed(1); });
+    return d + "L" + x(pts[pts.length-1][0]).toFixed(1) + "," + y(0).toFixed(1) + "Z";
+  }
+
+  const gPlot = el("g", {"clip-path":"url(#plotclip)"}, svg);
+  const areas = splitAreas();
+  const areaPos = el("path", {class:"fillpos", d: areas.pos.map(polyPath).join(" ")}, gPlot);
+  const areaNeg = el("path", {class:"fillneg", d: areas.neg.map(polyPath).join(" ")}, gPlot);
+
+  function pathFor(fn, step){
+    let d = "";
+    for (let S = X0; S <= X1; S += step) d += (d ? "L" : "M") + x(S).toFixed(1) + "," + y(fn(S)).toFixed(1);
+    d += "L" + x(X1).toFixed(1) + "," + y(fn(X1)).toFixed(1);
+    return d;
+  }
+  const lineExp = el("path", {class:"payoff", d: pathFor(pnlExp, stepX/8)}, gPlot);
+  const lineNow = el("path", {class:"nowcurve", d: pathFor(pnlNow, stepX/20)}, gPlot);
+
+  /* linee di riferimento */
+  const gMark = el("g", {}, svg);
+  function vline(price, cls, label, color){
+    el("line", {x1:x(price), y1:PAD.t, x2:x(price), y2:PAD.t+ih, class:cls}, gMark);
+    const onRight = x(price) > W - 190;
+    const t = el("text", { x: x(price) + (onRight ? -6 : 6), y: PAD.t+ih-9,
+      class:"lbl", "text-anchor": onRight ? "end" : "start" }, gMark);
+    t.style.fill = color;
+    t.style.paintOrder = "stroke";
+    t.style.stroke = "#0d1117";
+    t.style.strokeWidth = "3px";
+    t.textContent = label;
+  }
+  vline(CFG.spot, "refspot", "SPOT " + price2(CFG.spot), "#d29922");
+  const beLabel = (strikes.length ? strikes.map(s => "K " + s).join(" · ") + " · " : "")
+                + (BES.length ? "BE " + BES.map(b => b.toFixed(2)).join(" / ") : "");
+  if (beLabel) vline(BES.length ? BES[0] : strikes[0], "refline", beLabel, "#9aa4b1");
+
+  const hoverLine = el("line", {y1:PAD.t, y2:PAD.t+ih, x1:-10, x2:-10,
+    stroke:"#8b949e", "stroke-width":1, "stroke-dasharray":"2 4", opacity:.7}, svg);
+  const cursor = el("line", {class:"cursor", y1:PAD.t, y2:PAD.t+ih, x1:-10, x2:-10}, svg);
+  const dotExp = el("circle", {r:4.5, class:"dot", cx:-10, cy:-10}, svg);
+  const dotNow = el("circle", {r:4.5, class:"dotnow", cx:-10, cy:-10}, svg);
+
+  /* ---------- stato e interazione ---------- */
+  const slider = $("slider");
+  slider.min = X0; slider.max = X1; slider.step = 1; slider.value = CFG.spot;
+
+  const clampY = v => Math.min(PAD.t+ih-1, Math.max(PAD.t+1, v));
+  let cur = CFG.spot;
+
+  function render(p){
+    cur = p;
+    slider.value = p;
+    $("qval").textContent = moneyPlain(p);
+    const xe = x(p);
+    cursor.setAttribute("x1", xe); cursor.setAttribute("x2", xe);
+    const pe = pnlExp(p), pn = pnlNow(p), dl = deltaNow(p);
+    dotExp.setAttribute("cx", xe); dotExp.setAttribute("cy", clampY(y(pe)));
+    dotNow.setAttribute("cx", xe); dotNow.setAttribute("cy", clampY(y(pn)));
+    $("rPrice").textContent = moneyPlain(p);
+    $("rExp").textContent = money(pe); $("rExp").className = "v " + (pe >= 0 ? "green" : "red");
+    $("rNow").textContent = money(pn); $("rNow").className = "v " + (pn >= 0 ? "green" : "red");
+    $("rDelta").textContent = (dl > 0 ? "+" : "") + dl.toFixed(3);
+    document.querySelectorAll("#scen tr[data-price]").forEach(tr => {
+      tr.classList.toggle("hi", Math.abs(parseFloat(tr.dataset.price) - p) < 1);
+    });
+  }
+
+  function showTip(p){
+    const pe = pnlExp(p), pn = pnlNow(p), dl = deltaNow(p);
+    const gap = (p/CFG.spot - 1)*100;
+    tip.innerHTML =
+      '<div class="t1">' + CFG.ticker + " " + moneyPlain(p) + " (" + num1(gap) + ")</div>" +
+      '<div class="row"><span class="muted">a scadenza</span><b class="' + tone(pe) + '">' + money(pe) + "</b></div>" +
+      '<div class="row"><span class="muted">oggi</span><b class="' + tone(pn) + '">' + money(pn) + "</b></div>" +
+      '<div class="row"><span class="muted">delta</span><b>' + (dl > 0 ? "+" : "") + dl.toFixed(3) + "</b></div>";
+    const svgR = svg.getBoundingClientRect();
+    const boxR = tip.parentElement.getBoundingClientRect();
+    const scale = svgR.width / W;
+    const ax = svgR.left - boxR.left + x(p)*scale;
+    const ay = svgR.top - boxR.top + y(pn)*scale;
+    let left = ax + 16;
+    if (left + 210 > boxR.width) left = ax - 216;
+    let top = ay - 92;
+    if (top < 4) top = ay + 18;
+    if (top + 92 > boxR.height) top = boxR.height - 96;
+    tip.style.left = Math.max(4, left) + "px";
+    tip.style.top = Math.max(0, top) + "px";
+    tip.classList.add("show");
+  }
+
+  slider.addEventListener("input", e => { render(parseFloat(e.target.value)); tip.classList.remove("show"); });
+
+  let dragging = false;
+  function fromEvent(ev){
+    const b = svg.getBoundingClientRect();
+    const px = (ev.clientX - b.left)*(W/b.width);
+    return Math.max(X0, Math.min(X1, invX(px)));
+  }
+  svg.addEventListener("pointerdown", ev => {
+    dragging = true; svg.setPointerCapture(ev.pointerId);
+    const p = fromEvent(ev); render(p); showTip(p);
+  });
+  svg.addEventListener("pointermove", ev => {
+    const p = fromEvent(ev);
+    hoverLine.setAttribute("x1", x(p)); hoverLine.setAttribute("x2", x(p));
+    if (dragging) render(p);
+    showTip(p);
+  });
+  svg.addEventListener("pointerup", () => { dragging = false; });
+  svg.addEventListener("pointerleave", () => {
+    dragging = false; tip.classList.remove("show");
+    hoverLine.setAttribute("x1", -10); hoverLine.setAttribute("x2", -10);
+  });
+
+  document.querySelectorAll(".btn[data-series]").forEach(b => {
+    b.addEventListener("click", () => {
+      document.querySelectorAll(".btn[data-series]").forEach(o => o.classList.remove("on"));
+      b.classList.add("on");
+      const m = b.dataset.series;
+      lineExp.style.display = (m === "now") ? "none" : "";
+      lineNow.style.display = (m === "exp") ? "none" : "";
+      areaPos.style.display = (m === "now") ? "none" : "";
+      areaNeg.style.display = (m === "now") ? "none" : "";
+    });
+  });
+  $("reset").addEventListener("click", () => render(CFG.spot));
+
+  /* ---------- card di zona ---------- */
+  const zoneWrap = $("zoneCards");
+  /* estremi reali del payoff: S=0, strike, e pendenza a +infinito */
+  function extremes(){
+    let lo = Infinity, hi = -Infinity;
+    [0].concat(strikes, [CFG.spot]).forEach(S => {
+      const v = pnlExp(S);
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    });
+    /* pendenza per S molto grande: conta call e azioni */
+    const slopeUp = CFG.legs.reduce((a,l) => {
+      const m = (l.kind === "stock" ? 1 : MULT);
+      if (l.kind === "stock" || l.kind === "call") return a + sideSign(l)*(l.qty||1)*m;
+      return a;
+    }, 0);
+    return { lo: lo, hi: hi, unlimitedUp: slopeUp > 0, unlimitedLoss: slopeUp < 0 };
+  }
+  const EXT = extremes();
+  const loV = EXT.lo, hiV = EXT.hi;
+  const hiLabel = EXT.unlimitedUp ? "illimitato" : money(hiV);
+  const loLabel = EXT.unlimitedLoss ? "illimitato" : money(loV);
+  function autoZones(){
+    const out = [];
+    if (BES.length){
+      out.push({ k: "Zona di profitto", v: "sopra " + price2(BES[0]), cls: "green",
+        note: "Guadagno massimo: " + hiLabel + "." });
+      out.push({ k: "Zona di perdita", v: "sotto " + price2(BES[0]), cls: "red",
+        note: "Perdita massima: " + loLabel + "." });
+    }
+    const nearest = strikes.length ? Math.min(...strikes) : CFG.spot;
+    const buf = Math.abs(CFG.spot - nearest)/CFG.spot*100;
+    out.push({ k: "Distanza dallo strike", v: buf.toFixed(1) + "%", cls: "blue",
+      note: "Differenza tra spot e strike più vicino, in percentuale." });
+    return out;
+  }
+  (CFG.zones || autoZones()).forEach(z => {
+    const d = document.createElement("div");
+    d.className = "card";
+    d.innerHTML = '<div class="k">' + z.k + '</div><div class="v ' + (z.cls||"") + '">' + z.v +
+                  '</div>' + (z.note ? '<div class="note">' + z.note + "</div>" : "");
+    zoneWrap.appendChild(d);
+  });
+
+  /* ---------- gamba + economia ---------- */
+  const legsCard = $("legsCard");
+  const legRows = CFG.legs.map(l => {
+    const name = l.kind === "stock" ? "Azioni" : (l.kind === "put" ? "Put" : "Call");
+    const pos = (l.side === "short" ? "Short " : "Long ") + (l.qty || 1) + "× " + name +
+                (l.strike != null ? " " + l.strike : "");
+    const mv = l.mark != null ? l.mark : (l.kind === "stock" ? CFG.spot : bsValue(l, CFG.spot, T0));
+    const pnl = sideSign(l)*(mv - l.entry)*(l.qty||1)*legMult(l);
+    const cash = -sideSign(l)*(l.entry||0)*(l.qty||1)*legMult(l);
+    return '<tr><td class="muted">' + pos + '</td><td class="n">' +
+           (cash >= 0 ? "+" : "−") +
+           "$" + Math.abs(Math.round(cash)).toLocaleString("en-US") +
+           '</td><td class="n">' + moneyPlain(mv*legMult(l)*(l.qty||1)) +
+           '</td><td class="n ' + tone(pnl) + '">' + money(pnl) + "</td></tr>";
+  }).join("");
+  legsCard.innerHTML =
+    '<div class="k">Gambe aperte</div>' +
+    '<div class="v">' + CFG.legs.map(l => (l.kind === "stock" ? "Azioni" :
+      (l.side === "short" ? "Short " : "Long ") + (l.kind === "put" ? "put" : "call") + " " + l.strike)).join(" · ") +
+    ' <span class="unit">scad. ' + (CFG.expiryLabel || "—") + "</span></div>" +
+    '<table style="margin-top:12px"><thead><tr><th>Gamba</th><th class="n">Entry</th>' +
+    '<th class="n">Mark</th><th class="n">P&amp;L</th></tr></thead><tbody>' + legRows + "</tbody></table>" +
+    (CFG.legsNote ? '<div class="note">' + CFG.legsNote + "</div>" : "");
+
+  const pnlTotal = pnlNow(CFG.spot);
+  const econRows = [
+    ["Max profit", hiLabel, "pos"],
+    ["Max loss", loLabel, "neg"],
+    ["Break-even", BES.length ? BES.map(b => price2(b)).join(" / ") : "—", ""],
+    ["P&L oggi", money(pnlTotal), pnlTotal >= 0 ? "pos" : "neg"],
+    ["Rapporto loss/profit", (hiV > 0 && !EXT.unlimitedUp && !EXT.unlimitedLoss ? (Math.abs(loV)/hiV).toFixed(1) + "×" : "—"), "neg"],
+    ["DTE", String(CFG.dte != null ? CFG.dte : "—"), ""]
+  ];
+  $("econCard").innerHTML =
+    '<div class="k">Economia della posizione</div>' +
+    '<table style="margin-top:12px"><tbody>' +
+    econRows.map(r => '<tr><td class="muted">' + r[0] + '</td><td class="n ' + r[2] + '">' + r[1] + "</td></tr>").join("") +
+    "</tbody></table>" +
+    ((CFG.greeks || []).length
+      ? '<div class="k" style="margin-top:16px">Sensibilità</div><table style="margin-top:6px"><tbody>' +
+        CFG.greeks.map(g => '<tr><td class="muted">' + g.name + '</td><td class="n">' + g.value +
+          (g.note ? ' <span class="muted">· ' + g.note + '</span>' : "") + "</td></tr>").join("") +
+        "</tbody></table>"
+      : "");
+
+  /* ---------- waterfall ---------- */
+  if ((CFG.bridge || []).length && $("sec3")){
+    const rows = [];
+    let run = 0;
+    CFG.bridge.forEach(d => {
+      if (d.kind === "total"){ rows.push({ label: d.label, from: 0, to: run, total: true }); }
+      else { const from = run; run += d.value; rows.push({ label: d.label, from: from, to: run, value: d.value, total: false }); }
+    });
+    const vals = rows.flatMap(r => [r.from, r.to]).concat([0]);
+    const lo = Math.min(...vals), hi = Math.max(...vals);
+    const pad = (hi - lo) * 0.08 || 500;
+    const h = 170;
+    const yy = v => (hi + pad - v)/((hi + pad) - (lo - pad || 1))*h;
+    const wf = $("wf");
+    rows.forEach((r, i) => {
+      const col = document.createElement("div"); col.className = "col";
+      const top = yy(Math.max(r.from, r.to));
+      const height = Math.max(3, Math.abs(yy(r.from) - yy(r.to)));
+      const val = r.total ? r.to : r.value;
+      const color = r.total ? (val >= 0 ? "#58a6ff" : "#f85149") : (val >= 0 ? "#3fb950" : "#f85149");
+      let html =
+        '<div class="val" style="color:' + color + '">' + money(val) + "</div>" +
+        '<div style="position:relative;width:100%;height:' + h + 'px">' +
+          '<div style="position:absolute;left:0;right:0;top:' + yy(0) + 'px;border-top:1px solid #3a4553"></div>' +
+          '<div class="bx" style="position:absolute;left:0;right:0;top:' + top + "px;height:" + height +
+            "px;background:" + color + ";opacity:" + (r.total ? 1 : 0.72) + '"></div>';
+      if (i < rows.length - 1) {
+        html += '<div style="position:absolute;right:-14px;width:14px;top:' + yy(r.to) + 'px;border-top:1px dashed #4a5563"></div>';
+      }
+      html += '</div><div class="cap">' + r.label + "</div>";
+      col.innerHTML = html;
+      wf.appendChild(col);
+    });
+    if (CFG.bridgeNote) $("wfNote").textContent = CFG.bridgeNote;
+  } else if ($("sec3")) { $("sec3").classList.add("hide"); }
+
+  /* ---------- timeline ---------- */
+  if ((CFG.timeline || []).length && $("sec4")){
+    const tl = $("tl");
+    CFG.timeline.forEach(s => {
+      const d = document.createElement("div");
+      d.className = "step " + (s.cls || "");
+      if (s.price != null) d.dataset.price = s.price;
+      d.innerHTML = '<div class="d">' + s.date + '</div><div class="a">' + s.title +
+        '</div><div class="c">' + s.detail + "</div>";
+      if (s.price != null) d.addEventListener("click", () => render(s.price));
+      tl.appendChild(d);
+    });
+    const side = $("tlSide"), ts = CFG.timelineSide;
+    if (ts){
+      side.innerHTML = '<div class="k">' + ts.title + "</div><table style=\"margin-top:10px\"><tbody>" +
+        ts.rows.map(r => '<tr><td class="muted">' + r[0] + '</td><td class="n ' + r[2] + '">' + r[1] + "</td></tr>").join("") +
+        "</tbody></table>" + (ts.note ? '<div class="note">' + ts.note + "</div>" : "");
+    } else { side.classList.add("hide"); }
+  } else if ($("sec4")) { $("sec4").classList.add("hide"); }
+
+  /* ---------- scenari ---------- */
+  function scenarioPrices(){
+    if ((CFG.scenarios || []).length) return CFG.scenarios.map(s => typeof s === "number" ? s : s.price);
+    const set = new Set();
+    const anchors = [CFG.spot, ...strikes, ...BES].filter(v => v > X0 && v < X1);
+    anchors.forEach(a => { set.add(Math.round(a)); });
+    [1.3, 1.1, 0.9, 0.75, 0.6, 0.45].forEach(k => {
+      const v = Math.round(CFG.spot*k/5)*5;
+      if (v > X0 && v < X1) set.add(v);
+    });
+    return [...set].sort((a,b) => b - a);
+  }
+  function labelFor(price){
+    if (BES.some(b => Math.abs(b - price) < 0.6)) return "Break-even";
+    if (strikes.some(s => Math.abs(s - price) < 0.6)) return "Soglia ITM";
+    if (price === Math.round(CFG.spot)) return "Spot";
+    if (hiV > 0 && Math.abs(pnlExp(price) - hiV) < 1) return "Max profit";
+    if (pnlExp(price) > 0) return "In profitto";
+    const ratio = Math.abs(pnlExp(price))/Math.max(1, Math.abs(loV));
+    return ratio > 0.5 ? "Perdita grave" : "In perdita";
+  }
+  const tbody = $("scen");
+  scenarioPrices().forEach(price => {
+    const pe = pnlExp(price), pn = pnlNow(price);
+    const tr = document.createElement("tr");
+    tr.dataset.price = price;
+    tr.innerHTML =
+      "<td>$" + price + "</td>" +
+      '<td class="n">' + num1((price/CFG.spot - 1)*100) + "</td>" +
+      '<td class="n ' + tone(pe) + '">' + money(pe) + "</td>" +
+      '<td class="n ' + tone(pn) + '">' + money(pn) + "</td>" +
+      '<td class="muted">' + labelFor(price) + "</td>";
+    tr.addEventListener("click", () => render(price));
+    tbody.appendChild(tr);
+  });
+  $("scenNote").textContent = "Il P&L a scadenza è esatto. Il P&L di oggi è un modello Black-Scholes (IV " +
+    (CFG.ivToday*100).toFixed(2) + "%, r " + (CFG.r*100).toFixed(3) + "%, " + CFG.dte + " giorni). Non è una quotazione.";
+
+  /* ---------- alert ---------- */
+  if ((CFG.alerts || []).length && $("sec6")){
+    const box = $("alerts");
+    CFG.alerts.forEach(a => {
+      const d = document.createElement("div");
+      const color = a.tone === "neg" ? "#f85149" : a.tone === "pos" ? "#3fb950" : "#d29922";
+      d.className = "alert";
+      d.style.background = "rgba(255,255,255,.03)";
+      d.style.borderLeft = "3px solid " + color;
+      d.innerHTML = '<div class="lv" style="color:' + color + '">' + a.level + '</div>' +
+        '<div><div>' + a.meaning + '</div><div class="ac">' + a.action + "</div></div>";
+      box.appendChild(d);
+    });
+  } else if ($("sec6")) { $("sec6").classList.add("hide"); }
+
+  /* ---------- verifica ---------- */
+  const v = CFG.verifica || {};
+  $("verifica").innerHTML =
+    "<b>Verifica.</b> Confidenza " + (v.confidence != null ? v.confidence : "—") + "/100 · " +
+    "Evidenza: " + (v.evidence || "—") + " · " +
+    "Non verificato: " + (v.unverified || "—") + " · " +
+    "Escalation: " + (v.escalation || "—") + ". Dati al " + CFG.asOf + ".";
+
+  render(CFG.spot);
+})();
+</script>
+</body>
+</html>

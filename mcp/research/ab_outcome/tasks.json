@@ -1,0 +1,95 @@
+{
+  "tasks": [
+    {
+      "name": "analyze_stock_aapl",
+      "tool": "analyze_stock",
+      "args": {
+        "ticker": "AAPL",
+        "fetch_news": false
+      },
+      "decision_fields": [
+        "verdict",
+        "composite_score",
+        "confidence",
+        "action_recommendation.action"
+      ]
+    },
+    {
+      "name": "scan_market_tech",
+      "tool": "scan_market",
+      "args": {
+        "tickers": "AAPL,MSFT,NVDA,AMZN,GOOGL,META",
+        "top_n": 5,
+        "fetch_news": false
+      },
+      "decision_fields": [
+        "tickers_scanned",
+        "tickers_passed",
+        "results[0].ticker",
+        "results[0].final_score"
+      ]
+    },
+    {
+      "name": "macro_context",
+      "tool": "get_macro_context",
+      "args": {},
+      "decision_fields": [
+        "detected_regime",
+        "macro_window"
+      ]
+    },
+    {
+      "name": "bali_signals_aapl",
+      "tool": "bali_signals",
+      "args": {
+        "ticker": "AAPL",
+        "period": "1y"
+      },
+      "decision_fields": [
+        "available",
+        "direction",
+        "composite_bali_score"
+      ]
+    },
+    {
+      "name": "tsmom_signals_aapl",
+      "tool": "tsmom_signals",
+      "args": {
+        "ticker": "AAPL"
+      },
+      "decision_fields": [
+        "available",
+        "signal",
+        "direction",
+        "mom_score"
+      ]
+    },
+    {
+      "name": "breakout_context_aapl",
+      "tool": "breakout_context",
+      "args": {
+        "ticker": "AAPL",
+        "include_gex": false
+      },
+      "decision_fields": [
+        "bias_guard.flag",
+        "breakout_triggers.fired",
+        "breakout_triggers.status",
+        "evidence.artifact_verified"
+      ]
+    },
+    {
+      "name": "bakshi_signals_aapl",
+      "tool": "bakshi_signals",
+      "args": {
+        "ticker": "AAPL"
+      },
+      "decision_fields": [
+        "calibrated",
+        "calibration_status",
+        "atm_iv",
+        "calibrated_vrp"
+      ]
+    }
+  ]
+}

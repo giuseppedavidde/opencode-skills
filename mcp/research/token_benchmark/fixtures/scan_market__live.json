@@ -1,0 +1,307 @@
+{
+  "schema_version": "2.0.0",
+  "data_source": "yfinance",
+  "data_quality": "eod",
+  "as_of": null,
+  "error_kind": null,
+  "error_retryable": null,
+  "universe": "custom",
+  "universe_metadata": {
+    "name": "custom",
+    "source": "user-provided tickers",
+    "as_of": null,
+    "universe_type": "current",
+    "survivorship_warning": false,
+    "historical_universe_available": false,
+    "notes": [
+      "Custom ticker list via CLI"
+    ]
+  },
+  "timestamp": "2026-11-06T22:32:24.434237",
+  "tickers_scanned": 12,
+  "tickers_passed": 12,
+  "min_score_threshold": 50.0,
+  "elapsed_seconds": 8.4,
+  "workers": 8,
+  "failures": 0,
+  "insufficient_data_count": 0,
+  "insufficient_data_detail": [],
+  "results": [
+    {
+      "ticker": "AAPL",
+      "final_score": 79.3,
+      "dimensions": [
+        {
+          "name": "Wyckoff Phase",
+          "score": 90
+        },
+        {
+          "name": "Volume Profile",
+          "score": 30
+        },
+        {
+          "name": "Price Action",
+          "score": 35
+        },
+        {
+          "name": "Sentiment",
+          "score": 68
+        },
+        {
+          "name": "Fundamentals",
+          "score": 95
+        }
+      ],
+      "modifiers": {
+        "multi_timeframe": 50,
+        "sot_weis_wave": 65,
+        "squeeze_play": 50,
+        "earnings_surprise": 75,
+        "clue6_test": 65,
+        "market_structure": 65,
+        "structure_levels": null,
+        "volatility_hawkes": 25,
+        "vol_regime": null,
+        "vsa": 50,
+        "vsa_signals": null,
+        "meta_label": 60,
+        "meta_label_setup": null,
+        "taa_patterns": 66,
+        "taa_detailed": null
+      },
+      "indicators": {},
+      "flags": [],
+      "sector": "Technology",
+      "price": 342.37,
+      "pattern": "Golden Cross Accumulation",
+      "sentiment_breakdown": {
+        "short_interest": 50.0,
+        "options_sentiment": 65.0,
+        "institutional": 80.0,
+        "momentum": 80.0,
+        "earnings_quality": 70.0
+      }
+    },
+    {
+      "ticker": "AIG",
+      "final_score": 71.2,
+      "dimensions": [
+        {
+          "name": "Wyckoff Phase",
+          "score": 100
+        },
+        {
+          "name": "Volume Profile",
+          "score": 65
+        },
+        {
+          "name": "Price Action",
+          "score": 35
+        },
+        {
+          "name": "Sentiment",
+          "score": 63
+        },
+        {
+          "name": "Fundamentals",
+          "score": 75
+        }
+      ],
+      "modifiers": {
+        "multi_timeframe": 50,
+        "sot_weis_wave": 55,
+        "squeeze_play": 35,
+        "earnings_surprise": 75,
+        "clue6_test": 50,
+        "market_structure": 55,
+        "structure_levels": null,
+        "volatility_hawkes": 25,
+        "vol_regime": null,
+        "vsa": 35,
+        "vsa_signals": null,
+        "meta_label": 70,
+        "meta_label_setup": null,
+        "taa_patterns": 54,
+        "taa_detailed": null
+      },
+      "indicators": {},
+      "flags": [],
+      "sector": "Financial Services",
+      "price": 77.75,
+      "pattern": "Accumulation Spring",
+      "sentiment_breakdown": {
+        "short_interest": 50.0,
+        "options_sentiment": 35.0,
+        "institutional": 80.0,
+        "momentum": 60.0,
+        "earnings_quality": 80.0
+      }
+    },
+    {
+      "ticker": "ABNB",
+      "final_score": 69.4,
+      "dimensions": [
+        {
+          "name": "Wyckoff Phase",
+          "score": 90
+        },
+        {
+          "name": "Volume Profile",
+          "score": 40
+        },
+        {
+          "name": "Price Action",
+          "score": 40
+        },
+        {
+          "name": "Sentiment",
+          "score": 60
+        },
+        {
+          "name": "Fundamentals",
+          "score": 100
+        }
+      ],
+      "modifiers": {
+        "multi_timeframe": 50,
+        "sot_weis_wave": 50,
+        "squeeze_play": 65,
+        "earnings_surprise": 75,
+        "clue6_test": 50,
+        "market_structure": 65,
+        "structure_levels": null,
+        "volatility_hawkes": 85,
+        "vol_regime": null,
+        "vsa": 50,
+        "vsa_signals": null,
+        "meta_label": 85,
+        "meta_label_setup": null,
+        "taa_patterns": 56,
+        "taa_detailed": null
+      },
+      "indicators": {},
+      "flags": [],
+      "sector": "Consumer Cyclical",
+      "price": 189.99,
+      "pattern": "Golden Cross Accumulation",
+      "sentiment_breakdown": {
+        "short_interest": 50.0,
+        "options_sentiment": 35.0,
+        "institutional": 80.0,
+        "momentum": 60.0,
+        "earnings_quality": 70.0
+      }
+    },
+    {
+      "ticker": "ADP",
+      "final_score": 68.6,
+      "dimensions": [
+        {
+          "name": "Wyckoff Phase",
+          "score": 90
+        },
+        {
+          "name": "Volume Profile",
+          "score": 35
+        },
+        {
+          "name": "Price Action",
+          "score": 40
+        },
+        {
+          "name": "Sentiment",
+          "score": 63
+        },
+        {
+          "name": "Fundamentals",
+          "score": 100
+        }
+      ],
+      "modifiers": {
+        "multi_timeframe": 50,
+        "sot_weis_wave": 55,
+        "squeeze_play": 35,
+        "earnings_surprise": 75,
+        "clue6_test": 50,
+        "market_structure": 65,
+        "structure_levels": null,
+        "volatility_hawkes": 78,
+        "vol_regime": null,
+        "vsa": 65,
+        "vsa_signals": null,
+        "meta_label": 70,
+        "meta_label_setup": null,
+        "taa_patterns": 46,
+        "taa_detailed": null
+      },
+      "indicators": {},
+      "flags": [],
+      "sector": "Technology",
+      "price": 303.35,
+      "pattern": "Golden Cross Accumulation",
+      "sentiment_breakdown": {
+        "short_interest": 50.0,
+        "options_sentiment": 35.0,
+        "institutional": 80.0,
+        "momentum": 80.0,
+        "earnings_quality": 70.0
+      }
+    },
+    {
+      "ticker": "AMD",
+      "final_score": 67.8,
+      "dimensions": [
+        {
+          "name": "Wyckoff Phase",
+          "score": 70
+        },
+        {
+          "name": "Volume Profile",
+          "score": 55
+        },
+        {
+          "name": "Price Action",
+          "score": 30
+        },
+        {
+          "name": "Sentiment",
+          "score": 63
+        },
+        {
+          "name": "Fundamentals",
+          "score": 100
+        }
+      ],
+      "modifiers": {
+        "multi_timeframe": 50,
+        "sot_weis_wave": 55,
+        "squeeze_play": 50,
+        "earnings_surprise": 75,
+        "clue6_test": 65,
+        "market_structure": 65,
+        "structure_levels": null,
+        "volatility_hawkes": 15,
+        "vol_regime": null,
+        "vsa": 50,
+        "vsa_signals": null,
+        "meta_label": 65,
+        "meta_label_setup": null,
+        "taa_patterns": 54,
+        "taa_detailed": null
+      },
+      "indicators": {},
+      "flags": [],
+      "sector": "Technology",
+      "price": 449.04,
+      "pattern": "Mixed / No dominant pattern",
+      "sentiment_breakdown": {
+        "short_interest": 50.0,
+        "options_sentiment": 50.0,
+        "institutional": 80.0,
+        "momentum": 60.0,
+        "earnings_quality": 70.0
+      }
+    }
+  ],
+  "error": null
+}

@@ -1,0 +1,38 @@
+name: mcp
+
+on:
+  push:
+    paths:
+      - "mcp/**"
+      - ".github/workflows/mcp.yml"
+  pull_request:
+    paths:
+      - "mcp/**"
+      - ".github/workflows/mcp.yml"
+
+jobs:
+  contract-and-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcp
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: mcp/pyproject.toml
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Contract snapshot is fresh
+        run: python scripts/export_contract.py --check
+
+      - name: Token budget
+        run: python -m research.token_benchmark.benchmark --check-budget
+
+      - name: Tests
+        run: python -m pytest -q

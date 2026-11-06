@@ -1,0 +1,38 @@
+{
+  "schema_version": "2.0.0",
+  "data_source": "yfinance+options",
+  "data_quality": "mixed",
+  "as_of": null,
+  "error_kind": null,
+  "error_retryable": null,
+  "ticker": "AAPL",
+  "available": true,
+  "spot": 342.37,
+  "rv": 0.2489,
+  "atm_call_iv": 0.2814,
+  "atm_put_iv": 0.2538,
+  "atm_straddle_iv": 0.2676,
+  "rvol_ivol_spread": -0.0188,
+  "cvol_pvol_spread": 0.0276,
+  "rvol_ivol_score": 45.3,
+  "cvol_pvol_score": 51.8,
+  "composite_bali_score": 53.5,
+  "direction": "neutral",
+  "error": null,
+  "error_is_blocking": false,
+  "available_bars": 251,
+  "required_bars": 50,
+  "paper_reference": {
+    "title": "Volatility Spreads and Expected Stock Returns",
+    "authors": [
+      "Turan G. Bali",
+      "Armen Hovakimian"
+    ],
+    "year": 2009,
+    "doi": "10.1287/mnsc.1090.1063",
+    "findings": {
+      "rvol_ivol": "RVol–IVol spread: premium negativo −0.63%/−0.73% mese (volatility risk premium). Long quando RV < IV.",
+      "cvol_pvol": "CVol–PVol spread: premium positivo +1.05%/+1.49% mese (jump risk). Long quando Call IV > Put IV."
+    }
+  }
+}

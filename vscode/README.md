@@ -25,6 +25,10 @@ generates the VS Code layer from it.
 | `plugins/auto-headroom` | — | No VS Code equivalent; use the `headroom` MCP server + `/read-chunk` |
 | `plugins/routing-stats`, `tokens-per-second` | — | Scripts remain available via prompts; telemetry only covers opencode sessions |
 
+The writing directive `asd-ste100` is a normal skill, so it maps automatically.
+The generated `.agent.md` files and `copilot-instructions.md` also embed a
+compact copy, so an agent follows the directive without an extra read.
+
 ## Install
 
 ```bash

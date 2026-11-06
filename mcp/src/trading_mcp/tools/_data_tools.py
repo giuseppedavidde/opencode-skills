@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from fastmcp import FastMCP
@@ -11,13 +10,21 @@ from trading_mcp.data.stocks import fetch_stock_full
 from trading_mcp.data.crypto import fetch_crypto_full
 from trading_mcp.data.options_chain import fetch_options_chain as _fetch_options_chain
 from trading_mcp.data.result_cache import result_cache
+from trading_mcp.responses import (
+    typed,
+    CryptoDataResponse,
+    OptionsChainResponse,
+    StockDataResponse,
+    error_payload,
+)
 
 
 def register_data_tools(mcp_server: FastMCP) -> None:
     """Register data fetch tools with the MCP server."""
 
     @mcp_server.tool()
-    def fetch_stock_data(ticker: str, period: str = "1y") -> dict[str, Any]:
+    @typed(StockDataResponse)
+    def fetch_stock_data(ticker: str, period: str = "1y") -> StockDataResponse:
         """Fetch complete stock data: OHLCV history, fundamentals, and indicators.
 
         Args:
@@ -59,10 +66,12 @@ def register_data_tools(mcp_server: FastMCP) -> None:
             "ohlcv": ohlcv[-252:],
             "info": info_safe,
             "indicators": result.get("indicators", {}),
+            "as_of": ohlcv[-1]["date"] if ohlcv else None,
         }
 
     @mcp_server.tool()
-    def fetch_crypto_data(coin_id: str, period: str = "1y") -> dict[str, Any]:
+    @typed(CryptoDataResponse)
+    def fetch_crypto_data(coin_id: str, period: str = "1y") -> CryptoDataResponse:
         """Fetch crypto data from CoinGecko and yfinance.
 
         Args:
@@ -94,12 +103,14 @@ def register_data_tools(mcp_server: FastMCP) -> None:
             "market_cap": result.get("market_cap"),
             "total_volume": result.get("total_volume"),
             "ohlcv": ohlcv[-365:],
+            "as_of": ohlcv[-1]["date"] if ohlcv else None,
         }
 
     @mcp_server.tool()
+    @typed(OptionsChainResponse)
     def fetch_options_chain(
         ticker: str, expiry: str, strike_window: int | None = 10
-    ) -> dict[str, Any]:
+    ) -> OptionsChainResponse:
         """Fetch options chain with Greeks and IV metrics.
 
         Args:
@@ -115,7 +126,11 @@ def register_data_tools(mcp_server: FastMCP) -> None:
             Dictionary with calls/puts lists including Greeks, and IV metrics.
         """
         if not expiry or str(expiry).lower() in ("null", "none", ""):
-            return {"ticker": ticker, "error": "expiry is REQUIRED. Pass expiry='YYYY-MM-DD'."}
+            return error_payload(
+                "expiry is REQUIRED. Pass expiry='YYYY-MM-DD'.",
+                data_source="options",
+                ticker=ticker,
+            )
 
         window = strike_window if strike_window is None or strike_window > 0 else None
         cache_params: dict[str, Any] = {"expiry": str(expiry), "strike_window": window}

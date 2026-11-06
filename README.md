@@ -36,7 +36,7 @@ opencode-skills/
 │   └── decrypt_secrets.sh      # Decrypt secrets.env.enc → API keys
 ├── mcp/                        # Trading MCP server (pip install -e)
 ├── routing-eval/               # Router evaluation harness (telemetria /routing-stats)
-├── skills/                     # Skill definitions (46, see below)
+├── skills/                     # Skill definitions (48, see below)
 ├── setup-headroom.sh           # Install headroom in venv
 ├── setup-trading-mcp.sh        # Install trading-mcp in venv
 ├── setup-rea-mcp.sh            # Clone + build the local rea repo (rea MCP)
@@ -225,6 +225,81 @@ See [`vscode/README.md`](vscode/README.md) for the full mapping, tool aliases,
 model names, hook behavior, and limitations. Start a **new chat** after
 installing so VS Code discovers the new skills and agents.
 
+## Writing directive — ASD-STE100
+
+Every agent writes its output text under ASD-STE100 (Simplified Technical
+English). The single source of truth is the `asd-ste100` skill:
+
+| Layer | File | Role |
+|---|---|---|
+| Canonical rule set | `skills/asd-ste100/SKILL.md` | Full directive, checklist, rewrite examples, per-agent matrix |
+| Agent enforcement | `agents/*.md` | Mandatory 9-point block in every agent |
+| Global rule | `config/AGENTS.md` | Applies to all agents and to the VS Code generated instructions |
+| Trade diagrams | `skills/interactive-trade-diagram/SKILL.md` | Diagram text follows the same directive |
+
+Hard limits:
+
+1. Maximum 20 words per sentence in a procedure. Maximum 25 words in a description.
+2. One idea per sentence. One topic per paragraph, maximum 6 sentences.
+3. Active voice. Simple tenses. One term for one concept in the whole answer.
+4. Procedures go in numbered vertical lists, one action per step.
+5. Exact numbers with units. No idiom, no metaphor, no slang.
+
+Exempt: code, tool output, JSON, tickers, paths, and quoted document text.
+
+```bash
+# Load the full directive in a session
+skill asd-ste100        # opencode
+/asd-ste100             # VS Code Copilot Chat
+```
+
+The directive propagates to the VS Code layer automatically: `install-vscode.py`
+symlinks the skill into `.github/skills/asd-ste100/` and embeds the agent block
+in the generated `.agent.md` files.
+
+### Conformance test
+
+`scripts/ste_conformance.py` checks the wiring and the text.
+
+```bash
+# Wiring: every agent carries the directive, the skill exists, VS Code is linked
+/tmp/opencode/.venv/bin/python scripts/ste_conformance.py --wiring
+
+# Built-in fixtures: 22 positive and negative cases
+/tmp/opencode/.venv/bin/python scripts/ste_conformance.py --self-test
+
+# Lint real output (a directory expands to *.md, *.html, *.txt)
+/tmp/opencode/.venv/bin/python scripts/ste_conformance.py trades/
+
+# Machine-readable report, strict mode, or summary only
+/tmp/opencode/.venv/bin/python scripts/ste_conformance.py trades/ --json /tmp/ste.json
+/tmp/opencode/.venv/bin/python scripts/ste_conformance.py trades/ --strict
+/tmp/opencode/.venv/bin/python scripts/ste_conformance.py trades/ --no-warn
+```
+
+| Rule | Check | Severity |
+|---|---|---|
+| `R1` | Sentence: max 20 words (procedure) / 25 (description) | FAIL |
+| `R2` | Paragraph: max 6 sentences | FAIL |
+| `R3` | Active voice | WARN |
+| `R4` | Forbidden verb: `effettuare`, `provvedere`, `eseguire la verifica` | FAIL |
+| `R5` | Forbidden connective: `al fine di`, `in merito a`, `qualora` | FAIL |
+| `R6` | Idiom, metaphor, slang | FAIL |
+| `R7` | Semicolon between clauses | FAIL |
+| `R8` | Contraction | FAIL |
+| `R9` | Abbreviation defined at first use | WARN |
+| `R10` | Vague quantity: `circa`, `alcuni`, `molti` | WARN |
+| `R11` | Emphatic adverb or adjective | WARN |
+| `W1`–`W7` | Wiring: skill, agent blocks, global rules, VS Code layer, permissions | FAIL |
+
+A numbered or bulleted item counts as a procedure only when it starts with an
+imperative verb (`verifica`, `calcola`, `chiudi`, ...). Other bullets use the
+descriptive limit. Code fences, inline code, quoted lines, and table cells are
+exempt from the sentence and punctuation rules.
+
+Exit code is `0` when the target is conform. Exit code is `1` on any FAIL.
+`--strict` makes WARN findings fail too.
+
 ## Portability Notes
 
 - **`$HOME` expansion** — every MCP command in `config/opencode.json` is
@@ -302,6 +377,7 @@ rm -rf ~/.local/share/opencode/bladebro-node && ./setup-bladebro.sh
 | Skill | Description |
 | ----- | ----------- |
 | `advances-in-financial-machine-learning` | Knowledge base from 'Advances in Financial Machine Learning' by Marcos M. López de Prado |
+| `asd-ste100` | ASD-STE100 (Simplified Technical English) writing directive shared by every agent: sentence limits, active voice, simple tenses, one term per concept, vertical lists, exact numbers |
 | `asset-management-factor-investing` | Knowledge base from 'Asset Management: A Systematic Approach to Factor Investing' by Andrew Ang |
 | `async-python-patterns` | Implementing asynchronous Python applications using asyncio, concurrent programming, and async/await |
 | `book-to-skill` | Converts books and documents (PDF, EPUB, DOCX, HTML, Markdown, etc.) into structured agent skills |
@@ -353,6 +429,7 @@ rm -rf ~/.local/share/opencode/bladebro-node && ./setup-bladebro.sh
 | `setup-rea-mcp.sh` | Clones + builds the separate [rea](https://github.com/morluto/rea) repo and validates the `rea` MCP wrapper |
 | `setup-bladebro.sh` | Installs bladebro (stealth browser MCP) into `~/.local/share/opencode/bladebro-node` and links Chrome |
 | `install-vscode.py` | Generates the VS Code / Copilot Chat layer (skills symlinks, agents, prompts, MCP, hooks) |
+| `scripts/ste_conformance.py` | ASD-STE100 conformance test: wiring check, text lint, self-test fixtures |
 | `vscode/` | VS Code-native templates: `copilot-instructions.md`, Python instructions, verifica-gate / graphify hooks, docs |
 
 ## Requires

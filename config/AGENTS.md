@@ -16,6 +16,19 @@ Every subagent MUST end its response with a `## VERIFICA` section (confidenza, e
 The `verifica-gate` plugin appends each task's token saving (`📊 Token saving: ...`, from auto-headroom) as the last line of the `## VERIFICA` block and logs a `token_saving` event; run `/token-stats` for the aggregated headroom report.
 All agents read these AGENTS.md rules. See opencode.json for full agent configuration.
 
+## ASD-STE100 — mandatory writing directive
+CRITICAL: every agent writes all output text under ASD-STE100. The single source of truth is @skills/asd-ste100 (`skills/asd-ste100/SKILL.md`). Load it when you write or review a long report.
+1. Maximum 20 words per sentence in a procedure. Maximum 25 words per sentence in a description.
+2. One idea per sentence. One topic per paragraph, maximum 6 sentences.
+3. Active voice. Simple tenses. Use `use`, `calculate`, `check`, `close`. Do not use `perform`, `provide`, `implement`.
+4. Use one term for one concept in the whole answer.
+5. Put procedures in numbered vertical lists. One action per step.
+6. No idiom, no metaphor, no slang. No semicolon between two clauses.
+7. Define each abbreviation at first use: `BE = break-even`.
+8. Give exact numbers with units: `−$3,383.54`. Never "about three thousand".
+9. The `## VERIFICA` block follows the same rules.
+Code, tool output, tickers, paths, and quoted document text are exempt.
+
 ## Python Virtual Environment Mandatory
 CRITICAL: Before ANY Python operation (install, run, test), load @skills/python-venv. You MUST use a virtual environment. Never `pip install` on the system Python.
 - Use a SINGLE shared venv at `/tmp/opencode/.venv` for all temporary NON-trading work. For trading/market-data Python work, REUSE the existing MCP trading venv at `~/.local/share/opencode/trading-mcp-venv` (it already has pandas, yfinance, lightgbm, scikit-learn — never reinstall). Never create duplicate venvs.

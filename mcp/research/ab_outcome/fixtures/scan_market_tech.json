@@ -1,0 +1,307 @@
+{
+  "schema_version": "2.0.0",
+  "data_source": "yfinance",
+  "data_quality": "eod",
+  "as_of": null,
+  "error_kind": null,
+  "error_retryable": null,
+  "universe": "custom",
+  "universe_metadata": {
+    "name": "custom",
+    "source": "user-provided tickers",
+    "as_of": null,
+    "universe_type": "current",
+    "survivorship_warning": false,
+    "historical_universe_available": false,
+    "notes": [
+      "Custom ticker list via CLI"
+    ]
+  },
+  "timestamp": "2026-11-06T22:34:09.379638",
+  "tickers_scanned": 6,
+  "tickers_passed": 5,
+  "min_score_threshold": 50.0,
+  "elapsed_seconds": 4.2,
+  "workers": 6,
+  "failures": 0,
+  "insufficient_data_count": 0,
+  "insufficient_data_detail": [],
+  "results": [
+    {
+      "ticker": "MSFT",
+      "final_score": 79.6,
+      "dimensions": [
+        {
+          "name": "Wyckoff Phase",
+          "score": 100
+        },
+        {
+          "name": "Volume Profile",
+          "score": 35
+        },
+        {
+          "name": "Price Action",
+          "score": 50
+        },
+        {
+          "name": "Sentiment",
+          "score": 63
+        },
+        {
+          "name": "Fundamentals",
+          "score": 100
+        }
+      ],
+      "modifiers": {
+        "multi_timeframe": 50,
+        "sot_weis_wave": 55,
+        "squeeze_play": 50,
+        "earnings_surprise": 75,
+        "clue6_test": 80,
+        "market_structure": 65,
+        "structure_levels": null,
+        "volatility_hawkes": 75,
+        "vol_regime": null,
+        "vsa": 50,
+        "vsa_signals": null,
+        "meta_label": 70,
+        "meta_label_setup": null,
+        "taa_patterns": 64,
+        "taa_detailed": null
+      },
+      "indicators": {},
+      "flags": [],
+      "sector": "Technology",
+      "price": 530.61,
+      "pattern": "Accumulation Spring",
+      "sentiment_breakdown": {
+        "short_interest": 50.0,
+        "options_sentiment": 50.0,
+        "institutional": 80.0,
+        "momentum": 60.0,
+        "earnings_quality": 70.0
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "final_score": 79.3,
+      "dimensions": [
+        {
+          "name": "Wyckoff Phase",
+          "score": 90
+        },
+        {
+          "name": "Volume Profile",
+          "score": 30
+        },
+        {
+          "name": "Price Action",
+          "score": 35
+        },
+        {
+          "name": "Sentiment",
+          "score": 68
+        },
+        {
+          "name": "Fundamentals",
+          "score": 95
+        }
+      ],
+      "modifiers": {
+        "multi_timeframe": 50,
+        "sot_weis_wave": 65,
+        "squeeze_play": 50,
+        "earnings_surprise": 75,
+        "clue6_test": 65,
+        "market_structure": 65,
+        "structure_levels": null,
+        "volatility_hawkes": 25,
+        "vol_regime": null,
+        "vsa": 50,
+        "vsa_signals": null,
+        "meta_label": 60,
+        "meta_label_setup": null,
+        "taa_patterns": 66,
+        "taa_detailed": null
+      },
+      "indicators": {},
+      "flags": [],
+      "sector": "Technology",
+      "price": 342.37,
+      "pattern": "Golden Cross Accumulation",
+      "sentiment_breakdown": {
+        "short_interest": 50.0,
+        "options_sentiment": 65.0,
+        "institutional": 80.0,
+        "momentum": 80.0,
+        "earnings_quality": 70.0
+      }
+    },
+    {
+      "ticker": "AMZN",
+      "final_score": 70.9,
+      "dimensions": [
+        {
+          "name": "Wyckoff Phase",
+          "score": 90
+        },
+        {
+          "name": "Volume Profile",
+          "score": 40
+        },
+        {
+          "name": "Price Action",
+          "score": 50
+        },
+        {
+          "name": "Sentiment",
+          "score": 51
+        },
+        {
+          "name": "Fundamentals",
+          "score": 85
+        }
+      ],
+      "modifiers": {
+        "multi_timeframe": 50,
+        "sot_weis_wave": 65,
+        "squeeze_play": 50,
+        "earnings_surprise": 25,
+        "clue6_test": 50,
+        "market_structure": 65,
+        "structure_levels": null,
+        "volatility_hawkes": 82,
+        "vol_regime": null,
+        "vsa": 35,
+        "vsa_signals": null,
+        "meta_label": 80,
+        "meta_label_setup": null,
+        "taa_patterns": 74,
+        "taa_detailed": null
+      },
+      "indicators": {},
+      "flags": [],
+      "sector": "Consumer Cyclical",
+      "price": 259.3,
+      "pattern": "Golden Cross Accumulation",
+      "sentiment_breakdown": {
+        "short_interest": 50.0,
+        "options_sentiment": 50.0,
+        "institutional": 80.0,
+        "momentum": 60.0,
+        "earnings_quality": 30.0
+      }
+    },
+    {
+      "ticker": "META",
+      "final_score": 55.9,
+      "dimensions": [
+        {
+          "name": "Wyckoff Phase",
+          "score": 70
+        },
+        {
+          "name": "Volume Profile",
+          "score": 40
+        },
+        {
+          "name": "Price Action",
+          "score": 30
+        },
+        {
+          "name": "Sentiment",
+          "score": 60
+        },
+        {
+          "name": "Fundamentals",
+          "score": 100
+        }
+      ],
+      "modifiers": {
+        "multi_timeframe": 50,
+        "sot_weis_wave": 55,
+        "squeeze_play": 50,
+        "earnings_surprise": 25,
+        "clue6_test": 65,
+        "market_structure": 55,
+        "structure_levels": null,
+        "volatility_hawkes": 25,
+        "vol_regime": null,
+        "vsa": 30,
+        "vsa_signals": null,
+        "meta_label": 90,
+        "meta_label_setup": null,
+        "taa_patterns": 44,
+        "taa_detailed": null
+      },
+      "indicators": {},
+      "flags": [],
+      "sector": "Communication Services",
+      "price": 610.15,
+      "pattern": "Mixed / No dominant pattern",
+      "sentiment_breakdown": {
+        "short_interest": 50.0,
+        "options_sentiment": 35.0,
+        "institutional": 80.0,
+        "momentum": 60.0,
+        "earnings_quality": 70.0
+      }
+    },
+    {
+      "ticker": "NVDA",
+      "final_score": 55.7,
+      "dimensions": [
+        {
+          "name": "Wyckoff Phase",
+          "score": 30
+        },
+        {
+          "name": "Volume Profile",
+          "score": 50
+        },
+        {
+          "name": "Price Action",
+          "score": 30
+        },
+        {
+          "name": "Sentiment",
+          "score": 61
+        },
+        {
+          "name": "Fundamentals",
+          "score": 100
+        }
+      ],
+      "modifiers": {
+        "multi_timeframe": 50,
+        "sot_weis_wave": 80,
+        "squeeze_play": 50,
+        "earnings_surprise": 75,
+        "clue6_test": 50,
+        "market_structure": 65,
+        "structure_levels": null,
+        "volatility_hawkes": 17,
+        "vol_regime": null,
+        "vsa": 25,
+        "vsa_signals": null,
+        "meta_label": 85,
+        "meta_label_setup": null,
+        "taa_patterns": 54,
+        "taa_detailed": null
+      },
+      "indicators": {},
+      "flags": [],
+      "sector": "Technology",
+      "price": 186.64,
+      "pattern": "Mixed / No dominant pattern",
+      "sentiment_breakdown": {
+        "short_interest": 50.0,
+        "options_sentiment": 50.0,
+        "institutional": 80.0,
+        "momentum": 40.0,
+        "earnings_quality": 70.0
+      }
+    }
+  ],
+  "error": null
+}
