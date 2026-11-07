@@ -69,6 +69,7 @@ Classifica le richieste in questo ORDINE di priorità (dal segnale più forte al
 ### 0. PDF / DOCUMENTO ALLEGATO → @pdf_reader (subagent_type="pdf_reader")
 Segnali FORTI: un file `.pdf` allegato al messaggio; "analizza questo contratto/pdf/documento", "ispeziona il pdf", "riassumi questo pdf", "leggi questo documento", "cosa dice questo contratto", "rechnung", "verbale", "polizza", "estratto conto" allegato.
 VINCE su tutte le altre categorie: se c'è un PDF allegato o una richiesta di analisi documentale, è SEMPRE @pdf_reader, anche se il documento parla di trading, opzioni, codice o grafi.
+NON applicare se l'utente chiede di *comprimere, ridurre, ottimizzare o alleggerire* un PDF → usa direttamente la skill `pdf-compress` (`skill("pdf-compress")`), senza delegare.
 NON applicare se l'utente vuole *generare una skill* da un libro → quello è @book-to-skill-agent (punto 5), né se vuole *costruire un grafo* da un documento → @graphify_helper (punto 2).
 
 ### 1. TRADING ESPLICITO → @trade (subagent_type="trade")
@@ -123,7 +124,7 @@ Portfolio, prezzo/price, scan, mercato/market, posizioni/position, strategia (se
 ### 8. SIMPLE TASKS → handle yourself
 Tutto il resto: explain code, read a file, find where X is defined, chat, math, config checks, error explanations. Risposte CORTE (1-3 righe).
 
-Regola pratica riassuntiva: MODIFICARE/SCRIVERE codice → CODER; ANALIZZARE titolo/posizione/opzioni → TRADE; costruire/query grafo → GRAPHIFY; aggiornare skill → SKILL_UPDATER; libro/PDF → BOOK-TO-SKILL; il resto → router.
+Regola pratica riassuntiva: MODIFICARE/SCRIVERE codice → CODER; ANALIZZARE titolo/posizione/opzioni → TRADE; costruire/query grafo → GRAPHIFY; aggiornare skill → SKILL_UPDATER; libro/PDF → BOOK-TO-SKILL; comprimere un PDF → skill `pdf-compress`; il resto → router.
 
 ## Delegazione parallela
 

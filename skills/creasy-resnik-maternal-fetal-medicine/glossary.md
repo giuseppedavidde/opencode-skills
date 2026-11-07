@@ -1,0 +1,63 @@
+# Glossary of Maternal-Fetal Medicine Terms
+
+- **Abdominal circumference (AC)** — Fetal abdominal measurement; falling interval growth suggests asymmetric FGR.
+- **Abruptio placentae** — Separation of a normally sited placenta after 20 weeks.
+- **Acceleration (FHR)** — Rise of at least 15 beats/min for 15 seconds; 10 beats at 28-32 weeks.
+- **Active phase** — Labor from 6 cm to full dilation; arrest is 2 hours without change.
+- **Amniotic fluid index (AFI)** — Four-quadrant sum; below 5 cm oligohydramnios, above 24 cm polyhydramnios.
+- **Arrest disorder** — No dilation or descent for more than 2 hours in active phase.
+- **Baseline fetal heart rate** — Mean FHR over 10 minutes; normal 110 to 160 beats/min.
+- **Biophysical profile (BPP)** — Five components scored 2 each; 8/10 reassuring, 4/10 or less delivery.
+- **Biparietal diameter (BPD)** — Transverse skull diameter used for dating and growth.
+- **Cervical insufficiency** — Painless dilation causing recurrent second-trimester birth; short cervix without prior preterm birth treated with progestin.
+- **Chorioamnionitis** — Fever, tachycardia, uterine tenderness, foul fluid; white cells above 15,000/mL support it.
+- **Chronic hypertension** — Above 140/90 before 20 weeks or beyond 84 days postpartum.
+- **Doppler indices (PI, RI, S/D)** — PI = (PSV−EDV)/TAPV, RI = (PSV−EDV)/PSV, S/D = systolic-to-diastolic.
+- **Ductus venosus a-wave** — Absent or reversed a-wave predicts acidemia or death within 7 days.
+- **Eclampsia** — Seizures not attributable to another cause in preeclampsia.
+- **Fetal fibronectin (fFN)** — Below 50 ng/mL makes delivery within 7 days unlikely.
+- **Fetal growth restriction (FGR)** — Failure to achieve growth potential; distinguished from SGA by growth velocity and Doppler.
+- **Fetal heart rate categories (I, II, III)** — I: 110-160, moderate variability, no late or variable decelerations. III: absent variability with recurrent decelerations, bradycardia, or sinusoidal. II: all others.
+- **Fetal heart rate variability** — Absent, minimal below 5, moderate 6-25, marked above 25 beats/min.
+- **Gestational age limits** — Preterm before 37 0/7 weeks; post-term 42 weeks or later.
+- **Gestational diabetes (GDM)** — 75-g OGTT thresholds 92, 180, and 153 mg/dL.
+- **Gestational hypertension** — New hypertension after 20 weeks without proteinuria.
+- **Head circumference (HC)** — Axial head measurement used for dating and asymmetric growth.
+- **HELLP syndrome** — Hemolysis, elevated liver enzymes, low platelets (below 100,000/µL); hypertension may be absent.
+- **Large for gestational age (LGA)** — Birth weight above the 90th percentile.
+- **Late deceleration** — Gradual fall, onset-to-nadir at least 30 seconds, nadir after contraction peak.
+- **Late preterm** — Birth at 34 0/7 to 36 6/7 weeks.
+- **Latent phase** — Labor before 6 cm; prolonged beyond 20 hours in nulliparas.
+- **Low birth weight (LBW)** — Below 2500 g; below 1500 g VLBW, below 1000 g ELBW.
+- **Macrosomia** — Birth weight above 4000 g; 40-50% of shoulder dystocias occur below this.
+- **Middle cerebral artery peak systolic velocity (MCA-PSV)** — Above 1.5 MoM predicts moderate to severe anemia and indicates cordocentesis.
+- **Necrotizing enterocolitis (NEC)** — Acquired intestinal necrosis, 5% to 7% below 1500 g.
+- **Non-reassuring fetal status** — Category II with progressive change or III; resuscitate, then deliver if unrelieved.
+- **Nonstress test (NST)** — Two accelerations of 15 beats/min for 15 seconds in 20-30 minutes.
+- **Oligohydramnios** — AFI below 5 cm or maximum vertical pocket below 2 cm.
+- **Overt diabetes in pregnancy** — Fasting at least 126 mg/dL or HbA1c at least 6.5%.
+- **Placenta accreta** — Trophoblast invasion of myometrium; with previa, 10-25% after one cesarean.
+- **Placenta previa** — Placenta covering or within 2 cm of the os.
+- **Polyhydramnios** — AFI above 24 cm or maximum vertical pocket above 8 cm.
+- **Postpartum hemorrhage** — Excess bleeding after delivery, usually from atony; average loss 500 mL vaginally and 1000 mL after cesarean.
+- **Post-term** — Birth at 42 weeks or later.
+- **Preeclampsia** — New hypertension (140/90) with proteinuria (300 mg/24 hr) after 20 weeks.
+- **Preterm birth** — Birth at 20 to before 37 weeks (259 days).
+- **Preterm labor** — Contractions with cervical change before 37 weeks; refined by cervical length and fibronectin.
+- **Preterm premature rupture of membranes (PPROM)** — Rupture before 37 weeks and before labor.
+- **Prolonged deceleration** — Fall of at least 15 beats/min lasting 2 to 10 minutes.
+- **Protraction disorder** — Dilation or descent slower than normal in active phase.
+- **Respiratory distress syndrome (RDS)** — Surfactant deficiency causing tachypnea, retractions, grunting, and cyanosis.
+- **Sepsis** — Infection with temperature above 38 or below 36°C, heart rate above 90, respiratory rate above 20, white cells above 12,000 or below 4000.
+- **Severe preeclampsia** — 160/110 mm Hg, proteinuria at least 5 g/24 hr, oliguria below 500 mL/24 hr, symptoms, pulmonary edema, thrombocytopenia, or FGR.
+- **Shoulder dystocia** — Biacromial impingement; 0.24-2.00% of vaginal births.
+- **Single deepest pocket (SDP)** — Below 2 cm oligohydramnios, above 8 cm polyhydramnios.
+- **Sinusoidal pattern** — Sine-wave baseline of 3-6 cycles/min, amplitude up to 30 beats/min, lasting 20 minutes.
+- **Small for gestational age (SGA)** — Birth weight below the 10th percentile.
+- **Stillbirth** — Fetal death at 20 weeks or later.
+- **Term** — 37 0/7 to 41 6/7 weeks; early term 37 0/7-38 6/7, full term 39 0/7-41 6/7.
+- **Thyroid-stimulating hormone (TSH) in pregnancy** — Upper limits 2.5 mIU/L first trimester, 3.0 mIU/L later.
+- **Transient tachypnea of the newborn (TTN)** — Self-limited distress of term and late preterm infants, usually after cesarean.
+- **Umbilical artery Doppler** — Absent end-diastolic flow is ominous; reversed flow more so.
+- **Uterine atony** — Failure of uterine contraction; the most common cause of PPH.
+- **Variable deceleration** — Abrupt fall of at least 15 beats/min for 15 seconds to 2 minutes.

@@ -62,6 +62,10 @@ Skill reference (used by @trade):
 - Market data → @skills/market-data-fetch
 - Framework knowledge → `get_skill_knowledge` for Wyckoff, VPA, VP concepts
 
+## PDF handling
+- Compress, shrink, or optimize a PDF → @skills/pdf-compress. Use it before an upload or an ingest. The script keeps the original when the result is larger.
+- Extract text, tables, or images from a PDF → @skills/pdf-ingest.
+
 ## Headroom Compression & Token Saving — AUTOMATIC & MANDATORY
 CRITICAL: OpenCode uses automatic middleware token compression (`plugins/auto-headroom/index.js`).
 Every tool output (bash, read, grep, glob, webfetch) ≥800 chars is AUTOMATICALLY compressed in-process before entering your context window, eliminating double-trip token ingestion penalties.

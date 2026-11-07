@@ -88,7 +88,7 @@ Code, tool output, tickers, paths, and quoted document text are exempt.
   grepping large codebases.
 - Trading: `market-accumulation-scanner`, `stock-crypto-analysis`,
   `options-analysis`, `options-strategy-suggestions`, `market-data-fetch`.
-- Documents: `pdf-ingest`.
+- Documents: `pdf-ingest`, `pdf-compress`.
 
 Load a skill by reading `{{SKILLS_DIR}}/<name>/SKILL.md` or by typing
 `/<skill-name>` in chat.

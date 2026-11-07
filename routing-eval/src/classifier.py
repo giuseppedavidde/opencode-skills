@@ -439,7 +439,7 @@ SKILL_NAMES: set[str] = {
     "options-analysis", "options-strategy-suggestions",
     "stock-crypto-analysis", "smart-dispatcher",
     "subatomic-orchestrator", "system-info",
-    "pdf-ingest",
+    "pdf-ingest", "pdf-compress",
 }
 
 CONJUNCTION_PATTERN = re.compile(

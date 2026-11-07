@@ -1,5 +1,5 @@
 ---
-description: PDF & document analyst — extracts and analyzes PDFs/contracts/invoices/policies via pdftotext + OCR. Use for any attached PDF or request to read/analyze a document.
+description: PDF & document analyst — extracts and analyzes PDFs/contracts/invoices/policies via pdftotext + OCR. Use for any attached PDF or request to read/analyze a document. Not for PDF compression: use the pdf-compress skill.
 mode: subagent
 model: opencode-go/deepseek-v4.1-flash
 hidden: false

@@ -36,7 +36,7 @@ opencode-skills/
 │   └── decrypt_secrets.sh      # Decrypt secrets.env.enc → API keys
 ├── mcp/                        # Trading MCP server (pip install -e)
 ├── routing-eval/               # Router evaluation harness (telemetria /routing-stats)
-├── skills/                     # Skill definitions (48, see below)
+├── skills/                     # Skill definitions (49, see below)
 ├── setup-headroom.sh           # Install headroom in venv
 ├── setup-trading-mcp.sh        # Install trading-mcp in venv
 ├── setup-rea-mcp.sh            # Clone + build the local rea repo (rea MCP)
@@ -402,6 +402,7 @@ rm -rf ~/.local/share/opencode/bladebro-node && ./setup-bladebro.sh
 | `options-crash-course` | Knowledge base from 'Options Trading Crash Course' by Mark Elder and Brian Douglas (options trading) |
 | `options-playbook` | Knowledge base from 'The Options Playbook' by Brian Overby (40+ options strategies) |
 | `options-strategy-suggestions` | Suggests an options strategy from stock analysis verdict + IV regime |
+| `pdf-compress` | Reduces the size of PDF files with a Python script (PyMuPDF): presets, batches, encrypted files, JSON report |
 | `pdf-ingest` | PDF extraction helper for both Karpathy LLM Wiki and Graphify workflows |
 | `ponytail-coding` | Forces the laziest solution that actually works, simplest, shortest, most minimal — YAGNI, standard library before custom code, native platform features before dependencies, one line before fifty |
 | `position-management-playbook` | Active management of difficult positions: exit ladder, rolling, downside protection, documentary discipline |
@@ -439,6 +440,19 @@ rm -rf ~/.local/share/opencode/bladebro-node && ./setup-bladebro.sh
 - VS Code 1.144+ with GitHub Copilot Chat (only for `install-vscode.py`)
 
 ## Prerequisites per skill
+
+### pdf-compress
+
+Requires Python 3.10+ and a virtual environment with PyMuPDF and Pydantic:
+
+```bash
+mkdir -p /tmp/opencode
+python3 -m venv /tmp/opencode/.venv
+/tmp/opencode/.venv/bin/pip install -r skills/pdf-compress/requirements.txt
+```
+
+The script needs no external binary. It uses PyMuPDF for image rewriting,
+font subsetting, object streams, and stream deflate.
 
 ### pdf-ingest
 
