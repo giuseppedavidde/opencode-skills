@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# Regenerate the VS Code Copilot layer from the opencode-skills sources.
+#
+# Skills are symlinks and follow edits immediately. Agents, prompts,
+# instructions, hooks and MCP are generated copies, so they need a rerun.
+# This script is hash-gated: it runs the installer only when a source file
+# changed since the last successful run.
+#
+# Usage:
+#   scripts/sync-vscode.sh [--target workspace|user|both] [--workspace PATH]
+#                          [--check] [--quiet]
+#
+#   --target     Which scope to regenerate (default: both, matching the
+#                current installation).
+#   --workspace  Workspace root that owns .github/ and .vscode/
+#                (default: the parent of the repository, i.e. ~/Progetti).
+#   --check      Run the installer verification only; no writes.
+#   --quiet      Print nothing unless the run fails.
+
+set -euo pipefail
+
+export PATH="/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+
+REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+DEFAULT_WORKSPACE="$(cd -- "$REPO_ROOT/../.." && pwd)"
+STATE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/opencode-skills"
+LOG_FILE="$STATE_DIR/sync-vscode.log"
+PYTHON="${PYTHON:-/usr/bin/python3}"
+
+target="both"
+workspace="${VSCODE_WORKSPACE:-$DEFAULT_WORKSPACE}"
+check=0
+quiet=0
+
+usage() {
+    cat <<'EOF'
+Regenerate the VS Code Copilot layer from the opencode-skills sources.
+
+Usage:
+  scripts/sync-vscode.sh [--target workspace|user|both] [--workspace PATH]
+                         [--check] [--quiet]
+
+  --target     Which scope to regenerate (default: both).
+  --workspace  Workspace root that owns .github/ and .vscode/
+               (default: the parent of the repository, i.e. ~/Progetti).
+  --check      Run the installer verification only; no writes.
+  --quiet      Print nothing unless the run fails.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --target)          target="${2:?missing value for --target}"; shift 2 ;;
+        --target=*)        target="${1#*=}"; shift ;;
+        --workspace)       workspace="${2:?missing value for --workspace}"; shift 2 ;;
+        --workspace=*)     workspace="${1#*=}"; shift ;;
+        --check)           check=1; shift ;;
+        --quiet)           quiet=1; shift ;;
+        -h|--help)         usage; exit 0 ;;
+        *) echo "sync-vscode: unknown option: $1" >&2; exit 2 ;;
+    esac
+done
+
+case "$target" in
+    workspace|user|both) ;;
+    *) echo "sync-vscode: invalid --target: $target" >&2; exit 2 ;;
+esac
+
+if (( check )); then
+    exec "$PYTHON" "$REPO_ROOT/install-vscode.py" --verify \
+        --target "$target" --workspace "$workspace"
+fi
+
+mkdir -p "$STATE_DIR"
+stamp="$STATE_DIR/layer-${target}-$(printf '%s' "$workspace" | sha256sum | cut -c1-12).stamp"
+
+fingerprint() {
+    {
+        printf '%s\n' "$REPO_ROOT/install-vscode.py"
+        find "$REPO_ROOT/agents" "$REPO_ROOT/command" "$REPO_ROOT/config" \
+             "$REPO_ROOT/plugins" "$REPO_ROOT/vscode" \
+             -type f -printf '%p %s %T@\n' 2>/dev/null
+        find "$REPO_ROOT/skills" -mindepth 1 -maxdepth 1 -printf '%f\n' 2>/dev/null
+    } | sort | sha256sum | cut -d' ' -f1
+}
+
+current="$(fingerprint)"
+if [[ -f "$stamp" ]] && [[ "$(<"$stamp")" == "$current" ]]; then
+    (( quiet )) || echo "sync-vscode: layer is up to date ($current)"
+    exit 0
+fi
+
+set +e
+output="$("$PYTHON" "$REPO_ROOT/install-vscode.py" --target "$target" \
+    --workspace "$workspace" --force 2>&1)"
+status=$?
+set -e
+
+if [[ -f "$LOG_FILE" ]] && (( $(stat -c%s "$LOG_FILE") > 1048576 )); then
+    tail -n 500 "$LOG_FILE" >"$LOG_FILE.tmp" && mv "$LOG_FILE.tmp" "$LOG_FILE"
+fi
+
+{
+    printf '=== %s target=%s workspace=%s\n' "$(date -Is)" "$target" "$workspace"
+    printf '%s\n' "$output"
+} >>"$LOG_FILE"
+
+if (( status != 0 )); then
+    echo "sync-vscode: installer failed (exit $status); see $LOG_FILE" >&2
+    exit "$status"
+fi
+
+printf '%s\n' "$current" >"$stamp"
+if (( ! quiet )); then
+    echo "sync-vscode: layer updated ($current)"
+    printf '%s\n' "$output" | tail -n 5
+fi

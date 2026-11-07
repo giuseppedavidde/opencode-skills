@@ -606,7 +606,11 @@ def mcp_servers_from_opencode() -> dict[str, dict]:
             executable, args = command, []
         else:
             continue
-        servers[name] = {"type": "stdio", "command": executable, "args": args}
+        server = {"type": "stdio", "command": executable, "args": args}
+        environment = spec.get("environment")
+        if isinstance(environment, dict) and environment:
+            server["env"] = {str(key): str(value) for key, value in environment.items()}
+        servers[name] = server
     return servers
 
 

@@ -1,0 +1,15 @@
+[Unit]
+Description=Watch opencode-skills sources and refresh the VS Code layer
+
+[Path]
+PathModified=%h/Progetti/Github/opencode-skills/agents
+PathModified=%h/Progetti/Github/opencode-skills/command
+PathModified=%h/Progetti/Github/opencode-skills/config
+PathModified=%h/Progetti/Github/opencode-skills/vscode
+PathModified=%h/Progetti/Github/opencode-skills/vscode/hooks
+PathModified=%h/Progetti/Github/opencode-skills/vscode/instructions
+PathModified=%h/Progetti/Github/opencode-skills/skills
+PathModified=%h/Progetti/Github/opencode-skills/install-vscode.py
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,7 @@
+[Unit]
+Description=Sync opencode-skills into the VS Code Copilot layer
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Progetti/Github/opencode-skills
+ExecStart=%h/Progetti/Github/opencode-skills/scripts/sync-vscode.sh --quiet

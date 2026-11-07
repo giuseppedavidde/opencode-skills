@@ -70,6 +70,44 @@ in `.github/copilot-instructions.md`, and a root `AGENTS.md` would be loaded
 by both VS Code and opencode. Enable it only if you keep a separate
 `AGENTS.md`.
 
+## Automatic sync
+
+Skills are symlinks and follow edits immediately. Agents, prompts,
+instructions, hooks and MCP are generated copies, so they need a rerun of the
+installer.
+
+[`scripts/sync-vscode.sh`](../scripts/sync-vscode.sh) wraps that rerun. It
+hashes `agents/`, `command/`, `config/`, `plugins/`, `vscode/`, the skill
+folder names and `install-vscode.py`, then runs the installer only when one of
+them changed. It always passes `--force`, so `copilot-instructions.md` is
+refreshed too.
+
+```bash
+scripts/sync-vscode.sh                    # both scopes (current installation)
+scripts/sync-vscode.sh --target workspace # only .github/ + .vscode/
+scripts/sync-vscode.sh --check            # verify only, no writes
+```
+
+The repository ships a systemd user path + service unit, so a save in
+`agents/` (or a `git checkout`) regenerates both scopes without a manual
+command:
+
+```bash
+ln -sfn "$PWD/vscode/systemd/opencode-skills-vscode-sync.service" ~/.config/systemd/user/
+ln -sfn "$PWD/vscode/systemd/opencode-skills-vscode-sync.path" ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now opencode-skills-vscode-sync.path
+```
+
+The path unit uses `PathModified=`, which also fires when a file inside a
+watched directory is saved. Runs are hash-gated, so a metadata-only write
+does not rewrite the generated layer. Logs go to
+`~/.cache/opencode-skills/sync-vscode.log`. Disable the watcher with
+`systemctl --user disable --now opencode-skills-vscode-sync.path`.
+
+The units assume the repository lives at `~/Progetti/Github/opencode-skills`;
+edit the `%h/...` paths for a different checkout.
+
 ## The VS Code Migrations panel
 
 **Ignore both migrations.** They move generated files away from the
