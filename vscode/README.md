@@ -29,6 +29,54 @@ The writing directive `asd-ste100` is a normal skill, so it maps automatically.
 The generated `.agent.md` files and `copilot-instructions.md` also embed a
 compact copy, so an agent follows the directive without an extra read.
 
+### Agent models
+
+`model:` in a generated agent is the **bare VS Code model id**, for example
+`deepseek-v4.1-flash` from `opencode-go/deepseek-v4.1-flash#low`. VS Code
+resolves an agent model against `metadata.id` first and against
+`metadata.name` only for models that are not BYOK. The OpenCode Go provider is
+BYOK, so a display name such as `DeepSeek V4.1 Flash` never resolves and the
+agent silently falls back to the session model. Keep the bare id.
+
+## Startup selection
+
+VS Code has a setting for the default model but **no setting for the default
+custom agent**. The selection lives in application storage:
+
+| Key | Value |
+|-----|-------|
+| `workbench.agentsession.agentHostAgentPicker.<scheme>.selectedAgentUri` | `file://.../.github/agents/<name>.agent.md` |
+| `chat.currentLanguageModel.panel.<scheme>` | `<scheme>:opencodego/<model-id>` |
+
+`<scheme>` is `agent-host-copilotcli` for the Copilot agent host.
+
+Two mechanisms cover startup:
+
+1. `chat.defaultModel` in `.vscode/settings.json`, written from
+   `config/opencode.json` → `model`. VS Code applies it to every new
+   conversation.
+2. [`scripts/vscode-preselect.py`](../scripts/vscode-preselect.py), which writes
+   both storage keys from `config/opencode.json` → `default_agent` and `model`.
+   Run it while VS Code is closed; it exits 2 otherwise.
+
+```bash
+scripts/vscode-preselect.py --dry-run
+scripts/vscode-preselect.py --force            # VS Code open (last write wins)
+scripts/vscode-preselect.py --keep-user-choice # respect an existing selection
+```
+
+`vscode/systemd/opencode-skills-vscode-preselect.service` runs the helper at
+login, before the graphical session starts applications:
+
+```bash
+ln -sfn "$PWD/vscode/systemd/opencode-skills-vscode-preselect.service" ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable opencode-skills-vscode-preselect.service
+```
+
+A manual agent choice inside a session is not lost: it survives until the next
+login, when the workflow default is applied again.
+
 ## Install
 
 ```bash

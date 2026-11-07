@@ -115,3 +115,10 @@ if (( ! quiet )); then
     echo "sync-vscode: layer updated ($current)"
     printf '%s\n' "$output" | tail -n 5
 fi
+
+# Apply the workflow agent/model as the VS Code startup selection. This only
+# works while VS Code is closed; the helper exits 2 otherwise and never fails
+# the sync.
+if [[ -x "$REPO_ROOT/scripts/vscode-preselect.py" ]]; then
+    "$REPO_ROOT/scripts/vscode-preselect.py" >/dev/null 2>&1 || true
+fi

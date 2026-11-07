@@ -59,17 +59,10 @@ AGENT_NAMES = {
     "pdf_reader": "pdf-reader",
 }
 
-# opencode provider/model → display name used by the OpenCode Go Copilot provider
-MODEL_NAMES = {
-    "opencode-go/deepseek-v4.1-flash": "DeepSeek V4.1 Flash",
-    "opencode-go/deepseek-v4-pro": "DeepSeek V4 Pro (New)",
-    "opencode-go/qwen3.8-flash": "Qwen3.8 Flash",
-    "opencode-go/qwen3.8-max": "Qwen3.8 Max",
-    "opencode-go/glm-5.3": "GLM-5.3",
-    "opencode-go/glm-5.2": "GLM-5.2",
-    "opencode-go/kimi-k2.7-code": "Kimi K2.7 Code",
-    "opencode-go/minimax-m3": "MiniMax-M3",
-}
+# VS Code resolves an agent `model:` entry against `metadata.id` first and against
+# `metadata.name` only for non-BYOK models. The OpenCode Go provider is BYOK, so
+# only the bare model id (the part after the vendor slash) can match. Emit that id
+# and never the provider display name.
 
 TRADING_PERMISSION_KEYS = {
     "get_macro_context",
@@ -236,12 +229,14 @@ def tools_for(permission: dict[str, str], agent_name: str = "") -> list[str]:
 
 
 def model_for(raw_model: str) -> str | None:
-    """Map an opencode model id to a VS Code model display name."""
+    """Map an opencode model id to the VS Code model id.
+
+    `opencode-go/deepseek-v4.1-flash#low` becomes `deepseek-v4.1-flash`, which is
+    the value VS Code compares against `metadata.id`.
+    """
     raw_model = strip_quotes(raw_model).split("#", 1)[0].strip()
     if not raw_model:
         return None
-    if raw_model in MODEL_NAMES:
-        return MODEL_NAMES[raw_model]
     return raw_model.rsplit("/", 1)[-1]
 
 
@@ -585,6 +580,29 @@ def render_template(template: Path, replacements: dict[str, str]) -> str:
     return content
 
 
+def opencode_config() -> dict:
+    """Return the parsed opencode workflow configuration."""
+    path = CONFIG_SRC / "opencode.json"
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def default_model_id() -> str | None:
+    """Return the workflow default model as a VS Code model id."""
+    return model_for(str(opencode_config().get("model", "")))
+
+
+def default_agent_name() -> str:
+    """Return the workflow default agent name."""
+    raw = str(opencode_config().get("default_agent", "router"))
+    return AGENT_NAMES.get(raw, raw.replace("_", "-"))
+
+
 def mcp_servers_from_opencode() -> dict[str, dict]:
     """Convert the opencode MCP config to VS Code stdio server definitions."""
     config_path = CONFIG_SRC / "opencode.json"
@@ -794,13 +812,18 @@ def install_workspace(options: Options) -> None:
     install_mcp_workspace(workspace, options)
     install_hooks(github / "hooks", workspace, options)
 
+    settings_updates = {
+        "chat.useAgentSkills": True,
+        "chat.useAgentsMdFile": False,
+        "chat.useHooks": True,
+    }
+    default_model = default_model_id()
+    if default_model:
+        settings_updates["chat.defaultModel"] = default_model
+
     merge_json(
         workspace / ".vscode" / "settings.json",
-        {
-            "chat.useAgentSkills": True,
-            "chat.useAgentsMdFile": False,
-            "chat.useHooks": True,
-        },
+        settings_updates,
         options,
         "settings",
     )
@@ -1111,8 +1134,14 @@ def verify_workspace(options: Options) -> tuple[list[str], list[str]]:
             "settings: "
             f"chat.useAgentSkills={settings.get('chat.useAgentSkills', 'default(true)')}, "
             f"chat.useHooks={settings.get('chat.useHooks', 'default(true)')}, "
-            f"chat.useAgentsMdFile={settings.get('chat.useAgentsMdFile', 'default(true)')}"
+            f"chat.useAgentsMdFile={settings.get('chat.useAgentsMdFile', 'default(true)')}, "
+            f"chat.defaultModel={settings.get('chat.defaultModel', 'unset')}"
         )
+        expected_model = default_model_id()
+        if expected_model and settings.get("chat.defaultModel") != expected_model:
+            notes.append(
+                f"settings: chat.defaultModel is not {expected_model!r} from config/opencode.json"
+            )
     else:
         notes.append("settings: no .vscode/settings.json (defaults enable skills, hooks, AGENTS.md)")
     if (workspace / "AGENTS.md").is_file():

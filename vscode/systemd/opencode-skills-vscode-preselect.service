@@ -1,0 +1,14 @@
+[Unit]
+Description=Preselect the opencode-skills agent and model for VS Code
+Documentation=file://%h/Progetti/Github/opencode-skills/vscode/README.md
+Before=graphical-session.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Progetti/Github/opencode-skills
+ExecStart=%h/Progetti/Github/opencode-skills/scripts/vscode-preselect.py
+# Exit code 2 means VS Code was already running; keep the login clean.
+SuccessExitStatus=2
+
+[Install]
+WantedBy=graphical-session-pre.target
