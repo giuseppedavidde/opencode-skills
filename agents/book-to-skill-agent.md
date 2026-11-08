@@ -41,17 +41,34 @@ Processi un libro alla volta seguendo la pipeline book-to-skill-bridge:
 
 ## Pipeline
 
+### Phase 0 — Risolvi le directory
+
+```bash
+# Default opencode. install-vscode.py riscrive questo valore in ~/.copilot/skills.
+SKILLS_HOME="${BOOK_SKILL_SKILLS_HOME:-$HOME/.config/opencode/skills}"
+
+EXTRACT_SCRIPT=""
+AUTO_DETECT_SCRIPT=""
+for candidate in "$SKILLS_HOME" "$HOME/.copilot/skills"; do
+  [ -z "$EXTRACT_SCRIPT" ] && [ -f "$candidate/book-to-skill/scripts/extract.py" ] && EXTRACT_SCRIPT="$candidate/book-to-skill/scripts/extract.py"
+  [ -z "$AUTO_DETECT_SCRIPT" ] && [ -f "$candidate/book-to-skill-bridge/scripts/auto_detect.py" ] && AUTO_DETECT_SCRIPT="$candidate/book-to-skill-bridge/scripts/auto_detect.py"
+done
+mkdir -p "$SKILLS_HOME"
+```
+
+Le variabili non sopravvivono tra una chiamata e l'altra. Ripeti questo blocco in ogni nuova shell.
+Oppure passa `BOOK_SKILL_SKILLS_HOME` con il percorso risolto.
+
 ### Phase 1 — Estrai testo dal PDF
 ```bash
-BOOK_SKILL_WORKDIR="/tmp/opencode/book_skill_work/<SLUG>" python3 <EXTRACT_SCRIPT> "<PDF_PATH>" --mode text --install-missing no
+BOOK_SKILL_WORKDIR="/tmp/opencode/book_skill_work/<SLUG>" python3 "$EXTRACT_SCRIPT" "<PDF_PATH>" --mode text --install-missing no
 ```
-Dove EXTRACT_SCRIPT è `$HOME/.config/opencode/skills/book-to-skill/scripts/extract.py`
 
 Leggi metadata.json risultante per capire dimensione e struttura.
 
 ### Phase 2 — Auto-detect
 ```bash
-python3 "$HOME/.config/opencode/skills/book-to-skill-bridge/scripts/auto_detect.py" /tmp/opencode/book_skill_work/<SLUG>/full_text.txt
+python3 "$AUTO_DETECT_SCRIPT" /tmp/opencode/book_skill_work/<SLUG>/full_text.txt
 ```
 Leggi il risultato e correggi title/author se necessario.
 
@@ -59,7 +76,7 @@ Leggi il risultato e correggi title/author se necessario.
 
 Crea la directory output:
 ```bash
-mkdir -p ~/.config/opencode/skills/<SLUG>/chapters
+mkdir -p "$SKILLS_HOME/<SLUG>/chapters"
 ```
 
 Trova la struttura capitoli nel full_text.txt (cerca "CHAPTER N" headings).
@@ -67,13 +84,15 @@ Dividi in dispari (Agent A) e pari (Agent B).
 
 **IMPORTANTE**: Lancia 2 task in PARALLELLO usando `subagent_type="explore"` ma nel prompt specifica ESPLICITAMENTE: "Usa deepseek-v4.1-flash per generare i contenuti."
 
+Sostituisci `$SKILLS_HOME` con il percorso assoluto risolto in Phase 0 prima di inviare i prompt.
+
 #### Agent A — capitoli dispari + glossary
 Prompt:
 ```
 Genera {N} capitoli (dispari) e il glossary per "{TITLE}" di {AUTHOR}.
 MODE: technical
 SOURCE: /tmp/opencode/book_skill_work/<SLUG>/full_text.txt
-OUTPUT: ~/.config/opencode/skills/<SLUG>/
+OUTPUT: $SKILLS_HOME/<SLUG>/
 
 Capitoli dispari: {lista}
 Genera: capitoli + glossary.md
@@ -94,7 +113,7 @@ Prompt:
 Genera {N} capitoli (pari) + patterns.md + cheatsheet.md + SKILL.md per "{TITLE}" di {AUTHOR}.
 MODE: technical
 SOURCE: /tmp/opencode/book_skill_work/<SLUG>/full_text.txt
-OUTPUT: ~/.config/opencode/skills/<SLUG>/
+OUTPUT: $SKILLS_HOME/<SLUG>/
 
 Capitoli pari: {lista}
 Genera: capitoli + patterns.md (~2000 token, When/How/Trade-offs) + cheatsheet.md (~1000 token, tabelle decisionali) + SKILL.md (~4000 token, frontmatter + core frameworks + chapter index TUTTI 11 capitoli + topic index + support files)

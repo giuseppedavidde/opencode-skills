@@ -486,6 +486,19 @@ def build_agent(
         description = description.replace(old, new)
         body = body.replace(old, new)
 
+    # The book-to-skill agent writes generated skills. Point it at the root
+    # that this VS Code target reads instead of the opencode root.
+    if name == "book-to-skill-agent":
+        skill_root = skills_dir
+        if skill_root.startswith("~/"):
+            skill_root = "$HOME/" + skill_root[2:]
+        for opencode_root in (
+            "${HOME}/.config/opencode/skills",
+            "$HOME/.config/opencode/skills",
+            "~/.config/opencode/skills",
+        ):
+            body = body.replace(opencode_root, skill_root)
+
     if name == "router":
         body = body.replace("on the opencode CLI", "in VS Code Copilot Chat")
 

@@ -1,6 +1,6 @@
 ---
 name: book-to-skill-bridge
-description: "Auto-generates OpenCode skills from books/documents. Wraps book-to-skill with zero interactive prompts: auto-detects book type (technical/text), auto-extracts title/author, generates skill files in ~/.config/opencode/skills/<slug>/. Supports parallel batch processing for multiple books. Use when you want to convert a book to a skill without answering questions."
+description: "Auto-generates agent skills from books/documents. Wraps book-to-skill with zero interactive prompts: auto-detects book type (technical/text), auto-extracts title/author, writes skill files to the host agent skill root ($HOME/.copilot/skills or $HOME/.config/opencode/skills, override with BOOK_SKILL_SKILLS_HOME). Supports parallel batch processing for multiple books. Use when you want to convert a book to a skill without answering questions."
 metadata:
   argument-hint: "<path-to-document> [skill-name-slug]  or  --batch <directory>"
 ---
@@ -68,10 +68,33 @@ For batch/multi: print `Processing N books in parallel with 2 agents each (N×2 
 
 ### Phase 1 — Parallel extraction (bash)
 
+**Resolve the skill root first.** VS Code Copilot reads `$HOME/.copilot/skills`.
+opencode reads `$HOME/.config/opencode/skills`. The first existing root wins.
+Set `BOOK_SKILL_SKILLS_HOME` to override the probe.
+
 ```bash
-SKILLS_HOME="${HOME}/.config/opencode/skills"
-EXTRACT_SCRIPT="${SKILLS_HOME}/book-to-skill/scripts/extract.py"
-AUTO_DETECT_SCRIPT="${SKILLS_HOME}/book-to-skill-bridge/scripts/auto_detect.py"
+SKILLS_HOME="${BOOK_SKILL_SKILLS_HOME:-}"
+if [ -z "$SKILLS_HOME" ]; then
+  for candidate in "${HOME}/.copilot/skills" "${HOME}/.agents/skills" "${HOME}/.claude/skills" "${HOME}/.config/opencode/skills"; do
+    if [ -d "$candidate" ]; then SKILLS_HOME="$candidate"; break; fi
+  done
+fi
+if [ -z "$SKILLS_HOME" ]; then
+  echo "No skill root found. Set BOOK_SKILL_SKILLS_HOME." >&2
+  exit 1
+fi
+
+EXTRACT_SCRIPT=""
+AUTO_DETECT_SCRIPT=""
+for candidate in "${HOME}/.config/opencode/skills" "${HOME}/.copilot/skills" "${HOME}/.agents/skills" "${HOME}/.claude/skills"; do
+  [ -z "$EXTRACT_SCRIPT" ] && [ -f "$candidate/book-to-skill/scripts/extract.py" ] && EXTRACT_SCRIPT="$candidate/book-to-skill/scripts/extract.py"
+  [ -z "$AUTO_DETECT_SCRIPT" ] && [ -f "$candidate/book-to-skill-bridge/scripts/auto_detect.py" ] && AUTO_DETECT_SCRIPT="$candidate/book-to-skill-bridge/scripts/auto_detect.py"
+done
+if [ -z "$EXTRACT_SCRIPT" ] || [ -z "$AUTO_DETECT_SCRIPT" ]; then
+  echo "Helper scripts not found. Install book-to-skill and book-to-skill-bridge." >&2
+  exit 1
+fi
+
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 WORKDIR="/tmp/opencode/book_skill_work"
 mkdir -p "$WORKDIR"
@@ -91,6 +114,10 @@ wait
 ```
 
 **Do NOT re-extract with Docling.**
+
+**Shell state does not persist between tool calls.** Re-run the root resolution
+block and rebuild `BOOK_PATHS` and `SLUGS` at the start of every later bash
+phase, or set `BOOK_SKILL_SKILLS_HOME` to the resolved path first.
 
 ### Phase 2 — Parallel auto-detect (bash)
 
@@ -117,8 +144,10 @@ if [ -n "$EXPLICIT_SLUG_PREFIX" ]; then
 fi
 ```
 
-Check slug collisions, create directories:
+Check slug collisions, create directories, then link the skill into the other
+host root when that root exists:
 ```bash
+OPENCODE_HOME="${HOME}/.config/opencode/skills"
 for i in "${!SLUGS[@]}"; do
   SLUG="${SLUGS[$i]}"
   if [ -d "${SKILLS_HOME}/${SLUG}" ]; then
@@ -127,6 +156,9 @@ for i in "${!SLUGS[@]}"; do
     SLUGS[$i]="${SLUG}-${n}"
   fi
   mkdir -p "${SKILLS_HOME}/${SLUGS[$i]}/chapters"
+  if [ -d "$OPENCODE_HOME" ] && [ "$OPENCODE_HOME" != "$SKILLS_HOME" ] && [ ! -e "$OPENCODE_HOME/${SLUGS[$i]}" ] && [ ! -L "$OPENCODE_HOME/${SLUGS[$i]}" ]; then
+    ln -s "${SKILLS_HOME}/${SLUGS[$i]}" "$OPENCODE_HOME/${SLUGS[$i]}"
+  fi
 done
 ```
 
@@ -148,7 +180,7 @@ Build Agent A prompt:
 Generate {ceil(N/2)} chapter files and the glossary for "{TITLE}" by {AUTHOR}.
 
 SOURCE: /tmp/opencode/book_skill_work/{SLUG}/full_text.txt
-OUTPUT: ~/.config/opencode/skills/{SLUG}/
+OUTPUT: {SKILLS_HOME}/{SLUG}/
 MODE: {MODE} (technical → include Anti-patterns in chapters)
 
 Your chapters (ODD numbers only):
@@ -179,7 +211,7 @@ Build Agent B prompt:
 Generate {floor(N/2)} chapter files + patterns + cheatsheet + SKILL.md for "{TITLE}" by {AUTHOR}.
 
 SOURCE: /tmp/opencode/book_skill_work/{SLUG}/full_text.txt
-OUTPUT: ~/.config/opencode/skills/{SLUG}/
+OUTPUT: {SKILLS_HOME}/{SLUG}/
 MODE: {MODE}
 
 Your chapters (EVEN numbers only):
@@ -231,6 +263,8 @@ The chapter index in SKILL.md must cover ALL books chapters.
 
 Return JSON: {{"chapters_created": N, "skill_complete": bool, "files": [...]}}
 ```
+
+Replace `{SKILLS_HOME}` in both prompts with the resolved absolute path before launch.
 
 **Launch all agents:**
 

@@ -381,7 +381,7 @@ rm -rf ~/.local/share/opencode/bladebro-node && ./setup-bladebro.sh
 | `asset-management-factor-investing` | Knowledge base from 'Asset Management: A Systematic Approach to Factor Investing' by Andrew Ang |
 | `async-python-patterns` | Implementing asynchronous Python applications using asyncio, concurrent programming, and async/await |
 | `book-to-skill` | Converts books and documents (PDF, EPUB, DOCX, HTML, Markdown, etc.) into structured agent skills |
-| `book-to-skill-bridge` | Auto-generates OpenCode skills from books/documents without interactive prompts |
+| `book-to-skill-bridge` | Auto-generates agent skills from books/documents without interactive prompts |
 | `consulting-writing` | Management-consulting writing craft — McKinsey SCR (Situation·Complication·Resolution), Minto Pyramid/MECE, BCG bold-bullet executive summary, so-what upfront, numeric precision, Forrester Landscape |
 | `crypto-crash-course` | Knowledge base from 'The Crypto Crash Course' by Frank Richmond (cryptocurrency, blockchain) |
 | `crypto-technical-analysis` | Knowledge base from 'Crypto Technical Analysis' by Alan John & Jon Law (TA adapted for crypto) |
