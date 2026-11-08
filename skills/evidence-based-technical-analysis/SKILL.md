@@ -2,7 +2,8 @@
 name: evidence-based-technical-analysis
 description: "Knowledge base from 'Evidence-Based Technical Analysis' by David R. Aronson. Scientific method and statistical inference for trading signals, data-mining bias, White's Reality Check, hypothesis testing, and objective TA evaluation."
 allowed-tools: [read, grep]
-argument-hint: [topic, framework, or chapter number]
+metadata:
+  argument-hint: "[topic, framework, or chapter number]"
 ---
 
 # Evidence-Based Technical Analysis

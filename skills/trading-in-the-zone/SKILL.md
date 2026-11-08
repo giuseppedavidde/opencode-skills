@@ -2,7 +2,8 @@
 name: trading-in-the-zone
 description: "Knowledge base from 'Trading in the Zone: Master the Market with Confidence, Discipline, and a Winning Attitude' by Mark Douglas."
 allowed-tools: [read, grep]
-argument-hint: [topic, framework, or chapter number]
+metadata:
+  argument-hint: "[topic, framework, or chapter number]"
 ---
 
 # Trading in the Zone — Mark Douglas

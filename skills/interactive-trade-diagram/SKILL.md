@@ -2,7 +2,8 @@
 name: interactive-trade-diagram
 description: "Genera un diagramma HTML interattivo per ogni analisi di posizione su azioni o opzioni e per ogni proposta di strategia. Il diagramma mostra payoff, break-even, greche, waterfall del P&L, storia del trade, scenari e livelli di alert. Usa questa skill quando l'utente chiede: analizza la mia posizione, cosa fare con questa posizione, position repair, roll, strategia opzioni, come entro a mercato, che opzioni compro, diagramma, payoff, spiegami la posizione, visualizza la strategia."
 allowed-tools: [read, grep, bash, edit, write]
-argument-hint: [ticker oppure "template" oppure "checklist"]
+metadata:
+  argument-hint: '[ticker oppure "template" oppure "checklist"]'
 ---
 
 # Interactive Trade Diagram

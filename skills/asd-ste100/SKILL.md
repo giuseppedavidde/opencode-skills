@@ -2,7 +2,8 @@
 name: asd-ste100
 description: "Direttiva di scrittura ASD-STE100 (Simplified Technical English) per tutti gli agenti del workflow. Impone limiti di frase, voce attiva, tempi semplici, un termine per concetto, liste verticali e numeri esatti. Usa questa skill quando scrivi o revisioni un output di agente: analisi, repair, report, piani atomici, risposte di routing, messaggi di commit, testo dentro diagrammi HTML. Trigger: ASD-STE100, STE100, simplified technical english, scrivi in STE, controlla STE, riscrivi in STE, direttiva di scrittura, stile agenti."
 allowed-tools: [read, grep, edit, write]
-argument-hint: [checklist | rewrite | regole | agenti]
+metadata:
+  argument-hint: "[checklist | rewrite | regole | agenti]"
 ---
 
 # ASD-STE100 — Direttiva di scrittura per il workflow agenti

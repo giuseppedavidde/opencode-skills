@@ -2,7 +2,8 @@
 name: option-volatility-pricing
 description: "Knowledge base from 'Option Volatility and Pricing' by Sheldon Natenberg. Advanced trading strategies and techniques, 2nd Edition."
 allowed-tools: [read, grep]
-argument-hint: [topic, framework, or chapter number]
+metadata:
+  argument-hint: "[topic, framework, or chapter number]"
 ---
 
 # Option Volatility and Pricing (2nd Edition)

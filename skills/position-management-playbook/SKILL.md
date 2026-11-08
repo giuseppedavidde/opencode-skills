@@ -2,7 +2,8 @@
 name: position-management-playbook
 description: "Gestione attiva di posizioni in difficoltà: exit ladder, rolling, protezione downside, disciplina documentale, verifica incrociata dati, qualificazione VPA/Wyckoff dei rimbalzi, caveat volumi intraday. Carica quando l'utente chiede: posizione scomoda, uscire, exit, gestione posizione, position repair, chiudere, roll, dead cat, exit ladder, scala di uscita, riparare, fix this, cosa fare con questa posizione, coprire, hedge."
 allowed-tools: [read, grep, bash, webfetch]
-argument-hint: [topic (discipline, scenario, vpa, ladder, trigger, checklist, metrics)]
+metadata:
+  argument-hint: "[topic (discipline, scenario, vpa, ladder, trigger, checklist, metrics)]"
 ---
 
 # Position Management Playbook

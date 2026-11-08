@@ -2,7 +2,8 @@
 name: creasy-resnik-maternal-fetal-medicine
 description: "Clinical knowledge base from 'Creasy and Resnik's Maternal-Fetal Medicine: Principles and Practice', Seventh Edition. Covers maternal physiology, fetal imaging, prenatal diagnosis, labor, and medical complications of pregnancy across 72 chapters."
 allowed-tools: [read, grep]
-argument-hint: [topic, condition, or chapter number]
+metadata:
+  argument-hint: "[topic, condition, or chapter number]"
 ---
 
 # Creasy and Resnik's Maternal-Fetal Medicine: Principles and Practice

@@ -2,7 +2,8 @@
 name: way-of-the-turtle
 description: "Knowledge base from 'Way of the Turtle' by Curtis M. Faith. Systematic trend following frameworks, cognitive bias exploitation, position sizing, pyramiding, stop loss, exit rules, backtesting methodology, trader psychology."
 allowed-tools: [read, grep]
-argument-hint: [topic, framework, or chapter number]
+metadata:
+  argument-hint: "[topic, framework, or chapter number]"
 ---
 
 # Way of the Turtle
