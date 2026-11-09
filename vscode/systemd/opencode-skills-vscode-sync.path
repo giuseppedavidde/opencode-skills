@@ -10,6 +10,7 @@ PathModified=%h/Progetti/Github/opencode-skills/vscode/hooks
 PathModified=%h/Progetti/Github/opencode-skills/vscode/instructions
 PathModified=%h/Progetti/Github/opencode-skills/skills
 PathModified=%h/Progetti/Github/opencode-skills/install-vscode.py
+PathModified=%h/Progetti/Github/opencode-skills/scripts/sync-vscode.sh
 
 [Install]
 WantedBy=default.target

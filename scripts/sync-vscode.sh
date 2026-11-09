@@ -8,10 +8,12 @@
 #
 # Usage:
 #   scripts/sync-vscode.sh [--target workspace|user|both] [--workspace PATH]
-#                          [--check] [--quiet]
+#                          [--check] [--quiet] [--expose-subagents|--no-expose-subagents]
 #
-#   --target     Which scope to regenerate (default: both, matching the
-#                current installation).
+#   --target     Which scope to regenerate (default: user). The workspace
+#                .github layer is a symlink to ~/.copilot, so a second
+#                workspace copy would overwrite the user layer with paths
+#                that point back into the workspace.
 #   --workspace  Workspace root that owns .github/ and .vscode/
 #                (default: the parent of the repository, i.e. ~/Progetti).
 #   --check      Run the installer verification only; no writes.
@@ -27,10 +29,14 @@ STATE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/opencode-skills"
 LOG_FILE="$STATE_DIR/sync-vscode.log"
 PYTHON="${PYTHON:-/usr/bin/python3}"
 
-target="both"
+target="user"
 workspace="${VSCODE_WORKSPACE:-$DEFAULT_WORKSPACE}"
 check=0
 quiet=0
+# Keep the specialist subagents in the agent picker. Without this flag the
+# installer writes `user-invocable: false` and every sync hides them again,
+# leaving `router` as the only visible agent.
+expose_subagents="${EXPOSE_SUBAGENTS:-1}"
 
 usage() {
     cat <<'EOF'
@@ -39,12 +45,17 @@ Regenerate the VS Code Copilot layer from the opencode-skills sources.
 Usage:
   scripts/sync-vscode.sh [--target workspace|user|both] [--workspace PATH]
                          [--check] [--quiet]
+                         [--expose-subagents | --no-expose-subagents]
 
-  --target     Which scope to regenerate (default: both).
+  --target     Which scope to regenerate (default: user; the workspace
+               .github layer is a symlink to ~/.copilot).
   --workspace  Workspace root that owns .github/ and .vscode/
                (default: the parent of the repository, i.e. ~/Progetti).
   --check      Run the installer verification only; no writes.
   --quiet      Print nothing unless the run fails.
+  --expose-subagents     List the specialist subagents in the agent picker
+                         (default; EXPOSE_SUBAGENTS=0 restores router-only).
+  --no-expose-subagents  Show only the primary agents in the picker.
 EOF
 }
 
@@ -56,6 +67,8 @@ while [[ $# -gt 0 ]]; do
         --workspace=*)     workspace="${1#*=}"; shift ;;
         --check)           check=1; shift ;;
         --quiet)           quiet=1; shift ;;
+        --expose-subagents)    expose_subagents=1; shift ;;
+        --no-expose-subagents) expose_subagents=0; shift ;;
         -h|--help)         usage; exit 0 ;;
         *) echo "sync-vscode: unknown option: $1" >&2; exit 2 ;;
     esac
@@ -66,9 +79,34 @@ case "$target" in
     *) echo "sync-vscode: invalid --target: $target" >&2; exit 2 ;;
 esac
 
+# With the workspace layer symlinked into ~/.copilot, a workspace write lands
+# in the same files but with paths that point back into the workspace.
+if [[ "$target" != "user" ]]; then
+    linked=()
+    if [[ -L "$workspace/.github" ]]; then
+        linked+=(".github -> $(readlink -f "$workspace/.github")")
+    else
+        for rel in agents skills hooks instructions copilot-instructions.md; do
+            if [[ -L "$workspace/.github/$rel" ]]; then
+                linked+=(".github/$rel -> $(readlink -f "$workspace/.github/$rel")")
+            fi
+        done
+    fi
+    if (( ${#linked[@]} )); then
+        printf 'sync-vscode: workspace layer is symlinked into the user layer:\n' >&2
+        printf '  %s\n' "${linked[@]}" >&2
+        echo "sync-vscode: use --target user, or the workspace write overwrites the user layer" >&2
+        exit 2
+    fi
+fi
+
+installer_args=(--target "$target" --workspace "$workspace")
+if [[ "$expose_subagents" != "0" ]]; then
+    installer_args+=(--expose-subagents)
+fi
+
 if (( check )); then
-    exec "$PYTHON" "$REPO_ROOT/install-vscode.py" --verify \
-        --target "$target" --workspace "$workspace"
+    exec "$PYTHON" "$REPO_ROOT/install-vscode.py" --verify "${installer_args[@]}"
 fi
 
 mkdir -p "$STATE_DIR"
@@ -77,6 +115,7 @@ stamp="$STATE_DIR/layer-${target}-$(printf '%s' "$workspace" | sha256sum | cut -
 fingerprint() {
     {
         printf '%s\n' "$REPO_ROOT/install-vscode.py"
+        printf '%s\n' "$REPO_ROOT/scripts/sync-vscode.sh"
         find "$REPO_ROOT/agents" "$REPO_ROOT/command" "$REPO_ROOT/config" \
              "$REPO_ROOT/plugins" "$REPO_ROOT/vscode" \
              -type f -printf '%p %s %T@\n' 2>/dev/null
@@ -91,8 +130,7 @@ if [[ -f "$stamp" ]] && [[ "$(<"$stamp")" == "$current" ]]; then
 fi
 
 set +e
-output="$("$PYTHON" "$REPO_ROOT/install-vscode.py" --target "$target" \
-    --workspace "$workspace" --force 2>&1)"
+output="$("$PYTHON" "$REPO_ROOT/install-vscode.py" "${installer_args[@]}" --force 2>&1)"
 status=$?
 set -e
 

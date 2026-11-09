@@ -131,13 +131,24 @@ them changed. It always passes `--force`, so `copilot-instructions.md` is
 refreshed too.
 
 ```bash
-scripts/sync-vscode.sh                    # both scopes (current installation)
+scripts/sync-vscode.sh                    # user scope (default)
 scripts/sync-vscode.sh --target workspace # only .github/ + .vscode/
 scripts/sync-vscode.sh --check            # verify only, no writes
+scripts/sync-vscode.sh --no-expose-subagents  # router-only agent picker
 ```
 
+The sync passes `--expose-subagents`, so it keeps the specialist agents in the
+picker. Do not remove that flag: a run without it writes
+`user-invocable: false` on every subagent, and `router` becomes the only
+visible agent again. Set `EXPOSE_SUBAGENTS=0` to opt out for one run.
+
+The sync also refuses `--target workspace` and `--target both` when any managed
+entry under the workspace `.github` is a symlink, because that write lands in
+the user layer with paths that point back into the workspace. The guard covers
+the whole directory and the per-item layout.
+
 The repository ships a systemd user path + service unit, so a save in
-`agents/` (or a `git checkout`) regenerates both scopes without a manual
+`agents/` (or a `git checkout`) regenerates the layer without a manual
 command:
 
 ```bash
@@ -199,14 +210,64 @@ duplicates are easy to spot and delete.
 To avoid per-workspace copies entirely, use `--target user`: one installation
 in `~/.copilot/` applies to every workspace.
 
+### Single install through per-item symlinks
+
+This installation keeps one physical copy and links the individual workspace
+entries to it:
+
+```bash
+mkdir -p ~/Progetti/.github
+for d in agents skills hooks instructions; do
+    ln -sfn ~/.copilot/"$d" ~/Progetti/.github/"$d"
+done
+ln -sfn ~/.copilot/copilot-instructions.md ~/Progetti/.github/copilot-instructions.md
+```
+
+Link only what the installer writes at workspace scope:
+
+| Workspace entry | Target |
+|-----------------|--------|
+| `.github/agents` | `~/.copilot/agents` |
+| `.github/skills` | `~/.copilot/skills` |
+| `.github/hooks` | `~/.copilot/hooks` |
+| `.github/instructions` | `~/.copilot/instructions` |
+| `.github/copilot-instructions.md` | `~/.copilot/copilot-instructions.md` |
+
+Do not link `.github` as a whole. That exposes `logs/`, `session-state/`,
+`ide/`, and `installed-plugins/` as workspace files, which adds noise and lets
+the file watcher and search index scan session data.
+
+Linked and unlinked paths share the same inode, so no agent or skill is
+duplicated on disk and a sync never leaves the two layers out of step. Check
+with:
+
+```bash
+stat -c '%i %n' ~/.copilot/agents/trade.agent.md ~/Progetti/.github/agents/trade.agent.md
+```
+
+Two rules follow from the symlinks:
+
+1. Regenerate with `--target user` only. A workspace write lands in
+   `~/.copilot` with paths that point back into the workspace, and the next
+   user write reverts it. The sync script enforces this and exits 2.
+2. Prompts stay in `~/.config/Code/User/prompts`, the user-level folder that
+   VS Code reads. A workspace `prompts/` folder is not needed.
+
+Back up the old directory before you replace it:
+
+```bash
+tar czf ~/.github-backup.tar.gz -C ~/Progetti .github
+```
+
 ## Agent picker visibility
 
 `mode: primary` → `user-invocable: true`; `mode: subagent` → `user-invocable: false`.
-So by default the picker shows only `router`, exactly like opencode where the
-subagents are reached through delegation. The subagents stay available to the
+A plain installer run therefore shows only `router`, exactly like opencode where
+the subagents are reached through delegation. The subagents stay available to the
 model because `disable-model-invocation: false` is set.
 
-To also list the specialists in the picker (direct `trade`, `coder`, ...):
+This installation keeps the specialists visible (`trade`, `coder`,
+`graphify-helper`, `pdf-reader`, `skill-updater`, `book-to-skill-agent`):
 
 ```bash
 python3 install-vscode.py --workspace /path/to/workspace --expose-subagents
@@ -216,6 +277,14 @@ Verify with the same flag, otherwise the check reports drift:
 
 ```bash
 python3 install-vscode.py --verify --workspace /path/to/workspace --expose-subagents
+```
+
+Symptom to know: when the agent picker lists `router` only, the generated
+agents carry `user-invocable: false`. That happens after any installer or sync
+run without `--expose-subagents`. Check with:
+
+```bash
+grep -H "^user-invocable" ~/.copilot/agents/*.agent.md .github/agents/*.agent.md
 ```
 
 ## Verify the layer matches opencode
