@@ -10,6 +10,7 @@ This OpenCode instance uses automatic model routing to save tokens:
 - **@skill_updater**: deepseek-v4.1-flash — updates skills that depend on -src submodules (graphify, book-to-skill, quant-mind, karpathy)
 - **@explore**: deepseek-v4.1-flash — code search
 - **@pdf_reader**: deepseek-v4.1-flash — estrazione e analisi di PDF/contratti/fatture/polizze via pdftotext + OCR (fallback tesseract)
+- **@oegk_health**: deepseek-v4.1-flash — copertura ÖGK e costi a carico del paziente per esami del sangue e visite specialistiche in Austria (Pauschbeträge, Wahlarzt 80%, Rezeptgebühr, Selbstbehalt)
 
 The router delegates based on keywords. Trading requests go to @trade, complex coding to @coder, skill updates to @skill_updater, graphify requests to @graphify_helper.
 Every subagent MUST end its response with a `## VERIFICA` section (confidenza, evidenza, non_verificato, escalation_consigliata). The router interprets this to decide whether to retry, escalate, or ask the user for clarification.

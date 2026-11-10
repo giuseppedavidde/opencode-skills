@@ -57,12 +57,12 @@ AGENT_NAMES = {
     "skill_updater": "skill-updater",
     "book-to-skill-agent": "book-to-skill-agent",
     "pdf_reader": "pdf-reader",
+    "oegk_health": "oegk-health",
 }
 
-# VS Code resolves an agent `model:` entry against `metadata.id` first and against
-# `metadata.name` only for non-BYOK models. The OpenCode Go provider is BYOK, so
-# only the bare model id (the part after the vendor slash) can match. Emit that id
-# and never the provider display name.
+# VS Code lists the OpenCode Go models with the `opencodego/` prefix. Emit that
+# prefixed id in the generated agent frontmatter; a bare model id is rejected at
+# invocation time.
 
 TRADING_PERMISSION_KEYS = {
     "get_macro_context",
@@ -231,13 +231,17 @@ def tools_for(permission: dict[str, str], agent_name: str = "") -> list[str]:
 def model_for(raw_model: str) -> str | None:
     """Map an opencode model id to the VS Code model id.
 
-    `opencode-go/deepseek-v4.1-flash#low` becomes `deepseek-v4.1-flash`, which is
-    the value VS Code compares against `metadata.id`.
+    `opencode-go/deepseek-v4.1-flash#low` becomes
+    `opencodego/deepseek-v4.1-flash`, the provider-prefixed id that VS Code
+    lists. A bare id without a provider is returned unchanged.
     """
     raw_model = strip_quotes(raw_model).split("#", 1)[0].strip()
     if not raw_model:
         return None
-    return raw_model.rsplit("/", 1)[-1]
+    vendor, sep, model = raw_model.rpartition("/")
+    if sep and vendor in {"opencode-go", "opencodego"}:
+        return f"opencodego/{model}"
+    return model
 
 
 def skill_directories() -> list[Path]:
@@ -482,6 +486,7 @@ def build_agent(
         ("graphify_helper", "graphify-helper"),
         ("pdf_reader", "pdf-reader"),
         ("skill_updater", "skill-updater"),
+        ("oegk_health", "oegk-health"),
     ):
         description = description.replace(old, new)
         body = body.replace(old, new)
@@ -519,7 +524,7 @@ def build_agent(
         lines.append(f"agents: {json.dumps(subagents, ensure_ascii=False)}")
         lines.append(
             'argument-hint: "Describe the task; the router delegates to trade, '
-            'coder, graphify-helper, pdf-reader, skill-updater, or book-to-skill-agent."'
+            'coder, graphify-helper, pdf-reader, skill-updater, book-to-skill-agent, or oegk-health."'
         )
     lines.append("---")
     lines.append("")

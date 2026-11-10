@@ -267,7 +267,7 @@ the subagents are reached through delegation. The subagents stay available to th
 model because `disable-model-invocation: false` is set.
 
 This installation keeps the specialists visible (`trade`, `coder`,
-`graphify-helper`, `pdf-reader`, `skill-updater`, `book-to-skill-agent`):
+`graphify-helper`, `pdf-reader`, `skill-updater`, `book-to-skill-agent`, `oegk-health`):
 
 ```bash
 python3 install-vscode.py --workspace /path/to/workspace --expose-subagents
@@ -308,7 +308,7 @@ In-chat confirmation:
 | Signal | Where | Expected |
 |--------|-------|----------|
 | Skills | type `/` in chat | 46 skills (`/python-venv`, `/graphify`, ...) + 3 prompts |
-| Agents | agent picker in chat | `router`, `trade`, `coder`, `coder-planner`, `graphify-helper`, `pdf-reader`, `skill-updater`, `book-to-skill-agent` |
+| Agents | agent picker in chat | `router`, `trade`, `coder`, `coder-planner`, `graphify-helper`, `pdf-reader`, `skill-updater`, `book-to-skill-agent`, `oegk-health` |
 | MCP | MCP view / tools list | `headroom`, `trading`, `rea` running |
 | Instructions | ask "which rules apply to Python files?" | cites `.github/instructions/python.instructions.md` |
 

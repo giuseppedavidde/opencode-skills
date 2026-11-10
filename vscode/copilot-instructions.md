@@ -28,11 +28,13 @@ Use the `agent` tool with these agent names:
 | `skill-updater` | Updating skills that follow the `skill` + `-src` submodule pattern |
 | `book-to-skill-agent` | Generating a skill from a book |
 | `pdf-reader` | Any PDF, contract, invoice, policy, or scanned document |
+| `oegk-health` | ÖGK coverage and personal cost for blood tests and specialist exams in Austria |
 
 Rules:
 
 - Trading requests always go to `trade`; do not improvise market analysis.
 - Any attached PDF or document-analysis request goes to `pdf-reader`.
+- ÖGK / Austrian health-insurance coverage questions go to `oegk-health`.
 - Code/scripting requests from `trade` go to `coder`.
 - `coder` delegates atomic planning to `coder-planner` for tasks touching
   **2+ files or more than 20 lines**.
