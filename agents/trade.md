@@ -159,6 +159,8 @@ Le richieste POSITION_REPAIR, NEW_ANALYSIS, STRATEGY_IDEA e ogni analisi multi-l
 
 Segui la skill `interactive-trade-diagram`. Copia il template. Sostituisci solo il blocco CONFIG. Verifica con il browser headless. Collega il file al markdown.
 
+Il diagramma contiene **sempre** la sezione `Andamento giornaliero`: curva del giorno, mappa di calore, tabella giornaliera e, se hai le chiusure del sottostante, la ricostruzione storica. Questa sezione è parte dello standard, non un extra.
+
 Se la risposta contiene un prezzo di ingresso, uno strike o una scadenza, il diagramma è obbligatorio.
 
 ---

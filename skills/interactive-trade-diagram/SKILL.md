@@ -1,6 +1,6 @@
 ---
 name: interactive-trade-diagram
-description: "Genera un diagramma HTML interattivo per ogni analisi di posizione su azioni o opzioni e per ogni proposta di strategia. Il diagramma mostra payoff, break-even, greche, waterfall del P&L, storia del trade, scenari e livelli di alert. Usa questa skill quando l'utente chiede: analizza la mia posizione, cosa fare con questa posizione, position repair, roll, strategia opzioni, come entro a mercato, che opzioni compro, diagramma, payoff, spiegami la posizione, visualizza la strategia."
+description: "Genera un diagramma HTML interattivo per ogni analisi di posizione su azioni o opzioni e per ogni proposta di strategia. Il diagramma mostra payoff, break-even, greche, waterfall del P&L, andamento giornaliero con step temporale, storia del trade, scenari e livelli di alert. Usa questa skill quando l'utente chiede: analizza la mia posizione, cosa fare con questa posizione, position repair, roll, strategia opzioni, come entro a mercato, che opzioni compro, diagramma, payoff, spiegami la posizione, visualizza la strategia."
 allowed-tools: [read, grep, bash, edit, write]
 metadata:
   argument-hint: '[ticker oppure "template" oppure "checklist"]'
@@ -24,6 +24,8 @@ Il file è interattivo. Il file non richiede rete. Il file si apre con doppio cl
 | Analisi multi-leg (spread, condor, calendar) | **Sì** | `trades/<TICKER>_diagram.html` |
 | QUICK_CHECK — "quanto quota X?" | No | — |
 | PORTFOLIO_SCAN — solo classifica | No. Aggiungi il diagramma solo per il primo ticker scelto | — |
+
+**Standard**: ogni diagramma di posizione include la vista giornaliera. La vista giornaliera è parte dello standard, non un extra.
 
 **Regola**: se la risposta contiene un prezzo di ingresso, uno strike o una scadenza, allora serve il diagramma.
 
@@ -68,6 +70,7 @@ Il file è interattivo. Il file non richiede rete. Il file si apre con doppio cl
 | `expiryLabel` | string | Sì | Esempio `21.01.2028`. |
 | `ivToday` | number | Sì | IV usata per la curva "oggi". Calibrala sul mark. |
 | `realized` | number | No | P&L già incassato sulle gambe chiuse. Sommato a tutti i calcoli. |
+| `daily` | object | No | Vista giornaliera: `{iv, paths, heat, hist, lineNote, dayNote, histNote}`. Default: `iv` = `ivToday`, `paths` auto, `heat` auto, `hist` null. |
 | `legs` | array | Sì | Gamba: `{kind, side, strike, qty, entry, iv, mark}`. |
 | `chips` | array | Sì | `{label, value, tone}`. `tone` = `pos`, `neg`, `warn`. |
 | `zones` | array | No | Se manca, le card si generano dai dati. Meglio lasciarlo vuoto. |
@@ -77,6 +80,20 @@ Il file è interattivo. Il file non richiede rete. Il file si apre con doppio cl
 | `timelineSide` | object | No | `{title, rows:[[label, value, tone]], note}`. |
 | `alerts` | array | No | `{level, meaning, action, tone}`. |
 | `verifica` | object | Sì | `{confidence, evidence, unverified, escalation}`. |
+
+### `daily` — vista giornaliera
+
+Il blocco è opzionale. Se manca, la sezione usa i default.
+
+| Campo | Tipo | Default | Note |
+|---|---|---|---|
+| `iv` | number | `ivToday` | IV base della vista. Lo shift vale `iv − ivToday` su ogni gamba. |
+| `paths` | array | auto | `{label, short, color, to}`. Massimo 6. `to: null` = spot costante. |
+| `heat` | object | auto | `{min, max}` della scala colori. |
+| `hist` | array | null | `{date, close, est, note}`. Se null, la card storica è nascosta. |
+| `lineNote` | string | generata | Nota del grafico a linee. |
+| `dayNote` | string | generata | Nota della tabella. |
+| `histNote` | string | generata | Nota della ricostruzione. |
 
 ### `kind` delle gambe
 
@@ -142,14 +159,17 @@ La IV di `ivToday` deve riprodurre il mark. Verifica con un piccolo calcolo Pyth
 
 | Sezione | Contenuto | Interazione |
 |---|---|---|
-| 1 · Payoff | Curva a scadenza, curva di oggi, area verde e rossa, linee SPOT, strike e BE | Slider, trascinamento, 3 viste, tooltip |
-| 2 · Anatomia | Gambe, entry, mark, P&L, greche, economia | — |
-| 3 · Ponte del P&L | Flussi di cassa a cascata | — |
-| 4 · Storia | Passaggi della posizione, confronto prima/dopo | Clic su un passaggio |
-| 5 · Scenari | Tabella prezzi con P&L e esito | Clic su una riga |
-| 6 · Alert | Livelli da monitorare | — |
+| 1 · Payoff | Curva a scadenza, curva di oggi, curva del giorno, area verde e rossa, linee SPOT, strike e BE | Slider, trascinamento, 4 viste, tooltip |
+| 2 · Andamento giornaliero | Grafico a linee, mappa di calore, tabella, storia | Slider del giorno, pulsanti IV, legenda cliccabile |
+| 3 · Anatomia | Gambe, entry, mark, P&L, greche, economia | — |
+| 4 · Ponte del P&L | Flussi di cassa a cascata | — |
+| 5 · Storia | Passaggi della posizione, confronto prima/dopo | Clic su un passaggio |
+| 6 · Scenari | Tabella prezzi con P&L e esito | Clic su una riga |
+| 7 · Alert | Livelli da monitorare | — |
 
-Le sezioni 3, 4 e 6 sono opzionali. Se il dato manca, la sezione si nasconde da sola.
+La sezione 2 è obbligatoria quando `dte` è maggiore di 0 e c'è almeno una put o una call. Il passo è adattivo: 1 giorno fino a 120 giorni, poi `ceil(dte/120)`. Massimo 121 colonne.
+
+Le sezioni 4, 5 e 7 sono opzionali. Se il dato manca, la sezione si nasconde da sola.
 
 ---
 
@@ -165,6 +185,12 @@ Le sezioni 3, 4 e 6 sono opzionali. Se il dato manca, la sezione si nasconde da 
 8. Il diagramma è leggibile a 430 px di larghezza.
 9. Ogni numero ha una fonte.
 10. Il documento markdown collega il diagramma.
+11. Lo slider del giorno funziona da 0 a `dte`.
+12. Il grafico a linee mostra almeno 2 percorsi.
+13. Le celle della heatmap sono righe × colonne.
+14. Le righe della tabella sono uguali alle colonne della heatmap.
+15. Nessun valore `NaN` nel diagramma.
+16. La sezione 2 è nascosta se la posizione non ha opzioni.
 
 Esegui la verifica Python dei punti 4 e 5 prima di consegnare.
 
@@ -190,3 +216,4 @@ print("P&L", (cum - mark)*qty*mult)
 - ❌ **Consegnare senza screenshot.** Un grafico vuoto si scopre solo guardandolo.
 - ❌ **Scrivere frasi lunghe nel diagramma.** Il diagramma si legge in 10 secondi.
 - ❌ **Dimenticare il segno del delta.** Una short put ha delta **positivo**. La posizione guadagna quando il sottostante sale.
+- ❌ **Consegnare un diagramma di posizione senza la vista giornaliera.** La vista giornaliera è parte dello standard.

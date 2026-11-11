@@ -114,6 +114,24 @@
   footer{margin-top:44px;color:#5c6673;font-size:11.5px;border-top:1px solid var(--line);padding-top:14px;line-height:1.7}
   footer b{color:#8b949e}
   .hide{display:none !important}
+
+  .readout.r6{grid-template-columns:repeat(6,1fr)}
+  @media(max-width:1100px){.readout.r6{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:700px){.readout.r6{grid-template-columns:1fr 1fr}}
+  .daycurve{fill:none;stroke:#39d2c0;stroke-width:2;opacity:.95}
+  .dotday{fill:#fff;stroke:#39d2c0;stroke-width:2}
+  .heatlegend{display:flex;align-items:center;gap:10px;margin-top:10px;font-family:var(--mono);
+    font-size:11px;color:var(--muted)}
+  .heatlegend .bar{flex:1;height:8px;border-radius:4px;
+    background:linear-gradient(90deg,#f85149 0%,#161b22 50%,#2ea043 100%);border:1px solid var(--line)}
+  .heatlegend b{font-weight:600;color:var(--text)}
+  .tblwrap{max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+  .tblwrap table{margin:0;min-width:660px}
+  .tblwrap thead th{position:sticky;top:0;background:var(--panel);z-index:2}
+  .tblwrap::-webkit-scrollbar{width:9px}
+  .tblwrap::-webkit-scrollbar-thumb{background:#2c3644;border-radius:5px}
+  .hm{stroke:#0d1117;stroke-width:1}
+  #heatTip{position:fixed}
 </style>
 </head>
 <body>
@@ -128,6 +146,7 @@
       <div class="legend">
         <span><i style="background:var(--blue)"></i><span id="legExpiry">P&amp;L a scadenza</span></span>
         <span><i style="background:var(--violet)"></i>P&amp;L oggi (valore di mercato)</span>
+        <span id="legDayWrap"><i style="background:#39d2c0"></i><span id="legDay">P&amp;L al giorno selezionato</span></span>
         <span><i style="background:var(--amber)"></i><span id="legSpot">Spot</span></span>
       </div>
       <div class="chartscroll">
@@ -137,43 +156,105 @@
       <div class="controls">
         <input class="slider" id="slider" type="range" aria-label="Prezzo ipotetico del sottostante">
         <div class="qval" id="qval"></div>
-        <div style="display:flex;gap:6px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn on" data-series="both">Entrambe</button>
           <button class="btn" data-series="exp">Scadenza</button>
           <button class="btn" data-series="now">Oggi</button>
+          <button class="btn hide" data-series="day" id="dayBtn">Giorno d</button>
         </div>
         <button class="btn" id="reset">Reset spot</button>
       </div>
-      <div class="readout">
+      <div class="controls hide" id="dayCtl" style="margin-top:8px">
+        <span class="k" id="dayCtlLabel" style="min-width:76px">Giorno 0…0</span>
+        <input class="slider" id="daySlider" type="range" min="0" max="0" step="1" value="0" aria-label="Giorno di calendario">
+        <div class="qval" id="dayLabel" style="min-width:250px;font-size:13px"></div>
+      </div>
+      <div class="readout r6">
         <div class="ro"><div class="k">Prezzo ipotetico</div><div class="v amber" id="rPrice"></div></div>
         <div class="ro"><div class="k">P&amp;L a scadenza</div><div class="v" id="rExp"></div></div>
         <div class="ro"><div class="k">P&amp;L oggi</div><div class="v" id="rNow"></div></div>
+        <div class="ro hide" id="roDay"><div class="k" id="rDayK">P&amp;L al giorno 0</div><div class="v" id="rDay"></div></div>
+        <div class="ro hide" id="roDayDelta"><div class="k" id="rDeltaDayK">Delta al giorno 0</div><div class="v" id="rDeltaDay"></div></div>
         <div class="ro"><div class="k">Delta posizione</div><div class="v" id="rDelta"></div></div>
       </div>
     </div>
     <div class="grid3" id="zoneCards" style="margin-top:14px"></div>
   </div>
 
-  <div id="sec2">
-    <h2 id="h2">2 · Anatomia della posizione</h2>
+  <div id="sec2" class="hide">
+    <h2 id="h2">2 · Andamento giornaliero: il P&amp;L lungo la vita della posizione</h2>
+
+    <div class="card">
+      <div class="k" id="lineTitle">P&amp;L giorno per giorno · percorsi di prezzo</div>
+      <div class="legend" id="lineLegend" style="margin-top:8px"></div>
+      <div class="chartscroll">
+        <svg id="lineChart" viewBox="0 0 920 340" role="img" aria-label="P&amp;L giorno per giorno"></svg>
+      </div>
+      <div class="controls" style="margin-top:10px">
+        <span class="k">Volatilità implicita</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn on" data-iv="0">IV invariata</button>
+          <button class="btn" data-iv="-10">IV −10 punti</button>
+          <button class="btn" data-iv="10">IV +10 punti</button>
+        </div>
+      </div>
+      <div class="readout">
+        <div class="ro"><div class="k">P&amp;L oggi · spot costante</div><div class="v" id="ivNow"></div></div>
+        <div class="ro"><div class="k" id="ivEndK">P&amp;L all'ultimo giorno · spot costante</div><div class="v" id="ivEnd"></div></div>
+        <div class="ro"><div class="k">P&amp;L a scadenza · spot costante</div><div class="v" id="ivExp"></div></div>
+        <div class="ro"><div class="k">P&amp;L minimo tra le curve</div><div class="v" id="ivMin"></div></div>
+      </div>
+      <div class="note" id="lineNote"></div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <div class="k" id="heatTitle">Mappa di calore · P&amp;L per prezzo e giorno</div>
+      <div class="chartscroll" id="heatWrap" style="position:relative">
+        <svg id="heat" viewBox="0 0 920 520" role="img" aria-label="Mappa di calore del P&amp;L"></svg>
+      </div>
+      <div class="tip" id="heatTip"></div>
+      <div class="heatlegend"><b id="heatMin">—</b><div class="bar"></div><b id="heatMax">—</b><span style="margin-left:8px">grigio = P&amp;L zero</span></div>
+      <div class="note" id="heatNote"></div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <div class="k" id="tblTitle">Tabella giornaliera · spot costante</div>
+      <div class="tblwrap" style="margin-top:10px">
+        <table>
+          <thead><tr><th>Giorno</th><th>Data</th><th class="n">DTE</th><th class="n">Spot</th><th class="n">Mark</th><th class="n">P&amp;L</th><th class="n">Theta</th></tr></thead>
+          <tbody id="dayRows"></tbody>
+        </table>
+      </div>
+      <div class="note" id="dayNote"></div>
+    </div>
+
+    <div class="card" id="histCard" style="margin-top:14px">
+      <div class="k">Ricostruzione storica · chiusure reali</div>
+      <div id="histWrap" style="margin-top:10px;overflow-x:auto"></div>
+      <div class="note" id="histNote" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+  <div id="sec3">
+    <h2 id="h3">3 · Anatomia della posizione</h2>
     <div class="grid2">
       <div class="card" id="legsCard"></div>
       <div class="card" id="econCard"></div>
     </div>
   </div>
 
-  <div id="sec3">
-    <h2 id="h3">3 · Da dove viene il P&amp;L</h2>
+  <div id="sec4">
+    <h2 id="h4">4 · Da dove viene il P&amp;L</h2>
     <div class="card" id="wfCard"><div class="wf" id="wf"></div><div class="note" id="wfNote"></div></div>
   </div>
 
-  <div id="sec4">
-    <h2 id="h4">4 · Storia della posizione</h2>
+  <div id="sec5">
+    <h2 id="h5">5 · Storia della posizione</h2>
     <div class="grid2" id="tlWrap"><div class="tl" id="tl"></div><div class="card" id="tlSide"></div></div>
   </div>
 
-  <div id="sec5">
-    <h2 id="h5">5 · Scenari: clicca una riga per vederla sul grafico</h2>
+  <div id="sec6">
+    <h2 id="h6">6 · Scenari: clicca una riga per vederla sul grafico</h2>
     <div class="card">
       <table>
         <thead><tr><th>Prezzo a scadenza</th><th class="n">Gap vs spot</th><th class="n">P&amp;L a scadenza</th><th class="n">P&amp;L oggi</th><th style="padding-left:18px">Esito</th></tr></thead>
@@ -183,8 +264,8 @@
     </div>
   </div>
 
-  <div id="sec6">
-    <h2 id="h6">6 · Livelli da monitorare</h2>
+  <div id="sec7">
+    <h2 id="h7">7 · Livelli da monitorare</h2>
     <div class="card" id="alerts"></div>
   </div>
 
@@ -214,6 +295,9 @@ const CONFIG = {
   legs: [
     { kind: "put", side: "short", strike: 280, qty: 1, entry: 26.19, iv: 0.754506, mark: 40.83 }
   ],
+
+  /* daily: opzionale. Se manca, la vista giornaliera usa i default. */
+  daily: { iv: 0.754506, hist: null },
 
   chips: [
     { label: "Strike", value: "280" },
@@ -306,9 +390,9 @@ const CONFIG = {
     if (leg.kind === "put") return Math.max(0, leg.strike - S);
     return Math.max(0, S - leg.strike);
   }
-  function bsValue(leg, S, T){
+  function bsValue(leg, S, T, ivShift = 0){
     if (leg.kind === "stock") return S;
-    const K = leg.strike, s = legsIv(leg), r = CFG.r || 0.04;
+    const K = leg.strike, s = Math.max(1e-4, legsIv(leg) + ivShift), r = CFG.r || 0.04;
     if (T <= 0) return intrinsic(leg, S);
     const sT = s*Math.sqrt(T);
     const d1 = (Math.log(S/K) + (r + s*s/2)*T)/sT;
@@ -316,9 +400,9 @@ const CONFIG = {
     if (leg.kind === "put") return K*Math.exp(-r*T)*normCdf(-d2) - S*normCdf(-d1);
     return S*normCdf(d1) - K*Math.exp(-r*T)*normCdf(d2);
   }
-  function bsDelta(leg, S, T){
+  function bsDelta(leg, S, T, ivShift = 0){
     if (leg.kind === "stock") return 1;
-    const K = leg.strike, s = legsIv(leg), r = CFG.r || 0.04;
+    const K = leg.strike, s = Math.max(1e-4, legsIv(leg) + ivShift), r = CFG.r || 0.04;
     if (T <= 0) return (leg.kind === "put" ? (S < K ? -1 : 0) : (S > K ? 1 : 0));
     const sT = s*Math.sqrt(T);
     const d1 = (Math.log(S/K) + (r + s*s/2)*T)/sT;
@@ -327,14 +411,20 @@ const CONFIG = {
   const sideSign = leg => (leg.side === "short" ? -1 : 1);
   const legMult = leg => (leg.kind === "stock" ? 1 : MULT);
 
-  function legPnl(leg, S, T){
-    const v = T > 0 ? bsValue(leg, S, T) : intrinsic(leg, S);
+  function legPnl(leg, S, T, ivShift = 0){
+    const v = T > 0 ? bsValue(leg, S, T, ivShift) : intrinsic(leg, S);
     return sideSign(leg) * (v - leg.entry) * (leg.qty || 1) * legMult(leg);
   }
   const CARRY = CFG.realized || 0;
   const pnlExp = S => CARRY + CFG.legs.reduce((a,l) => a + legPnl(l, S, 0), 0);
   const pnlNow = S => CARRY + CFG.legs.reduce((a,l) => a + legPnl(l, S, T0), 0);
   const deltaNow = S => CFG.legs.reduce((a,l) => a + sideSign(l)*(l.qty||1)*legMult(l)*bsDelta(l, S, T0), 0);
+  const pnlAtShift = (S, T, ivShift) => CARRY + CFG.legs.reduce((a,l) =>
+    a + legPnl(l, S, Math.max(0, T), ivShift), 0);
+  const deltaAtShift = (S, T, ivShift) => CFG.legs.reduce((a,l) =>
+    a + sideSign(l)*(l.qty||1)*legMult(l)*bsDelta(l, S, Math.max(0, T), ivShift), 0);
+  const posMark = (S, T, ivShift) => CFG.legs.reduce((a,l) =>
+    a + sideSign(l)*(l.qty||1)*legMult(l)*bsValue(l, S, Math.max(0, T), ivShift), 0);
 
   /* ---------- dominio ---------- */
   const strikes = CFG.legs.filter(l => l.kind !== "stock").map(l => l.strike);
@@ -384,9 +474,36 @@ const CONFIG = {
   }
   const BES = breakevens();
 
+  /* ---------- vista giornaliera: giorni, passo, date ---------- */
+  const DAYN = (CFG.dte > 0 && CFG.legs.some(l => l.kind === "put" || l.kind === "call"))
+    ? Math.floor(CFG.dte) : 0;
+  const DAY_ON = DAYN > 0;
+  const STEP = DAYN > 120 ? Math.ceil(DAYN/120) : 1;
+  const DAYS = [];
+  if (DAY_ON){
+    for (let d = 0; d < DAYN; d += STEP) DAYS.push(d);
+    DAYS.push(DAYN);
+  }
+  const isoUTC = iso => {
+    const q = String(iso || "2026-12-18").split("-").map(Number);
+    return new Date(Date.UTC(q[0], q[1] - 1, q[2]));
+  };
+  const addD = (base, n) => { const c = new Date(base.getTime()); c.setUTCDate(c.getUTCDate() + n); return c; };
+  const isoOf = dt0 => dt0.toISOString().slice(0, 10);
+  const EXP_D = isoUTC(CFG.expiryISO);
+  const BASE_D = addD(EXP_D, -DAYN);
+  const dateOf = d => isoOf(addD(BASE_D, d));
+  const DD = CFG.daily || {};
+  const DAILY_IV = DD.iv != null ? DD.iv : (CFG.ivToday != null ? CFG.ivToday : 0.5);
+  const BASE_SHIFT = (CFG.ivToday != null ? DAILY_IV - CFG.ivToday : 0);
+
   /* ---------- formattazione ---------- */
   const money = v => (v < 0 ? "−$" : "+$") + Math.abs(Math.round(v)).toLocaleString("en-US");
   const moneyPlain = v => (v < 0 ? "−$" : "$") + Math.abs(Math.round(v)).toLocaleString("en-US");
+  const money2 = v => (v < 0 ? "−$" : "+$") + Math.abs(v).toLocaleString("en-US",
+    {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  const moneyAbs2 = v => (v < 0 ? "−$" : "$") + Math.abs(v).toLocaleString("en-US",
+    {minimumFractionDigits: 2, maximumFractionDigits: 2});
   const price2 = v => "$" + v.toFixed(2);
   const num1 = v => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(1) + "%";
   const tone = v => v >= 0 ? "pos2" : "neg2";
@@ -520,6 +637,51 @@ const CONFIG = {
   const clampY = v => Math.min(PAD.t+ih-1, Math.max(PAD.t+1, v));
   let cur = CFG.spot;
 
+  /* slider del giorno: 0 = oggi, DAYN = scadenza. Passo 1 giorno. */
+  let daySel = 0;
+  let ivShiftPts = 0;
+  const dayT = () => Math.max(0, (DAYN - daySel)/365);
+  const dayShift = () => BASE_SHIFT + ivShiftPts/100;
+  let lineDay = null, dotDay = null;
+
+  function dayCurve(){
+    if (!lineDay) return;
+    lineDay.setAttribute("d", pathFor(S => pnlAtShift(S, dayT(), dayShift()), stepX/20));
+  }
+  function dayText(){
+    if (!DAY_ON) return;
+    $("dayLabel").textContent = dateOf(daySel) + " · " + (DAYN - daySel) + " giorni alla scadenza";
+    $("legDay").textContent = "P&L al giorno " + daySel + " (" + dateOf(daySel) + ")";
+    $("rDayK").textContent = "P&L al giorno " + daySel;
+    $("rDeltaDayK").textContent = "Delta al giorno " + daySel;
+  }
+
+  if (DAY_ON){
+    lineDay = el("path", {class: "daycurve", d: ""}, gPlot);
+    dotDay = el("circle", {r: 4.5, class: "dotday", cx: -10, cy: -10}, svg);
+    const ds = $("daySlider");
+    ds.min = 0; ds.max = DAYN; ds.step = 1; ds.value = 0;
+    $("dayCtlLabel").textContent = "Giorno 0…" + DAYN;
+    $("dayCtl").classList.remove("hide");
+    $("dayBtn").classList.remove("hide");
+    $("legDayWrap").classList.remove("hide");
+    $("roDay").classList.remove("hide");
+    $("roDayDelta").classList.remove("hide");
+    ds.addEventListener("input", e => {
+      daySel = parseInt(e.target.value, 10) || 0;
+      dayCurve(); dayText(); applySeries(); render(cur);
+      tip.classList.remove("show");
+    });
+  } else {
+    $("dayCtl").classList.add("hide");
+    $("dayBtn").classList.add("hide");
+    $("legDayWrap").classList.add("hide");
+    $("roDay").classList.add("hide");
+    $("roDayDelta").classList.add("hide");
+    const ro = document.querySelector("#chartbox .readout");
+    if (ro) ro.classList.remove("r6");
+  }
+
   function render(p){
     cur = p;
     slider.value = p;
@@ -529,6 +691,17 @@ const CONFIG = {
     const pe = pnlExp(p), pn = pnlNow(p), dl = deltaNow(p);
     dotExp.setAttribute("cx", xe); dotExp.setAttribute("cy", clampY(y(pe)));
     dotNow.setAttribute("cx", xe); dotNow.setAttribute("cy", clampY(y(pn)));
+    if (DAY_ON){
+      const pd = pnlAtShift(p, dayT(), dayShift());
+      const dd = deltaAtShift(p, dayT(), dayShift());
+      if (dotDay){
+        dotDay.setAttribute("cx", xe);
+        dotDay.setAttribute("cy", clampY(y(pd)));
+      }
+      $("rDay").textContent = money2(pd);
+      $("rDay").className = "v " + (pd >= 0 ? "green" : "red");
+      $("rDeltaDay").textContent = (dd > 0 ? "+" : "") + dd.toFixed(3);
+    }
     $("rPrice").textContent = moneyPlain(p);
     $("rExp").textContent = money(pe); $("rExp").className = "v " + (pe >= 0 ? "green" : "red");
     $("rNow").textContent = money(pn); $("rNow").className = "v " + (pn >= 0 ? "green" : "red");
@@ -540,11 +713,15 @@ const CONFIG = {
 
   function showTip(p){
     const pe = pnlExp(p), pn = pnlNow(p), dl = deltaNow(p);
+    const pd = DAY_ON ? pnlAtShift(p, dayT(), dayShift()) : 0;
     const gap = (p/CFG.spot - 1)*100;
+    const hTip = DAY_ON ? 126 : 100;
     tip.innerHTML =
       '<div class="t1">' + CFG.ticker + " " + moneyPlain(p) + " (" + num1(gap) + ")</div>" +
       '<div class="row"><span class="muted">a scadenza</span><b class="' + tone(pe) + '">' + money(pe) + "</b></div>" +
       '<div class="row"><span class="muted">oggi</span><b class="' + tone(pn) + '">' + money(pn) + "</b></div>" +
+      (DAY_ON ? '<div class="row"><span class="muted">giorno ' + daySel + '</span><b class="' +
+        tone(pd) + '">' + money(pd) + "</b></div>" : "") +
       '<div class="row"><span class="muted">delta</span><b>' + (dl > 0 ? "+" : "") + dl.toFixed(3) + "</b></div>";
     const svgR = svg.getBoundingClientRect();
     const boxR = tip.parentElement.getBoundingClientRect();
@@ -553,9 +730,9 @@ const CONFIG = {
     const ay = svgR.top - boxR.top + y(pn)*scale;
     let left = ax + 16;
     if (left + 210 > boxR.width) left = ax - 216;
-    let top = ay - 92;
+    let top = ay - hTip;
     if (top < 4) top = ay + 18;
-    if (top + 92 > boxR.height) top = boxR.height - 96;
+    if (top + hTip > boxR.height) top = boxR.height - hTip - 4;
     tip.style.left = Math.max(4, left) + "px";
     tip.style.top = Math.max(0, top) + "px";
     tip.classList.add("show");
@@ -585,15 +762,26 @@ const CONFIG = {
     hoverLine.setAttribute("x1", -10); hoverLine.setAttribute("x2", -10);
   });
 
+  function seriesMode(){
+    const b = document.querySelector(".btn[data-series].on");
+    return b ? b.dataset.series : "both";
+  }
+  function applySeries(){
+    const m = seriesMode();
+    const showDay = DAY_ON && (m === "day" || (m === "both" && daySel > 0));
+    lineExp.style.display = (m === "now" || m === "day") ? "none" : "";
+    lineNow.style.display = (m === "exp" || m === "day") ? "none" : "";
+    areaPos.style.display = (m === "now" || m === "day") ? "none" : "";
+    areaNeg.style.display = (m === "now" || m === "day") ? "none" : "";
+    if (lineDay) lineDay.style.display = showDay ? "" : "none";
+    if (dotDay) dotDay.style.display = showDay ? "" : "none";
+    if (DAY_ON) $("legDayWrap").style.display = showDay ? "" : "none";
+  }
   document.querySelectorAll(".btn[data-series]").forEach(b => {
     b.addEventListener("click", () => {
       document.querySelectorAll(".btn[data-series]").forEach(o => o.classList.remove("on"));
       b.classList.add("on");
-      const m = b.dataset.series;
-      lineExp.style.display = (m === "now") ? "none" : "";
-      lineNow.style.display = (m === "exp") ? "none" : "";
-      areaPos.style.display = (m === "now") ? "none" : "";
-      areaNeg.style.display = (m === "now") ? "none" : "";
+      applySeries();
     });
   });
   $("reset").addEventListener("click", () => render(CFG.spot));
@@ -688,7 +876,7 @@ const CONFIG = {
       : "");
 
   /* ---------- waterfall ---------- */
-  if ((CFG.bridge || []).length && $("sec3")){
+  if ((CFG.bridge || []).length && $("sec4")){
     const rows = [];
     let run = 0;
     CFG.bridge.forEach(d => {
@@ -721,10 +909,10 @@ const CONFIG = {
       wf.appendChild(col);
     });
     if (CFG.bridgeNote) $("wfNote").textContent = CFG.bridgeNote;
-  } else if ($("sec3")) { $("sec3").classList.add("hide"); }
+  } else if ($("sec4")) { $("sec4").classList.add("hide"); }
 
   /* ---------- timeline ---------- */
-  if ((CFG.timeline || []).length && $("sec4")){
+  if ((CFG.timeline || []).length && $("sec5")){
     const tl = $("tl");
     CFG.timeline.forEach(s => {
       const d = document.createElement("div");
@@ -741,7 +929,7 @@ const CONFIG = {
         ts.rows.map(r => '<tr><td class="muted">' + r[0] + '</td><td class="n ' + r[2] + '">' + r[1] + "</td></tr>").join("") +
         "</tbody></table>" + (ts.note ? '<div class="note">' + ts.note + "</div>" : "");
     } else { side.classList.add("hide"); }
-  } else if ($("sec4")) { $("sec4").classList.add("hide"); }
+  } else if ($("sec5")) { $("sec5").classList.add("hide"); }
 
   /* ---------- scenari ---------- */
   function scenarioPrices(){
@@ -782,7 +970,7 @@ const CONFIG = {
     (CFG.ivToday*100).toFixed(2) + "%, r " + (CFG.r*100).toFixed(3) + "%, " + CFG.dte + " giorni). Non è una quotazione.";
 
   /* ---------- alert ---------- */
-  if ((CFG.alerts || []).length && $("sec6")){
+  if ((CFG.alerts || []).length && $("sec7")){
     const box = $("alerts");
     CFG.alerts.forEach(a => {
       const d = document.createElement("div");
@@ -794,7 +982,364 @@ const CONFIG = {
         '<div><div>' + a.meaning + '</div><div class="ac">' + a.action + "</div></div>";
       box.appendChild(d);
     });
-  } else if ($("sec6")) { $("sec6").classList.add("hide"); }
+  } else if ($("sec7")) { $("sec7").classList.add("hide"); }
+
+  /* ================= SEZIONE 2 · ANDAMENTO GIORNALIERO ================= */
+  if (DAY_ON && $("lineChart")){
+    $("sec2").classList.remove("hide");
+
+    const PAL = ["#58a6ff", "#3fb950", "#d29922", "#bc8cff", "#f85149", "#db61a2"];
+    const HIST_SHIFT = (DD.histIv != null ? DD.histIv : DAILY_IV) - (CFG.ivToday != null ? CFG.ivToday : DAILY_IV);
+    const shiftNow = () => BASE_SHIFT + ivShiftPts/100;
+
+    /* ---------- percorsi di prezzo ---------- */
+    function autoPaths(){
+      const out = [], seen = new Set();
+      const push = (label, short, to) => {
+        const key = to == null ? "spot" : String(Math.round(to*100)/100);
+        if (out.length >= 6 || seen.has(key)) return;
+        seen.add(key);
+        out.push({label: label, short: short, color: PAL[out.length], to: to});
+      };
+      push("Spot costante USD " + CFG.spot.toFixed(2), "spot", null);
+      [...new Set(strikes)].forEach(k => {
+        if (Math.abs(k/CFG.spot - 1) > 0.02)
+          push("Verso lo strike USD " + k.toFixed(2), "K" + k, k);
+      });
+      const dn = Math.round(CFG.spot*0.90*100)/100;
+      const up = Math.round(CFG.spot*1.10*100)/100;
+      push("Discesa a USD " + dn.toFixed(2), "−10%", dn);
+      push("Salita a USD " + up.toFixed(2), "+10%", up);
+      return out;
+    }
+    const PTH = (Array.isArray(DD.paths) && DD.paths.length ? DD.paths : autoPaths())
+      .slice(0, 6)
+      .map((q, i) => ({
+        label: q.label || ("Percorso " + (i + 1)),
+        short: q.short || ("P" + (i + 1)),
+        color: q.color || PAL[i % PAL.length],
+        to: q.to == null ? null : Number(q.to)
+      }));
+    const priceOn = (q, d) => (q.to == null ? CFG.spot : CFG.spot + (q.to - CFG.spot)*d/DAYN);
+
+    /* ---------- grafico a linee ---------- */
+    const LW = 920, LH = 340, LP = {l: 74, r: 132, t: 16, b: 36};
+    const liw = LW - LP.l - LP.r, lih = LH - LP.t - LP.b;
+    const svgL = $("lineChart");
+    const hid = PTH.map(() => false);
+    const lastI = DAYS.length - 1;
+
+    function tickIdx(n, m){
+      if (n <= 1) return [0];
+      const out = [];
+      for (let i = 0; i < m; i++){
+        const k = Math.round(i*(n - 1)/(m - 1));
+        if (out[out.length - 1] !== k) out.push(k);
+      }
+      return out;
+    }
+    function niceStep(span, target){
+      const raw = span/Math.max(3, target);
+      const p10 = Math.pow(10, Math.floor(Math.log10(Math.max(1, raw))));
+      const cand = [1, 2, 2.5, 5, 10];
+      for (let i = 0; i < cand.length; i++) if (p10*cand[i] >= raw) return p10*cand[i];
+      return p10*10;
+    }
+    function lineData(){
+      const sh = shiftNow();
+      return PTH.map(q => ({
+        p: q,
+        v: DAYS.map(d => pnlAtShift(priceOn(q, d), Math.max(0, (DAYN - d)/365), sh))
+      }));
+    }
+    function drawLines(){
+      while (svgL.firstChild) svgL.removeChild(svgL.firstChild);
+      const data = lineData();
+      let lo = Infinity, hi = -Infinity;
+      data.forEach(se => se.v.forEach(val => { if (val < lo) lo = val; if (val > hi) hi = val; }));
+      if (!isFinite(lo) || !isFinite(hi)){ lo = -100; hi = 100; }
+      const pad = Math.max(20, (hi - lo)*0.12);
+      const stepY = niceStep(hi - lo + 2*pad, 5);
+      const y0 = Math.floor((lo - pad)/stepY)*stepY;
+      const y1 = Math.ceil((hi + pad)/stepY)*stepY;
+      const ly = val => LP.t + (y1 - val)/(y1 - y0)*lih;
+      const lx = i => LP.l + (lastI ? i/lastI : 0)*liw;
+      const g = el("g", {}, svgL);
+      for (let val = y0; val <= y1 + 1e-9; val += stepY){
+        el("line", {x1: LP.l, y1: ly(val), x2: LP.l + liw, y2: ly(val), class: "gridline"}, g);
+        const t = el("text", {x: LP.l - 10, y: ly(val) + 4, "text-anchor": "end", class: "axis"}, g);
+        t.textContent = (val > 0 ? "+$" : val < 0 ? "−$" : "$") + Math.abs(Math.round(val)).toLocaleString("en-US");
+      }
+      tickIdx(DAYS.length, 6).forEach(i => {
+        el("line", {x1: lx(i), y1: LP.t, x2: lx(i), y2: LP.t + lih, class: "gridline"}, g);
+        const t = el("text", {x: lx(i), y: LP.t + lih + 18, "text-anchor": "middle", class: "axis"}, g);
+        t.textContent = dateOf(DAYS[i]).slice(5);
+      });
+      if (y0 <= 0 && y1 >= 0){
+        el("line", {x1: LP.l, y1: ly(0), x2: LP.l + liw, y2: ly(0), stroke: "#4a5563", "stroke-width": 1.2}, g);
+      }
+      data.forEach((se, i) => {
+        if (hid[i]) return;
+        let dpath = "";
+        se.v.forEach((val, j) => { dpath += (j ? "L" : "M") + lx(j).toFixed(1) + "," + ly(val).toFixed(1); });
+        el("path", {d: dpath, fill: "none", stroke: se.p.color, "stroke-width": i === 0 ? 2.6 : 1.9,
+          "stroke-linejoin": "round", "stroke-linecap": "round"}, g);
+        el("circle", {cx: lx(lastI).toFixed(1), cy: ly(se.v[lastI]).toFixed(1), r: 3.2, fill: se.p.color}, g);
+      });
+      const ends = data.map((se, i) => ({i: i, v: se.v[lastI], color: se.p.color, short: se.p.short}))
+                       .filter(e => !hid[e.i]).sort((a, b) => b.v - a.v);
+      let prevY = -1e9;
+      ends.forEach(e => {
+        let ty = ly(e.v);
+        if (ty < prevY + 14) ty = prevY + 14;
+        prevY = ty;
+        el("line", {x1: lx(lastI) + 4, y1: ly(e.v), x2: LP.l + liw + 9, y2: ty,
+          stroke: e.color, "stroke-width": 1, opacity: 0.55}, g);
+        const t = el("text", {x: LP.l + liw + 13, y: ty + 3.5, class: "lbl"}, g);
+        t.style.fill = e.color;
+        t.style.paintOrder = "stroke";
+        t.style.stroke = "#0d1117";
+        t.style.strokeWidth = "3px";
+        t.textContent = e.short + " " + money(Math.round(e.v));
+      });
+      el("line", {x1: lx(0), y1: LP.t, x2: lx(0), y2: LP.t + lih, stroke: "#8b949e",
+        "stroke-width": 1, "stroke-dasharray": "3 3", opacity: 0.55}, g);
+      if (!hid[0]){
+        el("circle", {cx: lx(0), cy: ly(data[0].v[0]), r: 4.5, fill: "#fff", stroke: "#58a6ff", "stroke-width": 2}, g);
+        const tl = el("text", {x: lx(0) + 9, y: ly(data[0].v[0]) - 10, class: "lbl"}, g);
+        tl.style.fill = "#e6edf3";
+        tl.style.paintOrder = "stroke";
+        tl.style.stroke = "#0d1117";
+        tl.style.strokeWidth = "3px";
+        tl.textContent = "oggi " + money(data[0].v[0]);
+      }
+      const yl2 = el("text", {x: 14, y: LP.t + lih/2, "text-anchor": "middle", class: "lbl",
+        transform: "rotate(-90 14 " + (LP.t + lih/2) + ")"}, g);
+      yl2.textContent = "P&L (USD)";
+      const xl2 = el("text", {x: LP.l + liw, y: LH - 4, "text-anchor": "end", class: "lbl"}, g);
+      xl2.textContent = "DATA" + (CFG.expiryISO ? " (" + CFG.expiryISO.slice(0, 4) + ")" : "");
+      const setRO = (id, val) => {
+        const node = $(id);
+        node.textContent = money2(val);
+        node.className = "v " + (val >= 0 ? "green" : "red");
+      };
+      setRO("ivNow", data[0].v[0]);
+      setRO("ivEnd", data[0].v[lastI]);
+      setRO("ivExp", pnlExp(CFG.spot));
+      let mn = Infinity;
+      data.forEach(se => se.v.forEach(val => { if (val < mn) mn = val; }));
+      setRO("ivMin", mn);
+    }
+
+    /* ---------- mappa di calore ---------- */
+    const HW = 920, HH = 520, HP = {l: 74, r: 112, t: 12, b: 36};
+    const hw = HW - HP.l - HP.r, hh = HH - HP.t - HP.b;
+    const HSTEPS = [1, 2, 2.5, 5, 10, 20, 25, 50, 100];
+    const KMIN = strikes.length ? Math.min(...strikes) : CFG.spot;
+    const KMAX = strikes.length ? Math.max(...strikes) : CFG.spot;
+    const HLO = Math.min(CFG.spot*0.75, KMIN*0.85);
+    const HHI = Math.max(CFG.spot*1.12, KMAX*1.12);
+    const rowCount = st => Math.floor(HHI/st) - Math.floor(HLO/st) + 1;
+    const scoreStep = st => {
+      const n = rowCount(st);
+      return (n >= 35 && n <= 45) ? Math.abs(n - 40) : 1000 + Math.abs(n - 40);
+    };
+    const HSTEP = HSTEPS.reduce((best, st) => (scoreStep(st) < scoreStep(best) ? st : best), HSTEPS[0]);
+    const ROWS = [];
+    for (let pv = Math.floor(HLO/HSTEP)*HSTEP; pv <= HHI + 1e-9; pv += HSTEP)
+      ROWS.push(Math.round(pv*100)/100);
+    const NCOL = DAYS.length;
+    const cw = hw/NCOL, ch = hh/ROWS.length;
+    const MAT = ROWS.map(pr => DAYS.map(d =>
+      pnlAtShift(pr, Math.max(0, (DAYN - d)/365), BASE_SHIFT)));
+    let GMIN = Infinity, GMAX = -Infinity;
+    MAT.forEach(r => r.forEach(val => { if (val < GMIN) GMIN = val; if (val > GMAX) GMAX = val; }));
+    if (!isFinite(GMIN)){ GMIN = -100; GMAX = 100; }
+    const HMIN = (DD.heat && DD.heat.min != null) ? DD.heat.min : Math.floor(GMIN/10)*10;
+    const HMAX = (DD.heat && DD.heat.max != null) ? DD.heat.max : Math.ceil(GMAX/10)*10;
+    const svgH = $("heat"), heatTip = $("heatTip");
+    const fmtP = val => "$" + (Math.abs(val - Math.round(val)) < 1e-9
+      ? Math.round(val).toLocaleString("en-US") : val.toFixed(2));
+    function heatColor(val){
+      const sc = val >= 0 ? Math.max(1, HMAX) : Math.max(1, Math.abs(Math.min(HMIN, 0)));
+      const a = Math.pow(Math.min(1, Math.abs(val)/sc), 0.72);
+      const b = [22, 27, 34], t = val >= 0 ? [46, 160, 67] : [248, 81, 73];
+      return "rgb(" + Math.round(b[0] + (t[0] - b[0])*a) + "," +
+                      Math.round(b[1] + (t[1] - b[1])*a) + "," +
+                      Math.round(b[2] + (t[2] - b[2])*a) + ")";
+    }
+    const yOfPrice = pr => HP.t + (ROWS.length - 1 - (pr - ROWS[0])/HSTEP + 0.5)*ch;
+
+    function drawHeat(){
+      while (svgH.firstChild) svgH.removeChild(svgH.firstChild);
+      const g = el("g", {}, svgH);
+      ROWS.forEach((pr, i) => {
+        const yy = HP.t + (ROWS.length - 1 - i)*ch;
+        for (let j = 0; j < NCOL; j++){
+          el("rect", {class: "hm", x: (HP.l + j*cw).toFixed(2), y: yy.toFixed(2),
+            width: Math.max(0.5, cw - 0.7).toFixed(2), height: Math.max(0.5, ch - 0.7).toFixed(2),
+            fill: heatColor(MAT[i][j])}, g);
+        }
+      });
+      const every = Math.max(1, Math.ceil(ROWS.length/7));
+      ROWS.forEach((pr, i) => {
+        if (i % every && i !== ROWS.length - 1) return;
+        const yy = HP.t + (ROWS.length - 1 - i)*ch;
+        const t = el("text", {x: HP.l - 8, y: yy + ch/2 + 3, "text-anchor": "end", class: "axis"}, g);
+        t.textContent = fmtP(pr);
+      });
+      tickIdx(NCOL, 6).forEach(j => {
+        const t = el("text", {x: HP.l + (j + 0.5)*cw, y: HP.t + hh + 16,
+          "text-anchor": "middle", class: "axis"}, g);
+        t.textContent = dateOf(DAYS[j]).slice(5);
+      });
+      const markRow = (pr, color, label) => {
+        const yy = yOfPrice(pr);
+        if (!isFinite(yy) || yy < HP.t || yy > HP.t + hh) return;
+        el("line", {x1: HP.l, y1: yy.toFixed(2), x2: HP.l + hw, y2: yy.toFixed(2),
+          stroke: color, "stroke-width": 1.6}, g);
+        const t = el("text", {x: HP.l + hw + 8, y: yy + 3.5, class: "lbl"}, g);
+        t.style.fill = color;
+        t.style.paintOrder = "stroke";
+        t.style.stroke = "#0d1117";
+        t.style.strokeWidth = "3px";
+        t.textContent = label;
+      };
+      markRow(CFG.spot, "#d29922", "spot " + CFG.spot.toFixed(2));
+      [...new Set(strikes)].forEach(k => markRow(k, "#f85149", "K " + k.toFixed(2)));
+      const xl3 = el("text", {x: HP.l + hw, y: HH - 6, "text-anchor": "end", class: "lbl"}, g);
+      xl3.textContent = "DATA";
+      const yl3 = el("text", {x: 14, y: HP.t + hh/2, "text-anchor": "middle", class: "lbl",
+        transform: "rotate(-90 14 " + (HP.t + hh/2) + ")"}, g);
+      yl3.textContent = CFG.ticker + " (USD)";
+      $("heatMin").textContent = money2(HMIN);
+      $("heatMax").textContent = money2(HMAX);
+    }
+
+    svgH.addEventListener("pointermove", ev => {
+      const b = svgH.getBoundingClientRect();
+      const sx = (ev.clientX - b.left)*(HW/b.width);
+      const sy = (ev.clientY - b.top)*(HH/b.height);
+      const j = Math.floor((sx - HP.l)/cw);
+      const ri = Math.floor((sy - HP.t)/ch);
+      if (j < 0 || j >= NCOL || ri < 0 || ri >= ROWS.length){
+        heatTip.classList.remove("show"); return;
+      }
+      const idx = ROWS.length - 1 - ri;
+      const pr = ROWS[idx], d = DAYS[j];
+      const T = Math.max(0, (DAYN - d)/365);
+      const pv = MAT[idx][j];
+      const mk = posMark(pr, T, BASE_SHIFT);
+      heatTip.innerHTML =
+        '<div class="t1">' + dateOf(d) + " · giorno " + d + "</div>" +
+        '<div class="row"><span class="muted">' + CFG.ticker + '</span><b>' + fmtP(pr) + "</b></div>" +
+        '<div class="row"><span class="muted">mark posizione</span><b>' + moneyAbs2(mk) + "</b></div>" +
+        '<div class="row"><span class="muted">P&L</span><b class="' + tone(pv) + '">' + money2(pv) + "</b></div>";
+      let left = ev.clientX + 18, top = ev.clientY - 12;
+      if (left + 220 > window.innerWidth) left = ev.clientX - 210;
+      if (top + 116 > window.innerHeight) top = window.innerHeight - 122;
+      heatTip.style.left = Math.max(4, left) + "px";
+      heatTip.style.top = Math.max(4, top) + "px";
+      heatTip.classList.add("show");
+    });
+    svgH.addEventListener("pointerleave", () => heatTip.classList.remove("show"));
+
+    /* ---------- tabella giornaliera ---------- */
+    function buildTable(){
+      const tb = $("dayRows");
+      for (let i = 0; i < DAYS.length; i++){
+        const d = DAYS[i];
+        const T = Math.max(0, (DAYN - d)/365);
+        const pv = pnlAtShift(CFG.spot, T, BASE_SHIFT);
+        const mk = posMark(CFG.spot, T, BASE_SHIFT);
+        const th = (d < DAYN) ? pv - pnlAtShift(CFG.spot, Math.max(0, (DAYN - d - 1)/365), BASE_SHIFT) : 0;
+        const tr = document.createElement("tr");
+        if (d === 0 || d === DAYN) tr.className = "hi";
+        tr.innerHTML = "<td>" + d + "</td><td>" + dateOf(d) + '</td><td class="n">' + (DAYN - d) +
+          '</td><td class="n">' + price2(CFG.spot) + '</td><td class="n">' + moneyAbs2(mk) +
+          '</td><td class="n ' + tone(pv) + '">' + money2(pv) + '</td><td class="n">' +
+          (d === DAYN ? "$0.00" : money2(th)) + "</td>";
+        tb.appendChild(tr);
+      }
+      $("tblTitle").textContent = "Tabella giornaliera · spot costante " + price2(CFG.spot);
+      $("dayNote").innerHTML = DD.dayNote ||
+        ("La tabella usa gli stessi giorni del grafico e della mappa di calore. " +
+         "Theta = variazione di P&L in un giorno. " +
+         (STEP > 1 ? "Passo di " + STEP + " giorni." : "Passo di 1 giorno."));
+    }
+
+    /* ---------- ricostruzione storica ---------- */
+    function buildHist(){
+      const H = Array.isArray(DD.hist) ? DD.hist : [];
+      if (!H.length || !CFG.expiryISO){ $("histCard").classList.add("hide"); return; }
+      const EXP = isoUTC(CFG.expiryISO);
+      let html = '<table><thead><tr><th>Data</th><th class="n">Chiusura</th><th class="n">DTE</th>' +
+                 '<th class="n">Mark</th><th class="n">P&amp;L</th><th>Nota</th></tr></thead><tbody>';
+      H.forEach(h => {
+        const dt0 = isoUTC(h.date);
+        const dteH = Math.round((EXP.getTime() - dt0.getTime())/86400000);
+        const T = Math.max(0, dteH/365);
+        const mk = posMark(h.close, T, HIST_SHIFT);
+        const pv = pnlAtShift(h.close, T, HIST_SHIFT);
+        html += '<tr' + (h.est ? ' class="hi"' : '') + '><td>' + h.date + '</td><td class="n">$' +
+          Number(h.close).toFixed(2) + '</td><td class="n">' + dteH + '</td><td class="n">' +
+          moneyAbs2(mk) + '</td><td class="n ' + tone(pv) + '">' + money2(pv) +
+          '</td><td class="muted">' + (h.note || "") + "</td></tr>";
+      });
+      html += "</tbody></table>";
+      $("histWrap").innerHTML = html;
+      $("histNote").textContent = DD.histNote ||
+        ("Il mark è una ricostruzione con IV " + (DAILY_IV*100).toFixed(2) + "%. La tabella non è una quotazione.");
+    }
+
+    /* ---------- controlli e note ---------- */
+    const lg = $("lineLegend");
+    PTH.forEach((q, i) => {
+      const sp = document.createElement("span");
+      sp.style.cursor = "pointer";
+      sp.style.userSelect = "none";
+      sp.innerHTML = '<i style="background:' + q.color + '"></i>' + q.label;
+      sp.addEventListener("click", () => {
+        hid[i] = !hid[i];
+        sp.style.opacity = hid[i] ? ".35" : "1";
+        sp.style.textDecoration = hid[i] ? "line-through" : "none";
+        drawLines();
+      });
+      lg.appendChild(sp);
+    });
+    document.querySelectorAll(".btn[data-iv]").forEach(b => {
+      b.addEventListener("click", () => {
+        document.querySelectorAll(".btn[data-iv]").forEach(o => o.classList.remove("on"));
+        b.classList.add("on");
+        ivShiftPts = parseFloat(b.dataset.iv) || 0;
+        drawLines();
+        dayCurve();
+        render(cur);
+      });
+    });
+
+    $("lineTitle").textContent = "P&L giorno per giorno · " + PTH.length + " percorsi di prezzo";
+    $("heatTitle").textContent = "Mappa di calore · P&L per prezzo " + CFG.ticker + " e giorno";
+    $("ivEndK").textContent = "P&L al giorno " + DAYN + " · spot costante";
+    $("lineNote").innerHTML = DD.lineNote ||
+      ("Ogni linea è un percorso di prezzo da oggi alla scadenza. " +
+       "Il P&L usa il modello Black-Scholes su tutte le gambe. " +
+       "IV base " + (DAILY_IV*100).toFixed(2) + "%. " +
+       (STEP > 1 ? "Passo di " + STEP + " giorni: il grafico salta i giorni intermedi. " : "") +
+       "I pulsanti IV spostano la volatilità di ±10 punti.");
+    $("heatNote").innerHTML =
+      "Righe: prezzo da USD " + ROWS[0].toFixed(2) + " a USD " + ROWS[ROWS.length - 1].toFixed(2) +
+      ", passo USD " + HSTEP.toFixed(2) + ". Colonne: " + NCOL + " giorni, da " + dateOf(0) +
+      " a " + dateOf(DAYN) + (STEP > 1 ? " (passo di " + STEP + " giorni)" : " (passo di 1 giorno)") + ". " +
+      "Colore: rosso = perdita, verde = profitto, grigio = P&L zero. " +
+      "Scala da " + money2(HMIN) + " a " + money2(HMAX) + ". " +
+      "La linea ambra è lo spot. La linea rossa è lo strike.";
+
+    drawLines();
+    drawHeat();
+    buildTable();
+    buildHist();
+  }
 
   /* ---------- verifica ---------- */
   const v = CFG.verifica || {};
@@ -804,7 +1349,7 @@ const CONFIG = {
     "Non verificato: " + (v.unverified || "—") + " · " +
     "Escalation: " + (v.escalation || "—") + ". Dati al " + CFG.asOf + ".";
 
-  render(CFG.spot);
+  dayCurve(); dayText(); applySeries(); render(CFG.spot);
 })();
 </script>
 </body>
