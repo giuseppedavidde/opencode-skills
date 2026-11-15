@@ -1,0 +1,191 @@
+{
+  "name": "budget-app-manager",
+  "displayName": "Budget App Manager",
+  "description": "Dashboard, monthly budget editor, AI bank-statement import and AI assistant for personal finances.",
+  "version": "0.4.0",
+  "publisher": "local",
+  "license": "MIT",
+  "private": true,
+  "icon": "media/icon.png",
+  "engines": {
+    "vscode": "^1.85.0",
+    "node": ">=18"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "budget",
+    "finance",
+    "dashboard",
+    "bank",
+    "ai",
+    "sqlite"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onView:budgetApp.dashboardView",
+    "onCommand:budget.openDashboard",
+    "onCommand:budget.openChat",
+    "onCommand:budget.importBankStatement"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "budget.openDashboard",
+        "title": "Open Budget Panel",
+        "category": "Budget",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "budget.openChat",
+        "title": "Open AI Assistant",
+        "category": "Budget",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "budget.importBankStatement",
+        "title": "Import Bank Statement",
+        "category": "Budget",
+        "icon": "$(cloud-upload)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "budget.importBankStatement",
+          "when": "view == budgetApp.dashboardView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "budget.openDashboard",
+          "when": "view == budgetApp.dashboardView",
+          "group": "navigation@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "budget.openDashboard"
+        },
+        {
+          "command": "budget.openChat"
+        },
+        {
+          "command": "budget.importBankStatement"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Budget App",
+      "properties": {
+        "budgetApp.dbPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "Absolute path of the SQLite database. Empty means <globalStorageUri>/budget.db."
+        },
+        "budgetApp.defaultTimeWindow": {
+          "type": "string",
+          "enum": [
+            "3",
+            "6",
+            "12",
+            "24",
+            "All"
+          ],
+          "default": "12",
+          "description": "Default trend horizon in months."
+        },
+        "budgetApp.defaultProvider": {
+          "type": "string",
+          "enum": [
+            "opencode",
+            "gemini",
+            "groq",
+            "ollama",
+            "openrouter",
+            "puter",
+            "llamacpp"
+          ],
+          "default": "opencode",
+          "description": "Default AI provider."
+        },
+        "budgetApp.defaultModel": {
+          "type": "string",
+          "default": "deepseek-v4-pro",
+          "description": "Default AI model. OpenCode models are stored without the opencode-go/ prefix."
+        },
+        "budgetApp.cloud.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable GitHub cloud backup/restore."
+        },
+        "budgetApp.cloud.repo": {
+          "type": "string",
+          "default": "giuseppedavidde/StreamLitPrj",
+          "description": "GitHub repository in owner/name form."
+        },
+        "budgetApp.cloud.branch": {
+          "type": "string",
+          "default": "main",
+          "description": "Branch used for cloud backup."
+        },
+        "budgetApp.cloud.path": {
+          "type": "string",
+          "default": "Budget_App/budget.db",
+          "description": "Path of the database file inside the GitHub repository."
+        },
+        "budgetApp.cloud.csvPath": {
+          "type": "string",
+          "default": "Budget_App/budget_database.csv",
+          "description": "Path of the CSV export inside the GitHub repository."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "budgetApp",
+          "title": "Budget App",
+          "icon": "media/activitybar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "budgetApp": [
+        {
+          "id": "budgetApp.dashboardView",
+          "name": "Budget",
+          "type": "webview",
+          "contextualTitle": "Budget App Manager"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "package": "vsce package --no-dependencies",
+    "smoke:webview": "npm run build && node scripts/webview-smoke.mjs",
+    "smoke:host": "npm run build && node scripts/host-smoke.mjs"
+  },
+  "dependencies": {
+    "iconv-lite": "^0.6.3",
+    "pdfjs-dist": "^4.10.38",
+    "sql.js": "^1.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/sql.js": "^1.4.9",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.2.1",
+    "esbuild": "^0.24.2",
+    "jsdom": "^31.0.1",
+    "plotly.js-dist-min": "^2.35.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

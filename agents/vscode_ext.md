@@ -41,6 +41,41 @@ Tutto il testo che produci segue `skills/asd-ste100/SKILL.md` (fonte unica). Car
 **Si applica a:** prosa di risposta, note di modifica, messaggi di commit.
 **Non si applica a:** codice sorgente, commenti richiesti dall'utente, output di test e lint.
 
+## Default UI pattern: Activity Bar icon
+
+Every new extension MUST show its main UI as an Icon in the Activity Bar, like
+`extensions/ibkr-mexem-portfolio-history` and `extensions/trade-assistant`.
+
+Do not build the main UI as an editor-area `createWebviewPanel` only.
+
+1. Add `contributes.viewsContainers.activitybar` with one container.
+   Example: `{"id": "budgetApp", "title": "Budget App", "icon": "media/activitybar-icon.svg"}`.
+2. Add `contributes.views` for that container with `"type": "webview"`.
+   Use a stable view id: `<containerId>.<name>`, for example `budgetApp.dashboardView`.
+3. Add `activationEvents` entry `onView:<viewId>`.
+4. Create `media/activitybar-icon.svg`. Size is 24x24. Use `fill="currentColor"` and `viewBox="0 0 24 24"`.
+5. Register the provider with `vscode.window.registerWebviewViewProvider(<viewId>, provider, options)`.
+   Push the disposable to `context.subscriptions`.
+6. Keep `enableScripts: true` and set `localResourceRoots`. Use a CSP nonce.
+7. Reveal the view from a command with `vscode.commands.executeCommand('<viewId>.focus')`.
+8. Add `contributes.menus["view/title"]` entries for the important actions.
+   Use `"when": "view == <viewId>"`.
+9. Set `retainContextWhenHidden: true` when the webview holds state, such as chat history.
+
+Verify the pattern with `npx @vscode/vsce ls` and a host smoke that mocks
+`window.registerWebviewViewProvider`.
+
+## Default extension location
+
+Create every new extension inside `/home/giuseppe/Progetti/Github/opencode-skills/extensions/<extension-name>`.
+Use kebab-case for `<extension-name>`, for example `budget-app-manager`.
+
+1. Do not create an extension in `/home/giuseppe/Progetti/Github` or in a temporary directory.
+2. Do not modify the source project that the extension reproduces.
+3. Package the VSIX inside the extension folder: `npx @vscode/vsce package --no-dependencies -o <extension-name>-<version>.vsix`.
+4. Install the VSIX with `code --install-extension <extension-name>-<version>.vsix --force`.
+5. Verify the install with `code --list-extensions --show-versions | grep <extension-name>`.
+
 ## Workflow
 
 ### 1. PHASE 1: PLANNING (only for complex tasks)

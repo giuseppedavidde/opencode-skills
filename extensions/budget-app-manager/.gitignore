@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.vsix
+.env
+.env.local
+budget.db
+budget.db.bak
+budget_database.csv
+*.log

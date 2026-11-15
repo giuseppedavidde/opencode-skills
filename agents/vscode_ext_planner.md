@@ -37,6 +37,29 @@ Tutto il testo che produci segue `skills/asd-ste100/SKILL.md` (fonte unica). Car
 **Si applica a:** obiettivo, elenco file, passi atomici, dettagli, passi di verifica.
 **Non si applica a:** path, nomi di simboli, comandi, output dei tool.
 
+## Default UI pattern: Activity Bar icon
+
+Every new extension MUST show its main UI as an Icon in the Activity Bar, like
+`extensions/ibkr-mexem-portfolio-history` and `extensions/trade-assistant`.
+
+1. Make the plan create `contributes.viewsContainers.activitybar` with one container and an icon at `media/activitybar-icon.svg`.
+2. Make the plan create `contributes.views` with `"type": "webview"` and a view id `<containerId>.<name>`.
+3. Make the plan add the activation event `onView:<viewId>`.
+4. Make the plan register the provider with `vscode.window.registerWebviewViewProvider`.
+5. Make the plan reveal the view with `vscode.commands.executeCommand('<viewId>.focus')`.
+6. Make the plan add `contributes.menus["view/title"]` with `"when": "view == <viewId>"`.
+7. Do not plan an editor-area `createWebviewPanel` as the only UI.
+8. Add `retainContextWhenHidden: true` when the webview holds state.
+
+## Default extension location
+
+Put every new extension in `/home/giuseppe/Progetti/Github/opencode-skills/extensions/<extension-name>`.
+Use kebab-case for `<extension-name>`.
+
+1. Make step 1 of every new-extension plan create that folder.
+2. Use absolute paths from that folder in every step and in the verification commands.
+3. Put the VSIX in the same folder: `<extension-name>-<version>.vsix`.
+
 ## Mandatory Rules
 
 1. **READ-ONLY EXPLORATION**: You inspect files using `read`, `glob`, `grep`. You do NOT modify code, write files, or run modification commands yourself.
