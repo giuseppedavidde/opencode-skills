@@ -33,9 +33,9 @@ target="user"
 workspace="${VSCODE_WORKSPACE:-$DEFAULT_WORKSPACE}"
 check=0
 quiet=0
-# Keep the specialist subagents in the agent picker. Without this flag the
-# installer writes `user-invocable: false` and every sync hides them again,
-# leaving `router` as the only visible agent.
+# Keep the specialist subagents in the agent picker. This matches the
+# installer default; EXPOSE_SUBAGENTS=0 writes `user-invocable: false` and
+# leaves `router` as the only visible agent.
 expose_subagents="${EXPOSE_SUBAGENTS:-1}"
 
 usage() {

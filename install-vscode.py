@@ -20,6 +20,10 @@ Usage:
     python3 install-vscode.py --target user
     python3 install-vscode.py --target both --workspace /path/to/workspace --force
 
+Every agent is written with `user-invocable: true` and a
+`reasoning-effort` level (`router` = low, `coder-planner` = max, others =
+high). Pass `--no-expose-subagents` to hide the subagents from the picker.
+
 Workspace target writes `.github/` and `.vscode/` inside the workspace.
 User target writes to `~/.copilot/` (skills, agents, hooks, instructions, MCP)
 and to the VS Code profile prompts folder.
@@ -58,7 +62,15 @@ AGENT_NAMES = {
     "book-to-skill-agent": "book-to-skill-agent",
     "pdf_reader": "pdf-reader",
     "oegk_health": "oegk-health",
+    "vscode_ext_planner": "vscode-ext-planner",
+    "vscode_ext": "vscode-ext",
 }
+
+# VS Code accepts low, medium, high, xhigh, max. The suffix in the opencode
+# model id (e.g. `deepseek-v4.1-flash#low`) wins; then this override; then the
+# default `high`.
+REASONING_EFFORT = {"coder-planner": "max", "vscode-ext-planner": "max"}
+DEFAULT_REASONING_EFFORT = "high"
 
 # VS Code lists the OpenCode Go models with the `opencodego/` prefix. Emit that
 # prefixed id in the generated agent frontmatter; a bare model id is rejected at
@@ -97,7 +109,7 @@ class Options:
     no_mcp: bool = False
     verbose: bool = False
     verify: bool = False
-    expose_subagents: bool = False
+    expose_subagents: bool = True
     mcp_format: str = "vscode"
     actions: list[str] = field(default_factory=list)
 
@@ -242,6 +254,14 @@ def model_for(raw_model: str) -> str | None:
     if sep and vendor in {"opencode-go", "opencodego"}:
         return f"opencodego/{model}"
     return model
+
+
+def reasoning_effort_for(name: str, raw_model: str) -> str:
+    """Return the VS Code `reasoning-effort` level for one agent."""
+    _, separator, suffix = strip_quotes(raw_model).partition("#")
+    if separator and suffix.strip():
+        return suffix.strip()
+    return REASONING_EFFORT.get(name, DEFAULT_REASONING_EFFORT)
 
 
 def skill_directories() -> list[Path]:
@@ -467,7 +487,7 @@ def build_agent(
     name: str,
     skills_dir: str,
     available: list[str],
-    expose_subagents: bool = False,
+    expose_subagents: bool = True,
 ) -> str | None:
     """Convert one opencode agent file to VS Code `.agent.md` content."""
     try:
@@ -487,6 +507,8 @@ def build_agent(
         ("pdf_reader", "pdf-reader"),
         ("skill_updater", "skill-updater"),
         ("oegk_health", "oegk-health"),
+        ("vscode_ext_planner", "vscode-ext-planner"),
+        ("vscode_ext", "vscode-ext"),
     ):
         description = description.replace(old, new)
         body = body.replace(old, new)
@@ -509,11 +531,13 @@ def build_agent(
 
     mode = strip_quotes(scalars.get("mode", "subagent"))
     model = model_for(scalars.get("model", ""))
+    reasoning_effort = reasoning_effort_for(name, scalars.get("model", ""))
     tools = tools_for(permission, name)
 
     lines = ["---", f"description: {json.dumps(description, ensure_ascii=False)}"]
     if model:
         lines.append(f"model: {json.dumps(model, ensure_ascii=False)}")
+    lines.append(f"reasoning-effort: {reasoning_effort}")
     lines.append(f"tools: {json.dumps(tools, ensure_ascii=False)}")
     invocable = mode == "primary" or expose_subagents
     lines.append(f"user-invocable: {'true' if invocable else 'false'}")
@@ -887,7 +911,7 @@ def install_user(options: Options) -> None:
 # ── Verification ─────────────────────────────────────────────────────────────
 
 
-def expected_agent_files(skills_dir: str, expose_subagents: bool = False) -> dict[str, str]:
+def expected_agent_files(skills_dir: str, expose_subagents: bool = True) -> dict[str, str]:
     """Return {filename: content} for the agents that should exist."""
     available = [AGENT_NAMES.get(path.stem, path.stem) for path in sorted(AGENTS_SRC.glob("*.md"))]
     expected: dict[str, str] = {}
@@ -1309,8 +1333,12 @@ def parse_args(argv: list[str] | None = None) -> Options:
     )
     parser.add_argument(
         "--expose-subagents",
-        action="store_true",
-        help="Show subagents (trade, coder, ...) in the agent picker as well",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Show subagents (trade, coder, ...) in the agent picker as well "
+            "(default: on; use --no-expose-subagents for a router-only picker)"
+        ),
     )
     parser.add_argument(
         "--verify",

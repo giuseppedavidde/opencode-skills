@@ -1,0 +1,269 @@
+{
+  "name": "ibkr-mexem-portfolio-history",
+  "displayName": "IBKR Mexem Portfolio History",
+  "description": "Fetch IBKR Flex Query trade confirmations and render realized P&L charts and portfolio statistics.",
+  "version": "0.8.4",
+  "publisher": "giuseppe",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "vscode": "^1.90.0",
+    "node": ">=20.3.0"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "ibkr",
+    "interactive-brokers",
+    "flex-query",
+    "portfolio",
+    "pnl"
+  ],
+  "main": "./dist/extension.cjs",
+  "activationEvents": [
+    "onCommand:ibkrHistory.open",
+    "onCommand:ibkrHistory.analyzeWithTradeAgent",
+    "onView:ibkrHistory.panel",
+    "onView:ibkrHistory.chat"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "ibkrHistory.open",
+        "title": "Open Portfolio Panel",
+        "category": "IBKR History"
+      },
+      {
+        "command": "ibkrHistory.fetch",
+        "title": "Fetch Report",
+        "category": "IBKR History"
+      },
+      {
+        "command": "ibkrHistory.exportCsv",
+        "title": "Export Current Dataset to CSV",
+        "category": "IBKR History"
+      },
+      {
+        "command": "ibkrHistory.copyDiagnostics",
+        "title": "Copy Diagnostics Report",
+        "category": "IBKR History"
+      },
+      {
+        "command": "ibkrHistory.clearCredentials",
+        "title": "Clear Stored Flex Credentials",
+        "category": "IBKR History"
+      },
+      {
+        "command": "ibkrHistory.openChat",
+        "title": "Open Trade Chat",
+        "category": "IBKR History"
+      },
+      {
+        "command": "ibkrHistory.analyzeWithTradeAgent",
+        "title": "Analyze in @trade Agent",
+        "category": "IBKR History"
+      },
+      {
+        "command": "ibkrHistory.setChatApiKey",
+        "title": "Set Chat API Key",
+        "category": "IBKR History"
+      },
+      {
+        "command": "ibkrHistory.clearChatApiKey",
+        "title": "Clear Chat API Key",
+        "category": "IBKR History"
+      },
+      {
+        "command": "ibkrHistory.resetChatConsent",
+        "title": "Reset Chat Data Consent",
+        "category": "IBKR History"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ibkrHistory",
+          "title": "IBKR Portfolio",
+          "icon": "media/activitybar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "ibkrHistory": [
+        {
+          "id": "ibkrHistory.panel",
+          "name": "Portfolio",
+          "type": "webview",
+          "contextualTitle": "IBKR Mexem Portfolio History"
+        },
+        {
+          "id": "ibkrHistory.chat",
+          "name": "Trade Chat",
+          "type": "webview",
+          "contextualTitle": "IBKR Trade Chat"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "IBKR Mexem Portfolio History",
+      "properties": {
+        "ibkrHistory.retry.deadlineMs": {
+          "type": "number",
+          "default": 900000,
+          "minimum": 30000,
+          "maximum": 3600000,
+          "description": "Hard time limit in milliseconds for the whole Flex fetch (SendRequest plus all GetStatement polls). This is the authoritative stop: a larger report simply keeps polling until the limit."
+        },
+        "ibkrHistory.retry.maxAttempts": {
+          "type": "number",
+          "default": 120,
+          "minimum": 5,
+          "maximum": 1000,
+          "description": "Safety net on the number of GetStatement polls. Error 1018 (rate limit) does not consume a poll. The deadline stops the fetch first for normal use."
+        },
+        "ibkrHistory.retry.maxSendAttempts": {
+          "type": "number",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Number of SendRequest attempts when IBKR answers with a transient generation error such as 1001. Waits 10 s, 20 s, then 30 s between attempts. Error 1018 (rate limit) waits 60 s and does not use an attempt."
+        },
+        "ibkrHistory.retry.initialDelayMs": {
+          "type": "number",
+          "default": 2000,
+          "minimum": 250,
+          "description": "Delay in milliseconds before the first GetStatement poll. The Flex Web Service allows at most 1 request per second per token."
+        },
+        "ibkrHistory.retry.maxDelayMs": {
+          "type": "number",
+          "default": 20000,
+          "minimum": 1000,
+          "description": "Upper bound in milliseconds for the growing delay between GetStatement polls (growth factor 1.5)."
+        },
+        "ibkrHistory.requestTimeoutMs": {
+          "type": "number",
+          "default": 30000,
+          "minimum": 1000,
+          "maximum": 120000,
+          "description": "Timeout in milliseconds for a single HTTP request to the Flex Web Service."
+        },
+        "ibkrHistory.pnl.fallbackFromProceeds": {
+          "type": "boolean",
+          "default": true,
+          "description": "For closing trades without a fifoPnlRealized value, approximate realized P&L from the closing leg's netCashInBase (already in the account base currency). A trade-currency figure is used only when the trade currency equals the base currency. Disable to treat those rows as unknown (excluded from statistics)."
+        },
+        "ibkrHistory.baseCurrency": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "EUR",
+            "USD",
+            "GBP",
+            "CHF"
+          ],
+          "enumDescriptions": [
+            "Detect the base currency from <AccountInformation> or the ConversionRate toCurrency.",
+            "Euro",
+            "US dollar",
+            "Pound sterling",
+            "Swiss franc"
+          ],
+          "default": "auto",
+          "description": "Account base currency used to label and format realized P&L. IBKR reports realized P&L in the account base currency, not in the trade currency. Set any other ISO 4217 code directly in settings.json to override detection."
+        },
+        "ibkrHistory.displayCurrency": {
+          "type": "string",
+          "default": "base",
+          "description": "Currency of the realized P&L series in the panel and the CSV export. Use base for the account base currency, which includes the FX result, or an ISO 4217 code such as USD for the trade-currency result, which excludes it. An explicit non-base value wins over the last choice made in the panel."
+        },
+        "ibkrHistory.chat.backend": {
+          "type": "string",
+          "enum": [
+            "lm",
+            "http"
+          ],
+          "enumDescriptions": [
+            "Use the VS Code Language Model API: the model list comes from vscode.lm.selectChatModels() and the request uses the Copilot or opencode-go subscription that is already signed in to VS Code. No API key.",
+            "Use the OpenAI-compatible HTTPS client against ibkrHistory.chat.baseUrl with a chat API key."
+          ],
+          "default": "lm",
+          "description": "Transport of the Trade Chat. lm is the primary backend and needs no API key. http keeps the older path against ibkrHistory.chat.baseUrl."
+        },
+        "ibkrHistory.chat.model": {
+          "type": "string",
+          "default": "deepseek-v4-pro",
+          "description": "Preferred model id. In lm mode the dropdown lists the models of vscode.lm.selectChatModels(), and an unknown id falls back to an exact family match, then to the first available model. In http mode the id is sent to the provider as is."
+        },
+        "ibkrHistory.chat.baseUrl": {
+          "type": "string",
+          "default": "https://opencode.ai/zen/go/v1",
+          "description": "Base URL of the OpenAI-compatible chat provider. The http backend calls {baseUrl}/chat/completions over HTTPS; the lm backend ignores it."
+        },
+        "ibkrHistory.chat.temperature": {
+          "type": "number",
+          "default": 0.3,
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Sampling temperature for chat requests. Lower values give more repeatable answers."
+        },
+        "ibkrHistory.chat.maxTokens": {
+          "type": "number",
+          "default": 2048,
+          "minimum": 64,
+          "maximum": 32000,
+          "description": "Maximum number of tokens in one chat answer."
+        },
+        "ibkrHistory.chat.maxContextTrades": {
+          "type": "number",
+          "default": 400,
+          "minimum": 10,
+          "maximum": 5000,
+          "description": "Maximum number of trades embedded as CSV in the system context. The statistics, monthly and per-symbol tables always cover every row in range."
+        },
+        "ibkrHistory.chat.marketData": {
+          "type": "boolean",
+          "default": true,
+          "description": "Append the live option prices of the open option positions to the chat context. The prices come from yfinance through the local trading CLI named by ibkrHistory.chat.marketDataCommand. Turn it off to send the Flex dataset only."
+        },
+        "ibkrHistory.chat.marketDataCommand": {
+          "type": "string",
+          "default": "/home/giuseppe/.local/share/opencode/trading-mcp-venv/bin/python -m trading_mcp.trading_cli",
+          "description": "Whitespace-separated command template of the local trading CLI. The extension appends fetch options <TICKER> --expiry <YYYY-MM-DD>. The value is split into arguments and run without a shell. A leading ~/ expands to the home directory."
+        },
+        "ibkrHistory.chat.maxHistoryMessages": {
+          "type": "number",
+          "default": 20,
+          "minimum": 2,
+          "maximum": 200,
+          "description": "Maximum number of user and assistant messages kept in the conversation. The oldest turns are dropped first; the system context is always sent."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "package": "node esbuild.mjs --production",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"test/*.test.ts\"",
+    "lint": "eslint .",
+    "smoke": "node scripts/smoke-host.mjs",
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run package && npm run smoke"
+  },
+  "dependencies": {
+    "chart.js": "^4.4.7",
+    "fast-xml-parser": "^4.5.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^22.10.2",
+    "@types/vscode": "^1.90.0",
+    "esbuild": "^0.24.2",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1"
+  }
+}

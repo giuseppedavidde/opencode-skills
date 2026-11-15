@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FlexQueryResponse queryName="synthetic-activity-sample" type="AF">
+  <FlexStatements count="3">
+  <FlexStatement accountId="U1234567" fromDate="20260101" toDate="20260102" period="YearToDate" whenGenerated="20260102;200000">
+    <Trades>
+        <Trade accountId="U1234567" symbol="FWRA" description="IVZ FTSE ALL WORLD ACC" tradeDate="20260102" dateTime="20260102;135015" buySell="BUY" quantity="419" tradePrice="7.155" tradeMoney="2997.95" proceeds="-2997.95" cost="2999.74877" ibCommission="-1.79877" taxes="0" netCash="-2999.74877" netCashInBase="-2999.74877" fifoPnlRealized="0" capitalGainsPnl="0" fxPnl="0" mtmPnl="-1.25" currency="EUR" assetCategory="STK" transactionType="ExchTrade" exchange="GETTEX2" tradeID="TRD-A1" transactionID="TXN-A1" />
+        <Trade accountId="U1234567" symbol="FWRA" description="IVZ FTSE ALL WORLD ACC" tradeDate="20260102" dateTime="20260102;142201" buySell="SELL" quantity="100" tradePrice="7.4" tradeMoney="740" proceeds="740" cost="619.5" ibCommission="-1.05" taxes="0" netCash="738.95" netCashInBase="738.95" fifoPnlRealized="120.5" capitalGainsPnl="0" fxPnl="0" mtmPnl="-1.25" currency="EUR" assetCategory="STK" transactionType="ExchTrade" exchange="GETTEX2" tradeID="TRD-A2" transactionID="TXN-A2" />
+        <Trade accountId="U1234567" symbol="AAPL" description="APPLE INC" tradeDate="20260102" dateTime="20260102;153000" buySell="BUY" quantity="10" tradePrice="190.5" tradeMoney="1905" proceeds="-1905" cost="1906.2" ibCommission="-1.2" taxes="0" netCash="-1906.2" netCashInBase="-1906.2" fifoPnlRealized="0" capitalGainsPnl="0" fxPnl="0" mtmPnl="-1.25" currency="USD" assetCategory="STK" transactionType="ExchTrade" exchange="NASDAQ" tradeID="TRD-A3" transactionID="TXN-A3" />
+        <Trade accountId="U1234567" symbol="AAPL" description="APPLE INC" tradeDate="20260102" dateTime="20260102;154500" buySell="SELL" quantity="10" tradePrice="195" tradeMoney="1950" proceeds="1950" cost="1906.2" ibCommission="-1.2" taxes="0" netCash="1948.8" netCashInBase="1948.8" fifoPnlRealized="43.8" capitalGainsPnl="0" fxPnl="0" mtmPnl="-1.25" currency="USD" assetCategory="STK" transactionType="ExchTrade" exchange="NASDAQ" tradeID="TRD-A4" transactionID="TXN-A4" />
+    </Trades>
+    <OpenPositions>
+      <OpenPosition accountId="U1234567" symbol="FWRA" description="IVZ FTSE ALL WORLD ACC" assetCategory="STK" currency="EUR" position="319" markPrice="7.21" positionValue="2299.99" openPrice="7.16" costBasisPrice="7.16" percentOfNAV="18.4" multiplier="1" conid="123456789" listingExchange="GETTEX2" />
+    </OpenPositions>
+    <FIFOPerformanceSummaryInBase accountId="U1234567" currency="EUR" totalRealizedPnl="120.5" totalUnrealizedPnl="9.99" />
+    <ConversionRates>
+      <ConversionRate reportDate="20260102" fromCurrency="USD" toCurrency="EUR" rate="0.9123" />
+      <ConversionRate reportDate="20260104" fromCurrency="USD" toCurrency="EUR" rate="0.91" />
+      <ConversionRate reportDate="20260103" fromCurrency="CHF" toCurrency="EUR" rate="1.0651" />
+    </ConversionRates>
+  </FlexStatement>
+  <FlexStatement accountId="U1234567" fromDate="20260101" toDate="20260103" period="YearToDate" whenGenerated="20260103;200000">
+    <Trades>
+        <Trade accountId="U1234567" symbol="TSLA" description="TSLA 16JAN26 200 C" tradeDate="20260103" dateTime="20260103;100512" buySell="BUY" quantity="1" tradePrice="12.5" tradeMoney="1250" proceeds="-1250" cost="1250.75" ibCommission="-0.75" taxes="0" netCash="-1250.75" netCashInBase="-1250.75" fifoPnlRealized="0" capitalGainsPnl="0" fxPnl="0" mtmPnl="-1.25" currency="USD" assetCategory="OPT" transactionType="ExchTrade" exchange="CBOE" tradeID="TRD-B1" transactionID="TXN-B1" />
+        <Trade accountId="U1234567" symbol="TSLA" description="TSLA 16JAN26 200 C" tradeDate="20260103" dateTime="20260103;143010" buySell="SELL" quantity="1" tradePrice="18.2" tradeMoney="1820" proceeds="1820" cost="1250.75" ibCommission="-0.75" taxes="0" netCash="1819.25" netCashInBase="1819.25" fifoPnlRealized="5.7" capitalGainsPnl="0" fxPnl="0" mtmPnl="-1.25" currency="USD" assetCategory="OPT" transactionType="ExchTrade" exchange="CBOE" tradeID="TRD-B2" transactionID="TXN-B2" />
+        <Trade accountId="U1234567" symbol="VWCE" description="VANGUARD FTSE ALL WORLD" tradeDate="20260103" dateTime="20260103;093000" buySell="BUY" quantity="25" tradePrice="118.2" tradeMoney="2955" proceeds="-2955" cost="2957.5" ibCommission="-2.5" taxes="0" netCash="-2957.5" netCashInBase="-2957.5" fifoPnlRealized="0" capitalGainsPnl="0" fxPnl="0" mtmPnl="-1.25" currency="EUR" assetCategory="STK" transactionType="ExchTrade" exchange="IBIS" tradeID="TRD-B3" transactionID="TXN-B3" />
+        <Trade accountId="U1234567" symbol="VWCE" description="VANGUARD FTSE ALL WORLD" tradeDate="20260103" dateTime="20260103;171500" buySell="SELL" quantity="5" tradePrice="119" tradeMoney="595" proceeds="595" cost="590" ibCommission="-2.5" taxes="0" netCash="592.5" netCashInBase="592.5" fifoPnlRealized="0" capitalGainsPnl="0" fxPnl="0" mtmPnl="-1.25" currency="EUR" assetCategory="STK" transactionType="ExchTrade" exchange="IBIS" tradeID="TRD-B4" transactionID="TXN-B4" />
+    </Trades>
+  </FlexStatement>
+  <FlexStatement accountId="U1234567" fromDate="20260101" toDate="20260104" period="YearToDate" whenGenerated="20260104;200000">
+    <Trades>
+        <Trade accountId="U1234567" symbol="VWCE" description="VANGUARD FTSE ALL WORLD" tradeDate="20260104" dateTime="20260104;101500" buySell="SELL" quantity="20" tradePrice="121" tradeMoney="2420" proceeds="2420" cost="2364" ibCommission="-2.5" taxes="0" netCash="2417.5" netCashInBase="2417.5" fifoPnlRealized="54" capitalGainsPnl="0" fxPnl="0" mtmPnl="-1.25" currency="EUR" assetCategory="STK" transactionType="ExchTrade" exchange="IBIS" tradeID="TRD-C1" transactionID="TXN-C1" />
+        <Trade accountId="U1234567" symbol="MSFT" description="MICROSOFT CORP" tradeDate="20260104" dateTime="20260104;160000" buySell="BUY" quantity="2" tradePrice="410" tradeMoney="820" proceeds="-820" cost="821" ibCommission="-1" taxes="0" netCash="-821" netCashInBase="-821" fifoPnlRealized="0" capitalGainsPnl="0" fxPnl="0" mtmPnl="-1.25" currency="USD" assetCategory="STK" transactionType="ExchTrade" exchange="NASDAQ" tradeID="TRD-C2" transactionID="TXN-C2" />
+        <Trade accountId="U1234567" symbol="MSFT" description="MICROSOFT CORP" tradeDate="20260104" dateTime="20260104;161500" buySell="SELL" quantity="2" tradePrice="415" tradeMoney="830" proceeds="830" cost="821" ibCommission="-1" taxes="0" netCash="829" netCashInBase="829" fifoPnlRealized="8" capitalGainsPnl="0" fxPnl="0" mtmPnl="-1.25" currency="USD" assetCategory="STK" transactionType="ExchTrade" exchange="NASDAQ" tradeID="TRD-C3" transactionID="TXN-C3" />
+    </Trades>
+  </FlexStatement>
+  </FlexStatements>
+</FlexQueryResponse>

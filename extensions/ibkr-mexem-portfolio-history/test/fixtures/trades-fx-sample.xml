@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Real figures from Trades_and_Open_Positions.xml (report date 20261212).
+     Numbers are copied from three USD option trades. Do not edit: the
+     aggregates 4585.0542 / 4727.9276 / -142.8734 are asserted by the tests. -->
+<FlexQueryResponse type="AF">
+  <FlexStatements count="1">
+    <FlexStatement accountId="U16517211">
+      <ConversionRates>
+        <ConversionRate reportDate="20260630" fromCurrency="USD" toCurrency="EUR" rate="0.87554" />
+        <ConversionRate reportDate="20260921" fromCurrency="USD" toCurrency="EUR" rate="0.87228" />
+      </ConversionRates>
+      <Trades>
+        <Trade symbol="LHX   270115C00370000" description="LHX 15JAN27 370 C" currency="USD" assetCategory="OPT" tradeDate="20260630" dateTime="20260630;102028" buySell="BUY" quantity="1" tradePrice="1.30" proceeds="-130" netCash="-130" ibCommission="-0.7" openCloseIndicator="C" fifoPnlRealized="2881.630354" capitalGainsPnl="2936.168699" fxPnl="-54.538345" accountId="U16517211" tradeID="FX-LHX" />
+        <Trade symbol="DRAM  261218P00045000" description="DRAM 18DEC26 45 P" currency="USD" assetCategory="OPT" tradeDate="20260921" dateTime="20260921;100000" buySell="BUY" quantity="1" tradePrice="0.50" proceeds="-50" netCash="-50" ibCommission="-0.7" openCloseIndicator="C" fifoPnlRealized="1130.20527" capitalGainsPnl="1167.429371" fxPnl="-37.224101" accountId="U16517211" tradeID="FX-DRAM" />
+        <Trade symbol="MU    270115P00150000" description="MU 15JAN27 150 P" currency="USD" assetCategory="OPT" tradeDate="20260921" dateTime="20260921;100500" buySell="BUY" quantity="1" tradePrice="0.20" proceeds="-20" netCash="-20" ibCommission="-0.7" openCloseIndicator="C" fifoPnlRealized="573.218576" capitalGainsPnl="624.32953" fxPnl="-51.110954" accountId="U16517211" tradeID="FX-MU" />
+      </Trades>
+    </FlexStatement>
+  </FlexStatements>
+</FlexQueryResponse>

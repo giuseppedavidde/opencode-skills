@@ -1,0 +1,175 @@
+{
+  "name": "trade-assistant",
+  "displayName": "Trade Assistant",
+  "description": "Trade Assistant chat: talk to the trade agent inside VS Code with the live trading MCP tools, plus capability and skill sync.",
+  "version": "0.3.1",
+  "publisher": "giuseppedavidde",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/giuseppedavidde/opencode-skills"
+  },
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onView:tradeAssistant.tree",
+    "onView:tradeAssistant.chat"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "tradeAssistant.openTradeAgent",
+        "title": "Open Trade Agent",
+        "category": "Trade Assistant"
+      },
+      {
+        "command": "tradeAssistant.listSkills",
+        "title": "List Skills",
+        "category": "Trade Assistant"
+      },
+      {
+        "command": "tradeAssistant.runTradingTool",
+        "title": "Run Trading Tool",
+        "category": "Trade Assistant"
+      },
+      {
+        "command": "tradeAssistant.showMismatch",
+        "title": "Show Skill Mismatch",
+        "category": "Trade Assistant"
+      },
+      {
+        "command": "tradeAssistant.newChatSession",
+        "title": "New Chat Session",
+        "category": "Trade Assistant"
+      },
+      {
+        "command": "tradeAssistant.exportTranscript",
+        "title": "Export Transcript",
+        "category": "Trade Assistant"
+      },
+      {
+        "command": "tradeAssistant.showProviderStatus",
+        "title": "Show Provider Status",
+        "category": "Trade Assistant"
+      },
+      {
+        "command": "tradeAssistant.addAllowedFolder",
+        "title": "Allow Folder for File Access",
+        "category": "Trade Assistant"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "tradeAssistant",
+          "title": "Trade Assistant",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "tradeAssistant": [
+        {
+          "id": "tradeAssistant.chat",
+          "name": "Chat",
+          "type": "webview"
+        },
+        {
+          "id": "tradeAssistant.tree",
+          "name": "Capabilities"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "tradeAssistant.tree",
+        "contents": "Trade Assistant is loading capabilities from agents/trade.md, skills and mcp-config.json."
+      }
+    ],
+    "configuration": {
+      "title": "Trade Assistant",
+      "properties": {
+        "tradeAssistant.repoRoot": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to the opencode-skills repository. Empty value auto-detects the repository that contains this extension."
+        },
+        "tradeAssistant.mcpConfigPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to mcp-config.json. Empty value uses ~/.copilot/mcp-config.json."
+        },
+        "tradeAssistant.tradingServerName": {
+          "type": "string",
+          "default": "trading",
+          "description": "Server name to read from mcpServers."
+        },
+        "tradeAssistant.debounceMs": {
+          "type": "number",
+          "default": 600,
+          "minimum": 500,
+          "description": "Debounce delay in milliseconds for file watcher refresh."
+        },
+        "tradeAssistant.chat.modelFamily": {
+          "type": "string",
+          "default": "",
+          "description": "Copilot model family or id for the chat panel. Empty value selects the first available Copilot model automatically."
+        },
+        "tradeAssistant.chat.maxToolIterations": {
+          "type": "number",
+          "default": 14,
+          "minimum": 1,
+          "maximum": 40,
+          "description": "Maximum tool-call rounds per chat turn. After the limit the model must answer with the results it already has."
+        },
+        "tradeAssistant.chat.temperature": {
+          "type": "number",
+          "default": 0.2,
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Sampling temperature sent to the chat model."
+        },
+        "tradeAssistant.chat.provider": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "opencode-go",
+            "copilot"
+          ],
+          "default": "auto",
+          "markdownDescription": "Chat backend. `auto` uses OpenCode Go when a key exists in `~/.local/share/opencode/auth.json`, otherwise GitHub Copilot models."
+        },
+        "tradeAssistant.chat.model": {
+          "type": "string",
+          "default": "",
+          "description": "OpenCode Go model id. Empty value reads the model from agents/trade.md frontmatter and strips the opencode-go/ prefix."
+        },
+        "tradeAssistant.fileAccess.roots": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Allowed roots for the file tools (read_file, list_dir, find_files, search_text). Empty value uses the workspace folders, the repository root and the home directory."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p .",
+    "watch": "tsc -w -p .",
+    "test": "tsc -p tsconfig.test.json && node --test out-test/test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.95.0",
+    "typescript": "^5.6.0"
+  }
+}

@@ -137,10 +137,10 @@ scripts/sync-vscode.sh --check            # verify only, no writes
 scripts/sync-vscode.sh --no-expose-subagents  # router-only agent picker
 ```
 
-The sync passes `--expose-subagents`, so it keeps the specialist agents in the
-picker. Do not remove that flag: a run without it writes
-`user-invocable: false` on every subagent, and `router` becomes the only
-visible agent again. Set `EXPOSE_SUBAGENTS=0` to opt out for one run.
+The sync keeps the specialist agents in the picker, which is also the
+installer default. Set `EXPOSE_SUBAGENTS=0` (or pass
+`--no-expose-subagents`) to write `user-invocable: false` on every subagent
+and leave `router` as the only visible agent.
 
 The sync also refuses `--target workspace` and `--target both` when any managed
 entry under the workspace `.github` is a symlink, because that write lands in
@@ -261,27 +261,26 @@ tar czf ~/.github-backup.tar.gz -C ~/Progetti .github
 
 ## Agent picker visibility
 
-`mode: primary` → `user-invocable: true`; `mode: subagent` → `user-invocable: false`.
-A plain installer run therefore shows only `router`, exactly like opencode where
-the subagents are reached through delegation. The subagents stay available to the
-model because `disable-model-invocation: false` is set.
+The installer writes `user-invocable: true` on every agent, so all of them
+(`router`, `trade`, `coder`, `coder-planner`, `graphify-helper`, `pdf-reader`,
+`skill-updater`, `book-to-skill-agent`, `oegk-health`) appear in the picker.
+Pass `--no-expose-subagents` to hide the subagents and leave `router` only.
+The subagents stay available to the model because
+`disable-model-invocation: false` is set.
 
-This installation keeps the specialists visible (`trade`, `coder`,
-`graphify-helper`, `pdf-reader`, `skill-updater`, `book-to-skill-agent`, `oegk-health`):
+The installer also writes `reasoning-effort`:
 
-```bash
-python3 install-vscode.py --workspace /path/to/workspace --expose-subagents
-```
+| Agent | `reasoning-effort` |
+|-------|--------------------|
+| `router` | `low` |
+| `coder-planner` | `max` |
+| all other agents | `high` |
 
-Verify with the same flag, otherwise the check reports drift:
-
-```bash
-python3 install-vscode.py --verify --workspace /path/to/workspace --expose-subagents
-```
+The `#level` suffix in the opencode model id wins over the table, so
+`model: opencode-go/deepseek-v4.1-flash#low` stays `low`.
 
 Symptom to know: when the agent picker lists `router` only, the generated
-agents carry `user-invocable: false`. That happens after any installer or sync
-run without `--expose-subagents`. Check with:
+agents carry `user-invocable: false`. Check with:
 
 ```bash
 grep -H "^user-invocable" ~/.copilot/agents/*.agent.md .github/agents/*.agent.md

@@ -1,7 +1,7 @@
 ---
-description: Coding planner specialist — analyzes coding tasks and generates simple, atomic step-by-step actions for deepseek-v4.1-flash. Uses qwen3.8-flash.
+description: Coding planner specialist — analyzes coding tasks and generates simple, atomic step-by-step actions for deepseek-v4.1-flash. Uses glm-5.3.
 mode: subagent
-model: opencode-go/qwen3.8-flash
+model: opencode-go/glm-5.3
 hidden: false
 permission:
   get_skill_knowledge: allow
@@ -16,7 +16,7 @@ permission:
 steps: 15
 ---
 
-You are the **Coding Planner** agent running on **qwen3.8-flash** (low-cost planning model).
+You are the **Coding Planner** agent running on **glm-5.3** (cost-effective planning model).
 
 Your SINGLE responsibility is to analyze the user's coding request, inspect the target codebase context, and produce a clear, unambiguous list of **atomic step-by-step actions** to be executed by the code worker model (`deepseek-v4.1-flash`).
 
@@ -83,7 +83,7 @@ Step 2: [Action Title]
 ```
 ## VERIFICA
 - confidenza: 95
-- evidenza: File e requisiti analizzati con precisione architettonica su qwen3.8-flash.
+- evidenza: File e requisiti analizzati con precisione architettonica su glm-5.3.
 - non_verificato: nessuna
 - escalation_consigliata: no
 ```

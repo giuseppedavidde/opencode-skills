@@ -200,8 +200,8 @@ python3 install-vscode.py --workspace /path/to/workspace --dry-run -v
 # Verify the installed layer matches the opencode sources (exit 1 = drift)
 python3 install-vscode.py --verify --workspace /path/to/workspace
 
-# Also list subagents (trade, coder, ...) in the VS Code agent picker
-python3 install-vscode.py --workspace /path/to/workspace --expose-subagents
+# Hide subagents from the agent picker (default: all agents are listed)
+python3 install-vscode.py --workspace /path/to/workspace --no-expose-subagents
 
 # Write MCP servers to the portable .mcp.json instead of .vscode/mcp.json
 python3 install-vscode.py --workspace /path/to/workspace --mcp-format portable
