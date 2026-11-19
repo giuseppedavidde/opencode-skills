@@ -170,6 +170,10 @@ def analyze_options_position(
 
     rate_snapshot = get_risk_free_rate()
     r = rate_snapshot.value
+    # Continuous dividend yield (Merton extension). yfinance reports a
+    # fractional yield (0.0155 == 1.55%); other backends may omit it.
+    _div = info.get("dividendYield") if info else None
+    q = float(_div) if isinstance(_div, (int, float)) and 0.0 <= float(_div) < 1.0 else 0.0
 
     for i, leg in enumerate(parsed_legs):
         eff = eff_expiries[i]
@@ -187,13 +191,24 @@ def analyze_options_position(
         iv = float(iv)
         leg_iv[i] = iv
 
+        # Realistic exit mark: long legs exit at the bid, short legs are
+        # closed by paying the ask. Fall back to the mid when a quote is missing.
+        if leg.qty > 0 and bid > 0:
+            mark_exec = bid
+        elif leg.qty < 0 and ask > 0:
+            mark_exec = ask
+        else:
+            mark_exec = mid
+
         # Greeks use THIS leg's own DTE (today -> leg effective expiry).
         leg_tte = _time_to_expiry_opt(eff)
-        greeks_result = _bs_greeks(spot, leg.strike, leg_tte, r, iv, leg.opt_type)
+        greeks_result = _bs_greeks(spot, leg.strike, leg_tte, r, iv, leg.opt_type, q)
 
-        pnl_per = (mid - leg.entry) * abs(leg.qty) * 100
-        cost_leg = leg.entry * abs(leg.qty) * 100
-        current_leg = mid * abs(leg.qty) * 100
+        # Signed by position direction: a short leg loses when the mark rises.
+        pnl_per_unit = (mark_exec - leg.entry) * (1.0 if leg.qty > 0 else -1.0)
+        pnl_per = pnl_per_unit * abs(leg.qty) * 100.0
+        cost_leg = leg.entry * leg.qty * 100.0
+        current_leg = mark_exec * leg.qty * 100.0
 
         cost_basis += cost_leg
         current_value += current_leg
@@ -206,8 +221,11 @@ def analyze_options_position(
             "entry_premium": leg.entry,
             "expiry": eff,
             "dte": int(leg_tte * 365),
+            "bid": round(bid, 4),
+            "ask": round(ask, 4),
             "current_premium": round(mid, 4),
-            "pnl_per_unit": round(mid - leg.entry, 2),
+            "exit_mark": round(mark_exec, 4),
+            "pnl_per_unit": round(pnl_per_unit, 2),
             "pnl": round(pnl_per, 2),
             "delta": round(greeks_result["delta"] * leg.qty, 4),
             "gamma": round(greeks_result["gamma"] * leg.qty, 4),
@@ -229,7 +247,7 @@ def analyze_options_position(
     estimated_commissions = n_legs * commission_per_contract * sum(
         abs(l.qty) for l in parsed_legs
     )
-    estimated_slippage = cost_basis * (slippage_premium_bps / 10000.0)
+    estimated_slippage = abs(cost_basis) * (slippage_premium_bps / 10000.0)
     estimated_total_costs = estimated_commissions + estimated_slippage
     pnl_net_estimate = total_pnl - estimated_total_costs
 
@@ -249,16 +267,17 @@ def analyze_options_position(
     }
 
     payoff, breakevens = _compute_payoff(
-        parsed_legs, spot, r, payoff_expiry, eff_expiries, leg_iv
+        parsed_legs, spot, r, payoff_expiry, eff_expiries, leg_iv, q=q
     )
     probabilities = _compute_probabilities(
-        parsed_legs, spot, r, payoff_expiry, eff_expiries, leg_iv
+        parsed_legs, spot, r, payoff_expiry, eff_expiries, leg_iv,
+        payoff=payoff, q=q,
     )
 
     strategy_name = _classify_strategy(parsed_legs)
 
     recommendations = _generate_recommendations(
-        parsed_legs, total_pnl, spot, payoff, strategy_name
+        parsed_legs, total_pnl, spot, strategy_name, breakevens
     )
 
     result: dict[str, Any] = {
@@ -279,7 +298,7 @@ def analyze_options_position(
             "cost_basis": round(cost_basis, 2),
             "current_value": round(current_value, 2),
             "total_pnl": round(total_pnl, 2),
-            "total_pnl_pct": round(total_pnl / cost_basis * 100, 1) if cost_basis > 0 else 0.0,
+            "total_pnl_pct": round(total_pnl / abs(cost_basis) * 100, 1) if cost_basis != 0 else 0.0,
         },
         "estimated_costs": estimated_costs_dict,
         "payoff_scenarios": payoff,
@@ -315,53 +334,77 @@ def analyze_options_position(
     return result
 
 
-def _bs_greeks(
-    spot: float, strike: float, tte: float, r: float, sigma: float, opt_type: str
+def _bs_greeks(  # pylint: disable=too-many-positional-arguments
+    spot: float,
+    strike: float,
+    tte: float,
+    r: float,
+    sigma: float,
+    opt_type: str,
+    q: float = 0.0,
 ) -> dict[str, float]:
+    """Merton (dividend-adjusted) Black-Scholes Greeks."""
     sqrt_t = math.sqrt(max(tte, 0.001))
-    d1 = (math.log(spot / strike) + (r + 0.5 * sigma ** 2) * tte) / (sigma * sqrt_t)
+    d1 = (
+        math.log(spot / strike) + (r - q + 0.5 * sigma ** 2) * tte
+    ) / (sigma * sqrt_t)
     d2 = d1 - sigma * sqrt_t
+    disc_q = math.exp(-q * tte)
+    disc_r = math.exp(-r * tte)
 
     if opt_type == "call":
-        delta = norm.cdf(d1)
+        delta = disc_q * norm.cdf(d1)
         theta = (
-            -spot * norm.pdf(d1) * sigma / (2 * sqrt_t)
-            - r * strike * math.exp(-r * tte) * norm.cdf(d2)
+            -spot * disc_q * norm.pdf(d1) * sigma / (2 * sqrt_t)
+            - r * strike * disc_r * norm.cdf(d2)
+            + q * spot * disc_q * norm.cdf(d1)
         ) / 365
     else:
-        delta = norm.cdf(d1) - 1
+        delta = -disc_q * norm.cdf(-d1)
         theta = (
-            -spot * norm.pdf(d1) * sigma / (2 * sqrt_t)
-            + r * strike * math.exp(-r * tte) * norm.cdf(-d2)
+            -spot * disc_q * norm.pdf(d1) * sigma / (2 * sqrt_t)
+            + r * strike * disc_r * norm.cdf(-d2)
+            - q * spot * disc_q * norm.cdf(-d1)
         ) / 365
 
-    gamma = norm.pdf(d1) / (spot * sigma * sqrt_t)
-    vega = spot * norm.pdf(d1) * sqrt_t / 100
+    gamma = disc_q * norm.pdf(d1) / (spot * sigma * sqrt_t)
+    vega = spot * disc_q * norm.pdf(d1) * sqrt_t / 100
 
     return {"delta": delta, "gamma": gamma, "theta": theta, "vega": vega}
 
 
-def _bs_price(
-    spot: float, strike: float, tte: float, r: float, sigma: float, opt_type: str
+def _bs_price(  # pylint: disable=too-many-positional-arguments
+    spot: float,
+    strike: float,
+    tte: float,
+    r: float,
+    sigma: float,
+    opt_type: str,
+    q: float = 0.0,
 ) -> float:
-    """Black-Scholes theoretical option price."""
+    """Merton (dividend-adjusted) Black-Scholes theoretical option price."""
     if tte <= 0 or sigma <= 0:
         return max(0.0, (spot - strike) if opt_type == "call" else (strike - spot))
     sqrt_t = math.sqrt(tte)
-    d1 = (math.log(spot / strike) + (r + 0.5 * sigma ** 2) * tte) / (sigma * sqrt_t)
+    d1 = (
+        math.log(spot / strike) + (r - q + 0.5 * sigma ** 2) * tte
+    ) / (sigma * sqrt_t)
     d2 = d1 - sigma * sqrt_t
+    disc_q = math.exp(-q * tte)
+    disc_r = math.exp(-r * tte)
     if opt_type == "call":
-        return spot * norm.cdf(d1) - strike * math.exp(-r * tte) * norm.cdf(d2)
-    return strike * math.exp(-r * tte) * norm.cdf(-d2) - spot * norm.cdf(-d1)
+        return spot * disc_q * norm.cdf(d1) - strike * disc_r * norm.cdf(d2)
+    return strike * disc_r * norm.cdf(-d2) - spot * disc_q * norm.cdf(-d1)
 
 
-def _leg_value_at(
+def _leg_value_at(  # pylint: disable=too-many-positional-arguments
     price: float,
     leg: OptionLeg,
     leg_eff_expiry: str,
     payoff_date: date,
     iv: float,
     r: float,
+    q: float = 0.0,
 ) -> float:
     """Value of a single leg at ``price`` on the payoff date.
 
@@ -375,131 +418,258 @@ def _leg_value_at(
                    if leg.opt_type == "call" else (leg.strike - price))
     remaining_days = max((leg_exp_date - payoff_date).days, 1)
     remaining_tte = remaining_days / 365.0
-    return _bs_price(price, leg.strike, remaining_tte, r, iv, leg.opt_type)
+    return _bs_price(price, leg.strike, remaining_tte, r, iv, leg.opt_type, q)
 
 
-def _compute_payoff(
+def _position_pnl_at(  # pylint: disable=too-many-positional-arguments
+    price: float,
+    legs: list[OptionLeg],
+    eff_expiries: list[str],
+    leg_iv: dict[int, float],
+    payoff_date: date,
+    r: float,
+    q: float = 0.0,
+) -> float:
+    """Signed position P&L at one terminal ``price`` on the payoff date."""
+    pnl = 0.0
+    for i, leg in enumerate(legs):
+        iv = leg_iv.get(i, 0.3)
+        value = _leg_value_at(price, leg, eff_expiries[i], payoff_date, iv, r, q)
+        pnl += (value - leg.entry) * leg.qty * 100
+    return pnl
+
+
+def _compute_payoff(  # pylint: disable=too-many-positional-arguments
     legs: list[OptionLeg],
     spot: float,
     r: float,
     payoff_expiry: str,
     eff_expiries: list[str],
     leg_iv: dict[int, float],
+    q: float = 0.0,
 ) -> tuple[list[dict], list[float]]:
     points = np.linspace(spot * 0.5, spot * 1.5, 100)
-    breakevens: list[float] = []
     payoff_date = datetime.strptime(payoff_expiry, "%Y-%m-%d").date()
 
+    raw: list[tuple[float, float]] = []
     payoffs = []
-
     for price in points:
-        pnl = 0.0
-        for i, leg in enumerate(legs):
-            iv = leg_iv.get(i, 0.3)
-            value = _leg_value_at(float(price), leg, eff_expiries[i], payoff_date, iv, r)
-            pnl += (value - leg.entry) * leg.qty * 100
-
-        payoff_type = "normal"
-        if abs(pnl) < 0.01 * spot * 100:
-            payoff_type = "breakeven"
-            breakevens.append(round(float(price), 2))
-
+        pnl = _position_pnl_at(
+            float(price), legs, eff_expiries, leg_iv, payoff_date, r, q
+        )
+        raw.append((float(price), pnl))
         payoffs.append({
             "price": round(float(price), 2),
             "pnl": round(float(pnl), 2),
-            "type": payoff_type,
+            "type": "normal",
         })
 
-    return payoffs, sorted(set(breakevens))[:10]
+    # Break-evens come from zero crossings of the payoff curve, interpolated
+    # linearly between adjacent grid points. No absolute tolerance: a fixed
+    # dollar band mislabels every point of a small-max-profit spread as BE.
+    breakevens: list[float] = []
+    for (x0, y0), (x1, y1) in zip(raw, raw[1:]):
+        if y0 == 0.0:
+            breakevens.append(x0)
+        elif (y0 < 0.0) != (y1 < 0.0) and y1 != y0:
+            breakevens.append(x0 - y0 * (x1 - x0) / (y1 - y0))
+    if raw and raw[-1][1] == 0.0:
+        breakevens.append(raw[-1][0])
+
+    return payoffs, sorted({round(be, 2) for be in breakevens})[:10]
 
 
-def _compute_probabilities(
+def _compute_probabilities(  # pylint: disable=too-many-positional-arguments
     legs: list[OptionLeg],
     spot: float,
     r: float,
     payoff_expiry: str,
     eff_expiries: list[str],
     leg_iv: dict[int, float],
-) -> dict[str, float]:
-    sigma = 0.30
+    payoff: list[dict] | None = None,
+    q: float = 0.0,
+) -> dict[str, float | bool]:
+    """Terminal-distribution probabilities driven by the position's own IV.
+
+    The diffusion uses the quantity-weighted average leg IV (not a hardcoded
+    30%), so the simulated dispersion matches the market. ``max_profit_prob``
+    is the share of terminal prices landing on the achievable-profit plateau;
+    unlimited-profit/loss profiles are flagged instead of reporting 0%.
+    """
     tte = _time_to_expiry_opt(payoff_expiry)
-    dr = (r - 0.5 * sigma ** 2) * tte
+
+    weights = [(abs(leg.qty), float(leg_iv.get(i, 0.30))) for i, leg in enumerate(legs)]
+    tot_w = sum(w for w, _ in weights)
+    sigma = (sum(w * s for w, s in weights) / tot_w) if tot_w > 0 else 0.30
+    sigma = max(sigma, 0.01)
+
+    dr = (r - q - 0.5 * sigma ** 2) * tte
     vol = sigma * math.sqrt(tte)
     payoff_date = datetime.strptime(payoff_expiry, "%Y-%m-%d").date()
 
+    # Achievable-profit plateau from the payoff grid.
+    max_pnl: float | None = None
+    if payoff:
+        max_pnl = max(point["pnl"] for point in payoff)
+    # "Unbounded" means the curve is still rising at the grid edge, not merely
+    # flat there: a capped-profit plateau (short put) is bounded.
+    unbounded_up = bool(
+        payoff and len(payoff) >= 2
+        and max_pnl is not None
+        and payoff[-1]["pnl"] >= max_pnl - 1.0
+        and (payoff[-1]["pnl"] - payoff[-2]["pnl"]) > 1.0
+    )
+    unbounded_down = bool(
+        payoff and len(payoff) >= 2
+        and max_pnl is not None
+        and payoff[0]["pnl"] >= max_pnl - 1.0
+        and (payoff[0]["pnl"] - payoff[1]["pnl"]) > 1.0
+    )
+
+    rng = np.random.default_rng(7)
     profit_count = 0
     max_profit_count = 0
     total = 5000
-    max_pnl = -1e9
+    plateau_tol = 1.0
 
     for _ in range(total):
-        z = float(np.random.normal(0, 1))
+        z = float(rng.normal(0.0, 1.0))
         price = spot * math.exp(dr + vol * z)
         pnl = 0.0
         for i, leg in enumerate(legs):
             iv = leg_iv.get(i, 0.3)
-            value = _leg_value_at(price, leg, eff_expiries[i], payoff_date, iv, r)
+            value = _leg_value_at(price, leg, eff_expiries[i], payoff_date, iv, r, q)
             pnl += (value - leg.entry) * leg.qty * 100
 
         if pnl > 0:
             profit_count += 1
-        if pnl > max_pnl:
-            max_pnl = pnl
-            max_profit_count = 1
-        elif abs(pnl - max_pnl) < 0.01:
+        if max_pnl is not None and pnl >= max_pnl - plateau_tol:
             max_profit_count += 1
 
+    profit_prob = profit_count / total
+    if max_pnl is None or unbounded_up or unbounded_down:
+        # No finite maximum (long call, short put): the meaningful analog of
+        # "keeps the max profit" is simply "finishes in profit".
+        max_profit_prob = profit_prob
+    else:
+        max_profit_prob = max_profit_count / total
+
+    # Unbounded *loss* profiles (naked short call / short put).
+    loss_unbounded = False
+    if payoff and len(payoff) >= 3:
+        right_falling = payoff[-1]["pnl"] < payoff[-2]["pnl"]
+        left_falling = payoff[0]["pnl"] < payoff[1]["pnl"]
+        loss_unbounded = (right_falling and payoff[-1]["pnl"] < payoff[0]["pnl"]) or (
+            left_falling and payoff[0]["pnl"] < payoff[-1]["pnl"]
+        )
+
+    # Analytic ITM probability of the dominant leg (largest |qty|).
+    itm_prob = 0.0
+    if legs:
+        main_idx = max(range(len(legs)), key=lambda i: abs(legs[i].qty))
+        main = legs[main_idx]
+        s_main = max(float(leg_iv.get(main_idx, sigma)), 0.01)
+        sq = s_main * math.sqrt(tte)
+        if sq > 0 and main.strike > 0 and spot > 0:
+            d1 = (
+                math.log(spot / main.strike) + (r - q + 0.5 * s_main ** 2) * tte
+            ) / sq
+            d2 = d1 - sq
+            itm_prob = float(
+                norm.cdf(d2) if main.opt_type == "call" else norm.cdf(-d2)
+            )
+    itm_prob = min(max(itm_prob, 0.0), 1.0)
+
     return {
-        "itm_prob": 0.0,
-        "otm_prob": 0.0,
-        "profit_prob": round(profit_count / total, 3),
-        "max_profit_prob": round(max_profit_count / total, 3),
+        "itm_prob": round(itm_prob, 3),
+        "otm_prob": round(1.0 - itm_prob, 3),
+        "profit_prob": round(profit_prob, 3),
+        "max_profit_prob": round(max_profit_prob, 3),
+        "max_profit_unbounded": unbounded_up or unbounded_down,
+        "max_loss_unbounded": loss_unbounded,
     }
 
 
 def _classify_strategy(legs: list[OptionLeg]) -> str:
-    calls_long = sum(1 for l in legs if l.opt_type == "call" and l.qty > 0)
-    calls_short = sum(1 for l in legs if l.opt_type == "call" and l.qty < 0)
-    puts_long = sum(1 for l in legs if l.opt_type == "put" and l.qty > 0)
-    puts_short = sum(1 for l in legs if l.opt_type == "put" and l.qty < 0)
+    calls_long = [leg for leg in legs if leg.opt_type == "call" and leg.qty > 0]
+    calls_short = [leg for leg in legs if leg.opt_type == "call" and leg.qty < 0]
+    puts_long = [leg for leg in legs if leg.opt_type == "put" and leg.qty > 0]
+    puts_short = [leg for leg in legs if leg.opt_type == "put" and leg.qty < 0]
 
-    if calls_long == 1 and puts_short == 2 and calls_short == 0 and puts_long == 0:
+    n_cl, n_cs = len(calls_long), len(calls_short)
+    n_pl, n_ps = len(puts_long), len(puts_short)
+
+    if n_cl == 1 and n_ps == 2 and n_cs == 0 and n_pl == 0:
         return "Synthetic Long 2:1"
-    if calls_long == 1 and calls_short == 0 and puts_long == 0 and puts_short == 0:
+    if n_cl == 1 and n_cs == 0 and n_pl == 0 and n_ps == 0:
         return "Long Call"
-    if puts_long == 1 and calls_long == 0 and calls_short == 0 and puts_short == 0:
+    if n_pl == 1 and n_cl == 0 and n_cs == 0 and n_ps == 0:
         return "Long Put"
-    if calls_short == 1 and calls_long == 0 and puts_long == 0 and puts_short == 0:
+    if n_cs == 1 and n_cl == 0 and n_pl == 0 and n_ps == 0:
         return "Short Call"
-    if puts_short > 0 and puts_long == 0 and calls_long == 0 and calls_short == 0:
+    if n_ps > 0 and n_pl == 0 and n_cl == 0 and n_cs == 0:
         return "Short Put(s)"
-    if calls_short >= 1 and puts_short >= 1:
-        if calls_long == 0 and puts_long == 0:
-            return "Short Strangle" if calls_short == 1 and puts_short == 1 else "Multi-Leg Short"
-    if calls_long == 1 and calls_short == 1:
-        return "Bull Call Spread" if calls_long > 0 else "Bear Call Spread"
-    if puts_long == 1 and puts_short == 1:
-        return "Bull Put Spread" if puts_short > 0 else "Bear Put Spread"
+
+    # Vertical spreads: the strike order decides bull vs bear.
+    if n_cl == 1 and n_cs == 1 and n_pl == 0 and n_ps == 0:
+        return (
+            "Bull Call Spread"
+            if calls_long[0].strike < calls_short[0].strike
+            else "Bear Call Spread"
+        )
+    if n_pl == 1 and n_ps == 1 and n_cl == 0 and n_cs == 0:
+        return (
+            "Bull Put Spread"
+            if puts_short[0].strike > puts_long[0].strike
+            else "Bear Put Spread"
+        )
+
+    # Volatility structures.
+    if n_cl == 1 and n_pl == 1 and n_cs == 0 and n_ps == 0:
+        return (
+            "Long Straddle"
+            if calls_long[0].strike == puts_long[0].strike
+            else "Long Strangle"
+        )
+    if n_cl == 2 and n_pl == 1 and n_cs == 0 and n_ps == 0:
+        return "Call Butterfly"
+    if n_pl == 2 and n_cl == 1 and n_cs == 0 and n_ps == 0:
+        return "Put Butterfly"
+    if n_cl == 1 and n_pl == 1 and n_ps == 1 and n_cs == 1:
+        return "Iron Condor" if _has_four_distinct_strikes(legs) else "Iron Butterfly"
+
+    if n_cs >= 1 and n_ps >= 1:
+        if n_cl == 0 and n_pl == 0:
+            return (
+                "Short Strangle"
+                if n_cs == 1 and n_ps == 1
+                else "Multi-Leg Short"
+            )
+
     return "Custom Multi-Leg"
 
 
-def _generate_recommendations(
+def _has_four_distinct_strikes(legs: list[OptionLeg]) -> bool:
+    return len({leg.strike for leg in legs}) >= 4
+
+
+def _generate_recommendations(  # pylint: disable=too-many-positional-arguments
     legs: list[OptionLeg],
     total_pnl: float,
     spot: float,
-    payoff: list[dict],
     strategy_name: str,
+    breakevens: list[float],
 ) -> list[dict[str, str]]:
     recs = []
-    breakevens_list = [s["price"] for s in payoff if s["type"] == "breakeven"]
 
     if total_pnl > 0:
         recs.append({"type": "Consider", "reason": "Position is profitable. Consider taking partial profits."})
     elif total_pnl < 0:
         recs.append({"type": "Monitor", "reason": "Position underwater. Check invalidation conditions."})
 
-    if breakevens_list:
-        recs.append({"type": "Target", "reason": f"Nearest breakeven: ${min(breakevens_list):.2f}"})
+    if breakevens:
+        nearest = min(breakevens, key=lambda level: abs(level - spot))
+        recs.append({"type": "Target", "reason": f"Nearest breakeven: ${nearest:.2f}"})
 
     recs.append({"type": "Strategy", "reason": f"Classified as: {strategy_name}"})
 

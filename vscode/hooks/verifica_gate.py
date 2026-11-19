@@ -23,6 +23,13 @@ DEFAULT_LOG_DIR = Path.home() / ".config" / "opencode" / "stats"
 VERIFICA_RE = re.compile(r"##\s*VERIFICA\b", re.IGNORECASE)
 CONFIDENCE_RE = re.compile(r"confidenza\s*[:：]\s*(\d{1,3})", re.IGNORECASE)
 
+# Blocking a long, complete answer is worse than a missing footer: the retry
+# usually replaces the whole analysis with a bare VERIFICA block, and the user
+# loses the deliverable. Only short answers are blocked; long ones are logged.
+SOFT_LIMIT_CHARS = 600
+# A message shorter than this is a footer-sized reply, not an answer.
+FOOTER_LIMIT_CHARS = 300
+
 
 def read_payload() -> dict:
     """Parse the hook payload from stdin; return an empty dict on failure."""
@@ -62,19 +69,19 @@ def content_to_text(content: object) -> str:
     return ""
 
 
-def last_assistant_text(transcript_path: str) -> str:
+def transcript_assistant_texts(transcript_path: str) -> list[str]:
     """Return the content of the last assistant message in the transcript.
 
     Supports the VS Code Copilot transcript (`assistant.message` + `data.content`)
     and the Claude-style (`assistant` / `role: assistant` + `message.content`).
     """
     if not transcript_path:
-        return ""
+        return []
     try:
         path = Path(transcript_path)
         if not path.is_file():
-            return ""
-        text = ""
+            return []
+        texts: list[str] = []
         with path.open(encoding="utf-8", errors="replace") as handle:
             for line in handle:
                 line = line.strip()
@@ -97,13 +104,13 @@ def last_assistant_text(transcript_path: str) -> str:
                 elif entry.get("role") == "assistant":
                     candidate = content_to_text(entry.get("content"))
                 if candidate:
-                    text = candidate
-        return text
+                    texts.append(candidate)
+        return texts
     except Exception:
-        return ""
+        return []
 
 
-def log_event(payload: dict, present: bool, confidence: int | None) -> None:
+def log_event(payload: dict, case: str, confidence: int | None) -> None:
     """Append an audit event, mirroring the opencode verifica-gate format."""
     try:
         log_dir = Path(os.environ.get("GATE_LOG_DIR", str(DEFAULT_LOG_DIR))).expanduser()
@@ -112,7 +119,7 @@ def log_event(payload: dict, present: bool, confidence: int | None) -> None:
             "ts": datetime.now(timezone.utc).isoformat(),
             "source": "vscode-verifica-gate",
             "subagent_type": payload_value(payload, "agent_type", "agentType") or "unknown",
-            "case": "ok" if present else "missing_verifica",
+            "case": case,
             "confidenza": confidence,
             "prompt_snippet": "",
         }
@@ -132,7 +139,9 @@ def main() -> int:
         return 0
 
     transcript_path = payload_value(payload, "transcript_path", "transcriptPath")
-    text = last_assistant_text(transcript_path)
+    texts = transcript_assistant_texts(transcript_path)
+    text = texts[-1] if texts else ""
+    previous = texts[-2] if len(texts) > 1 else ""
     present = bool(VERIFICA_RE.search(text))
 
     confidence = None
@@ -143,15 +152,32 @@ def main() -> int:
         except Exception:
             confidence = None
 
-    log_event(payload, present, confidence)
-
-    if present or not text:
-        # No transcript or no assistant message: fail open.
+    # Diagnostic: the answer was split and only the footer survived the retry.
+    if present and len(text) < FOOTER_LIMIT_CHARS and len(previous) >= SOFT_LIMIT_CHARS:
+        log_event(payload, "verifica_only_followup", confidence)
         print("{}")
         return 0
 
+    if present or not text:
+        # No transcript or no assistant message: fail open.
+        log_event(payload, "ok" if present else "no_text", confidence)
+        print("{}")
+        return 0
+
+    if len(text) >= SOFT_LIMIT_CHARS:
+        # Long, complete answer without the footer. Blocking would trigger a
+        # retry that commonly returns a bare VERIFICA block and loses the body.
+        log_event(payload, "missing_verifica_soft", confidence)
+        print("{}")
+        return 0
+
+    log_event(payload, "missing_verifica", confidence)
+
     reason = (
-        "Missing required `## VERIFICA` section. Append it before finishing:\n"
+        "Missing the `## VERIFICA` section.\n"
+        "Send your COMPLETE answer again, with the block APPENDED at the end.\n"
+        "Do NOT send a message that contains only the VERIFICA block: the user "
+        "would lose the analysis.\n\n"
         "## VERIFICA\n"
         "- confidenza: <0-100>\n"
         "- evidenza: <commands/files actually checked>\n"

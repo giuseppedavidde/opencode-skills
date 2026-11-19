@@ -16,8 +16,15 @@ The old 6-dimension formula (including separate Competitive at 10%) is supersede
 ### Aggregation Formula
 
 ```
-final = wyckoff * 0.20 + volprof * 0.20 + pa * 0.15 + sentiment * 0.20 + fundamentals * 0.25
+vp_bullish = 100 - volprof          # volprof is an EXTENSION score
+final = wyckoff * 0.20 + vp_bullish * 0.20 + pa * 0.15 + sentiment * 0.20 + fundamentals * 0.25
 ```
+
+`volprof` is an extension score: low means price sits below the value area
+(discount), high means price is extended above it. The scanner inverts it
+before weighting because the signal is mean-reversion (IC rank −0.068 OOS).
+The reported `Volume Profile` dimension is already inverted, so higher always
+means more bullish.
 
 ### Macro Regime Multiplier (Phase 0)
 
@@ -29,6 +36,16 @@ Applied post-aggregation. Controlled via `--regime` CLI arg (default: NORMAL).
 | NORMAL | 1.00x | No adjustment |
 | SELECTIVE | 1.00x | Defensive (+5%), Cyclical (-10%) |
 | DEFENSIVE | 0.85x | All sectors penalized (cap at 60) |
+
+Two adjustments are applied in this order:
+
+1. **Dimensional weights by regime** — `get_dynamic_weights(regime)` rescales
+   the five dimension weights (CRISIS raises sentiment, HIGH_VOLATILITY raises
+   Wyckoff and lowers Price Action, RANGE_BOUND raises Volume Profile,
+   TRENDING_BULL raises Wyckoff/sentiment, TRENDING_BEAR raises
+   sentiment/Volume Profile). The scanner uses these weights during
+   aggregation, so the same ticker can score differently in two regimes.
+2. **Sector multiplier** — the table above, applied after aggregation.
 
 ## Sentiment Sub-Dimension Weights (9 total)
 
@@ -66,18 +83,22 @@ Applied post-aggregation. Controlled via `--regime` CLI arg (default: NORMAL).
 
 ## Volume Profile — Score Table
 
-| Condition | Delta | Max |
-|-----------|:-----:|:---:|
-| Price inside Value Area | +20 | 20 |
-| Price below VAL | +25 | 25 |
-| Price above VAH | +15 | 15 |
-| Price within 5% of VPOC | +10 | 10 |
-| Volume ratio 1.0-2.0x | +10 | 10 |
-| Volume ratio > 2.0x | +15 | 15 |
-| D-Profile shape | +15 | 15 |
-| VPOC rising over 3mo | +15 | 15 |
-| Base | +10 | 10 |
-| **Total cap** | | **100** |
+The profile is a volume-at-price histogram with 40 bins. Each bar's volume is
+spread across every bin between `Low` and `High`. The value area expands
+contiguously from the POC until it covers 70% of the volume.
+
+The output is an **extension score** (0 = deep discount, 100 = extended):
+
+| Condition | Score |
+|-----------|:-----:|
+| Price below VAL | 20 |
+| Price inside VA | 35-65 (linear between VAL and VAH) |
+| Price above VAH | 80 |
+| Price within 2% of POC (inside VA) | pulled halfway to 50 |
+
+A 1% buffer around VAL and VAH stops the regime from flipping on marginal
+moves. The score is quantised to a 5-point grid. The scanner and the verdict
+engine consume `100 - score` (higher = more bullish).
 
 ## Price Action — Score Table
 

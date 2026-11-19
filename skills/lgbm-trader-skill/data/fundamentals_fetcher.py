@@ -29,6 +29,12 @@ ALL_COLS = [
     "val_revenue_growth", "val_profit_margins",
 ]
 
+# A balance-sheet period-end date is known to the market only after the filing.
+# Without an exact ``filingDate``, delay the period end by a conservative
+# 45 calendar days before a bar is allowed to see it (SEC 10-Q deadline is
+# 40 days for large filers, 10-K is 60-90 days; 45 is a safe middle).
+PUBLICATION_LAG_DAYS = 45
+
 API_KEY_PATH = Path(__file__).resolve().parents[2] / "config" / "fmp_api_key.txt"
 DOTENV_PATH = Path(__file__).resolve().parents[1] / ".env"
 
@@ -45,6 +51,37 @@ def _load_api_key() -> str | None:
             if line.startswith("FMP_API_KEY="):
                 return line.split("=", 1)[1].strip().strip("\"'")
     return os.environ.get("FMP_API_KEY")
+
+
+def _effective_date(period_end, filing_date=None):
+    """Date at which a reported period becomes usable without look-ahead."""
+    if filing_date is not None and pd.notna(filing_date):
+        try:
+            return pd.Timestamp(filing_date)
+        except (ValueError, TypeError):
+            pass
+    try:
+        return pd.Timestamp(period_end) + pd.Timedelta(days=PUBLICATION_LAG_DAYS)
+    except (ValueError, TypeError):
+        return None
+
+
+def _ttm(series: pd.Series, latest, periods: int = 4):
+    """Sum the last ``periods`` observations ending at ``latest``.
+
+    Quarterly income-statement values must be annualised before they feed a
+    P/E, P/S or EV/EBITDA ratio: a single quarter understates earnings by
+    roughly 4x and inflates every multiple computed from it. Returns ``None``
+    when fewer than ``periods`` observations exist.
+    """
+    if series is None or series.empty or latest is None:
+        return None
+    window = series.loc[[c for c in series.index if c <= latest]]
+    if len(window) < periods:
+        return None
+    tail = window.iloc[-periods:]
+    total = tail.sum(min_count=periods)
+    return float(total) if pd.notna(total) else None
 
 
 # ------------------------------------------------------------------- #
@@ -112,12 +149,23 @@ def _build_pit_from_fmp(ticker: str, ohlcv: pd.DataFrame) -> pd.DataFrame | None
         "earningsYield": "val_earnings_yield",
     }
 
+    # Map each reported period to the date it became public.
+    effective: dict[pd.Timestamp, pd.Timestamp] = {}
+    for period_end in df_fmp.index:
+        raw_filing = None
+        if "filingDate" in df_fmp.columns:
+            raw_filing = df_fmp.loc[period_end, "filingDate"]
+        eff = _effective_date(period_end, raw_filing)
+        if eff is not None:
+            effective[period_end] = eff
+    eff_index = pd.Series(effective).sort_values()
+
     for i in range(len(ohlcv)):
         date = ohlcv_idx[i]
-        valid = df_fmp.index[df_fmp.index <= date]
-        if len(valid) == 0:
+        visible = eff_index[eff_index <= date]
+        if visible.empty:
             continue
-        latest = valid[-1]
+        latest = visible.index[-1]
         price = float(close.iloc[i])
         if pd.isna(price) or price <= 0:
             continue
@@ -213,10 +261,14 @@ def _build_pit_from_yfinance(ticker: str, ohlcv: pd.DataFrame) -> pd.DataFrame |
 
     for i in range(len(ohlcv)):
         date = ohlcv_idx[i]
-        valid = fin_all.columns[fin_all.columns <= date]
-        if len(valid) == 0:
+        # A period end is not public on the day it ends: apply the filing lag.
+        visible_cols = [
+            col for col in fin_all.columns
+            if _effective_date(col) is not None and _effective_date(col) <= date
+        ]
+        if not visible_cols:
             continue
-        latest = valid[-1]
+        latest = max(visible_cols)
         price = float(close.iloc[i])
         if pd.isna(price) or price <= 0:
             continue
@@ -227,65 +279,70 @@ def _build_pit_from_yfinance(ticker: str, ohlcv: pd.DataFrame) -> pd.DataFrame |
         # Shares
         share_val = None
         for k, v in shares_dict.items():
-            if isinstance(k, pd.Timestamp) and k <= date:
-                share_val = v
+            if isinstance(k, pd.Timestamp):
+                eff = _effective_date(k)
+                if eff is not None and eff <= date:
+                    share_val = v
         if share_val is None:
             share_val = list(shares_dict.values())[-1] if shares_dict else None
 
         if share_val and float(share_val) > 0:
             shares_f = float(share_val)
 
-            # EPS → P/E
-            ni_val = ni_s.get(latest)
-            if pd.notna(ni_val) and ni_val > 0:
+            # EPS → P/E, on a trailing-twelve-month basis. A single quarter
+            # would understate earnings by ~4x and inflate every multiple.
+            ni_val = _ttm(ni_s, latest)
+            if ni_val is not None and ni_val > 0:
                 eps_val = ni_val / shares_f
                 _set("val_pe_ratio", price / eps_val)
                 _set("val_earnings_yield", eps_val / price)
 
-            # P/S
-            rev_val = revenue_s.get(latest)
-            if pd.notna(rev_val) and rev_val > 0:
+            # P/S on TTM revenue.
+            rev_val = _ttm(revenue_s, latest)
+            if rev_val is not None and rev_val > 0:
                 _set("val_ps_ratio", price / (rev_val / shares_f))
 
             # Market Cap
             _set("val_market_cap", price * shares_f)
 
-            # EV/EBITDA
-            ebitda_val = ebitda_s.get(latest)
-            if pd.notna(ebitda_val) and ebitda_val > 0:
+            # EV/EBITDA on TTM EBITDA.
+            ebitda_val = _ttm(ebitda_s, latest)
+            if ebitda_val is not None and ebitda_val > 0:
                 debt_val = debt_s.get(latest, 0) or 0
                 _set("val_ev_ebitda", (price * shares_f + debt_val) / ebitda_val)
 
         # BV → P/B, ROE, Debt/Equity
         bv_val = None
         for k, v in bv_dict.items():
-            if isinstance(k, pd.Timestamp) and k <= date:
-                bv_val = v
+            if isinstance(k, pd.Timestamp):
+                eff = _effective_date(k)
+                if eff is not None and eff <= date:
+                    bv_val = v
         if bv_val is None:
             bv_val = list(bv_dict.values())[-1] if bv_dict else None
 
         if bv_val and float(bv_val) > 0 and share_val and float(share_val) > 0:
             bv_f = float(bv_val)
             _set("val_pb_ratio", price / (bv_f / float(share_val)))
-            ni_val = ni_s.get(latest)
-            if pd.notna(ni_val) and ni_val != 0:
+            ni_val = _ttm(ni_s, latest)
+            if ni_val is not None and ni_val != 0:
                 _set("val_roe", ni_val / bv_f)
             debt_val = debt_s.get(latest, 0) or 0
             if pd.notna(debt_val):
                 _set("val_debt_equity", debt_val / bv_f)
 
-        # Revenue growth
-        rev_val = revenue_s.get(latest)
+        # Revenue growth: TTM versus the TTM one year earlier.
+        rev_ttm = _ttm(revenue_s, latest)
         prev = _prev_year_report(fin_all, latest)
-        rev_prev = revenue_s.get(prev) if prev else None
-        if rev_val is not None and rev_prev is not None and pd.notna(rev_val) and pd.notna(rev_prev) and rev_prev > 0:
-            _set("val_revenue_growth", (rev_val - rev_prev) / rev_prev)
+        rev_prev = _ttm(revenue_s, prev) if prev is not None else None
+        if rev_ttm and rev_prev and rev_prev > 0:
+            _set("val_revenue_growth", (rev_ttm - rev_prev) / rev_prev)
 
-        # Profit margins
-        ni_val = ni_s.get(latest)
-        rev_val = revenue_s.get(latest)
-        if ni_val is not None and rev_val is not None and pd.notna(ni_val) and pd.notna(rev_val) and rev_val > 0:
-            _set("val_profit_margins", ni_val / rev_val)
+        # Profit margins on the TTM aggregates.
+        if rev_ttm and rev_ttm > 0:
+            ni_ttm = _ttm(ni_s, latest)
+            if ni_ttm is not None:
+                _set("val_profit_margins", ni_ttm / rev_ttm)
 
     df = df.ffill()
     logger.info("yfinance PIT for %s: %d values", ticker, int(df.notna().sum().sum()))

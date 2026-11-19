@@ -89,7 +89,13 @@ def _fetch_macro_context() -> dict[str, Any]:
         elif dxy_val < dxy_prev * 0.98:
             dxy_trend = "falling"
 
-    regime = detect_regime(vix=vix_val, dxy_trend=dxy_trend, fear_greed=fear_greed)
+    equity_trend = raw.get("equity_trend")
+    regime = detect_regime(
+        vix=vix_val,
+        dxy_trend=dxy_trend,
+        fear_greed=fear_greed,
+        equity_trend=equity_trend,
+    )
     weights_stock = get_dynamic_weights(regime, is_crypto=False)
     weights_crypto = get_dynamic_weights(regime, is_crypto=True)
 
@@ -106,6 +112,7 @@ def _fetch_macro_context() -> dict[str, Any]:
         "btc_dominance": btc_dominance,
         "btc_price": btc_price,
         "fear_greed_index": fear_greed,
+        "equity_trend": equity_trend,
         "detected_regime": regime.value,
         "macro_window": macro_window,
         "dynamic_weights_stock": weights_stock,

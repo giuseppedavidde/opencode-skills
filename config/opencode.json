@@ -20,6 +20,9 @@
         "glm-5.3": {
           "name": "GLM-5.3"
         },
+        "gemini-4-argon": {
+          "name": "Gemini 4 Argon"
+        },
         "glm-5.2": {
           "name": "GLM-5.2"
         },

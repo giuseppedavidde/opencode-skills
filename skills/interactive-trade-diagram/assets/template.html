@@ -284,6 +284,7 @@ const CONFIG = {
 
   spot: 472.94,
   r: 0.04025,
+  q: 0.0,
   expiryLabel: "21.01.2028",
   expiryISO: "2028-01-21",
   dte: 442,
@@ -372,6 +373,7 @@ const CONFIG = {
   "use strict";
   const CFG = CONFIG;
   const MULT = 100;
+  const Q = CFG.q || 0;
   const T0 = (CFG.dte || 365) / 365;
   const $ = id => document.getElementById(id);
   const NS = "http://www.w3.org/2000/svg";
@@ -384,6 +386,15 @@ const CONFIG = {
     return x > 0 ? 1 - p : p;
   }
   function legsIv(leg){ return leg.iv != null ? leg.iv : (CFG.ivToday || 0.5); }
+  /* Per-leg time to expiry. A leg may override the global DTE (calendars,
+     diagonals); elapsed days are reconstructed from the caller's T so no
+     call site has to thread an extra argument. */
+  function legT(leg, T){
+    if (leg.dte == null) return T;
+    const total = CFG.dte || 365;
+    const elapsed = Math.max(0, total - T*365);
+    return Math.max(0, (leg.dte - elapsed)/365);
+  }
 
   function intrinsic(leg, S){
     if (leg.kind === "stock") return S;
@@ -392,21 +403,23 @@ const CONFIG = {
   }
   function bsValue(leg, S, T, ivShift = 0){
     if (leg.kind === "stock") return S;
+    T = legT(leg, T);
     const K = leg.strike, s = Math.max(1e-4, legsIv(leg) + ivShift), r = CFG.r || 0.04;
     if (T <= 0) return intrinsic(leg, S);
-    const sT = s*Math.sqrt(T);
-    const d1 = (Math.log(S/K) + (r + s*s/2)*T)/sT;
+    const sT = s*Math.sqrt(T), dq = Math.exp(-Q*T), dr = Math.exp(-r*T);
+    const d1 = (Math.log(S/K) + (r - Q + s*s/2)*T)/sT;
     const d2 = d1 - sT;
-    if (leg.kind === "put") return K*Math.exp(-r*T)*normCdf(-d2) - S*normCdf(-d1);
-    return S*normCdf(d1) - K*Math.exp(-r*T)*normCdf(d2);
+    if (leg.kind === "put") return K*dr*normCdf(-d2) - S*dq*normCdf(-d1);
+    return S*dq*normCdf(d1) - K*dr*normCdf(d2);
   }
   function bsDelta(leg, S, T, ivShift = 0){
     if (leg.kind === "stock") return 1;
+    T = legT(leg, T);
     const K = leg.strike, s = Math.max(1e-4, legsIv(leg) + ivShift), r = CFG.r || 0.04;
     if (T <= 0) return (leg.kind === "put" ? (S < K ? -1 : 0) : (S > K ? 1 : 0));
-    const sT = s*Math.sqrt(T);
-    const d1 = (Math.log(S/K) + (r + s*s/2)*T)/sT;
-    return leg.kind === "put" ? normCdf(d1) - 1 : normCdf(d1);
+    const sT = s*Math.sqrt(T), dq = Math.exp(-Q*T);
+    const d1 = (Math.log(S/K) + (r - Q + s*s/2)*T)/sT;
+    return leg.kind === "put" ? -dq*normCdf(-d1) : dq*normCdf(d1);
   }
   const sideSign = leg => (leg.side === "short" ? -1 : 1);
   const legMult = leg => (leg.kind === "stock" ? 1 : MULT);

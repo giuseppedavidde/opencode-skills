@@ -38,6 +38,8 @@ _TOP_N_DEFAULT = 15
 _MIN_DTE_DAYS = 1
 _FLIP_GRID_POINTS = 81
 _FLIP_GRID_WIDTH = 0.10
+# Dealer long-call / short-put is calibrated on index options.
+_INDEX_LIKE = {"SPX", "SPXW", "NDX", "RUT", "VIX", "XSP", "SPY", "QQQ", "IWM", "DIA"}
 
 _CONVENTION = (
     "Call GEX positive, put GEX negative (dealers long call gamma / short "
@@ -476,7 +478,14 @@ def _iv_quality(chains: list[dict[str, Any]]) -> dict[str, float | int | None]:
 
 
 def _tte_years(expiry: str | None) -> float:
-    """Time to expiry in years (min 1 day), matching the chain greeks."""
+    """Time to expiry in years, on the same convention as the option chain.
+
+    ``options_chain._time_to_expiry`` annualises calendar days with /365.
+    GEX must reuse that convention: ``test_repricing_matches_profile_at_spot``
+    enforces that repricing at spot reproduces the per-leg chain gamma. A
+    business-day (/252) annualisation here alone would silently disagree with
+    the greeks the chain ships, so any such switch has to land in both places.
+    """
     if not expiry:
         return 0.0
     try:
@@ -577,6 +586,12 @@ def analyze_gex(
         )
 
     warnings: list[str] = []
+    if ticker.upper() not in _INDEX_LIKE:
+        warnings.append(
+            "Dealer long-call/short-put is an index-option convention; on "
+            "single names institutional covered-call overwriting can leave "
+            "dealers short call gamma, inverting the wall interpretation."
+        )
     chains = _fetch_chains(ticker, first, expiries, warnings)
     profile = build_profile(aggregate_strikes(chains, spot))
     if not profile:

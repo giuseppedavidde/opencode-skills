@@ -296,9 +296,13 @@ def _compute_volume_profile(hist: pd.DataFrame) -> PostProcessAdjustment:
     price = df["Close"].iloc[-1]
     df["vwap"] = (df["Close"] * df["Volume"]).cumsum() / df["Volume"].cumsum()
     vwap = df["vwap"].iloc[-1]
-    df["dev"] = (df["Close"] - df["vwap"]) / df["vwap"]
-    std_dev = df["dev"].std()
-    current_dev = (price - vwap) / vwap
+    # Volume-weighted dispersion around VWAP: price levels traded on heavy
+    # volume must dominate the band width, unlike an unweighted std of dev.
+    weights = df["Volume"].clip(lower=1.0)
+    variance = float(((df["Close"] - vwap) ** 2 * weights).sum() / weights.sum())
+    std_abs = float(variance ** 0.5)
+    std_dev = std_abs / vwap if vwap > 0 else 0.0
+    current_dev = (price - vwap) / vwap if vwap > 0 else 0.0
     delta = 0
     parts = []
     conf = "bassa"
@@ -428,6 +432,7 @@ def _compute_options(ticker: str) -> PostProcessAdjustment:
                 reason="Prezzo non disponibile")
         price = hist["Close"].dropna().iloc[-1]
         calls = chain.calls
+        puts = chain.puts
         if "strike" not in calls.columns or "impliedVolatility" not in calls.columns:
             return PostProcessAdjustment(
                 skill="options-playbook", delta=0, confidence="bassa",
@@ -438,22 +443,46 @@ def _compute_options(ticker: str) -> PostProcessAdjustment:
             return PostProcessAdjustment(
                 skill="options-playbook", delta=0, confidence="bassa",
                 reason="IV non disponibile", data_available=False)
+
+        # Direction comes from the skew, not the absolute IV level. Expensive
+        # OTM puts versus OTM calls signal downside hedging demand (bearish);
+        # the opposite signals upside demand (bullish).
         delta = 0
-        parts = []
+        parts = [f"IV ATM {iv_current * 100:.0f}%"]
         conf = "bassa"
-        iv_pct = iv_current * 100
-        if iv_pct > 70:
-            delta = 8
-            parts.append(f"IV {iv_pct:.0f}% — alto, premi cari -> short/credit spread")
-            conf = "alta"
-        elif iv_pct > 50:
-            delta = 3
-            parts.append(f"IV {iv_pct:.0f}% — moderato, strategie neutrali")
-            conf = "media"
-        elif iv_pct < 30:
-            delta = -3
-            parts.append(f"IV {iv_pct:.0f}% — basso, premi economici -> long options")
-            conf = "media"
+        put_iv = call_iv = None
+        try:
+            otm_puts = puts[puts["strike"] <= price * 0.95].sort_values("strike")
+            otm_calls = calls[calls["strike"] >= price * 1.05].sort_values("strike")
+            if not otm_puts.empty:
+                candidate = float(otm_puts.iloc[-1]["impliedVolatility"])
+                put_iv = candidate if candidate > 0 else None
+            if not otm_calls.empty:
+                candidate = float(otm_calls.iloc[0]["impliedVolatility"])
+                call_iv = candidate if candidate > 0 else None
+        except (KeyError, IndexError, ValueError):
+            put_iv = call_iv = None
+
+        if put_iv is not None and call_iv is not None:
+            skew = put_iv - call_iv
+            parts.append(f"skew put-call {skew * 100:+.0f} pt")
+            if skew > 0.10:
+                delta -= 5
+                parts.append("put skew forte = domanda di protezione, bias ribassista")
+                conf = "alta"
+            elif skew > 0.03:
+                delta -= 2
+                parts.append("put skew moderato")
+                conf = "media"
+            elif skew < -0.05:
+                delta += 3
+                parts.append("call skew = domanda di upside")
+                conf = "media"
+
+        if iv_current * 100 > 70:
+            parts.append("IV alta: premi cari per la vendita di volatilita'")
+        elif iv_current * 100 < 30:
+            parts.append("IV bassa: premi economici per l'acquisto di volatilita'")
         reason = ", ".join(parts)
         return PostProcessAdjustment(
             skill="options-playbook", delta=delta, confidence=conf, reason=reason)
@@ -1070,37 +1099,53 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
         rate_snapshot = get_risk_free_rate()
         r = rate_snapshot.value
 
-        # 6. VRP stima (Bakshi empirical)
+        # 6. VRP empirico del titolo: IV ATM contro RV a 30 giorni.
+        #    La regressione Bakshi (1988-1995, S&P 500) resta un riferimento
+        #    secondario, non il valore primario del titolo.
+        ret_30 = clean_close.pct_change().dropna().tail(30)
+        rv_30d = float(ret_30.std() * np.sqrt(252)) if len(ret_30) >= 10 else float("nan")
         iv_pct_val = avg_iv * 100
-        vrp_pct_raw = _VRP_SLOPE * iv_pct_val + _VRP_INTERCEPT
-        vrp_pct = max(0.0, min(35.0, vrp_pct_raw))
+        vrp_ref_pct = max(0.0, min(35.0, _VRP_SLOPE * iv_pct_val + _VRP_INTERCEPT))
+        if rv_30d == rv_30d and rv_30d > 0:
+            vrp_pct = max(-35.0, min(35.0, (avg_iv - rv_30d) / max(avg_iv, 1e-6) * 100.0))
+            vrp_source = "ticker: (IV_ATM - RV_30d) / IV_ATM"
+        else:
+            rv_30d = None
+            vrp_pct = vrp_ref_pct
+            vrp_source = "fallback: Bakshi S&P 500 regression"
         vrp_decimal = vrp_pct / 100.0
 
         if iv_pct_val < 10:
             regime = "LOW_VOL"
-            desc = (
-                f"Volatilita' bassa ({iv_pct_val:.0f}%): "
-                f"VRP ~{vrp_pct:.1f}% del premio. Vendita opzioni meno profittevole."
-            )
         elif iv_pct_val < 16:
             regime = "NORMAL_VOL"
-            desc = (
-                f"Volatilita' normale ({iv_pct_val:.0f}%): "
-                f"VRP ~{vrp_pct:.1f}% del premio. Vendita opzioni con VRP moderato."
-            )
         else:
             regime = "HIGH_VOL"
-            desc = (
-                f"Volatilita' alta ({iv_pct_val:.0f}%): "
-                f"VRP ~{vrp_pct:.1f}% del premio. "
-                f"VENDITA OPZIONI FORTEMENTE AGEVOLATA dal VRP."
+
+        if vrp_pct > 0:
+            vrp_sentence = (
+                f"VRP positivo ~{vrp_pct:.1f}% del premio: la vendita di opzioni "
+                f"raccoglie un premio superiore alla volatilita' realizzata."
             )
+        else:
+            vrp_sentence = (
+                f"VRP non positivo ({vrp_pct:.1f}%): l'IV non supera la RV, "
+                f"quindi il premio e' scarso e comprare volatilita' e' relativamente "
+                f"conveniente."
+            )
+        desc = (
+            f"Volatilita' {'bassa' if regime == 'LOW_VOL' else 'normale' if regime == 'NORMAL_VOL' else 'alta'} "
+            f"({iv_pct_val:.0f}%). {vrp_sentence} Fonte VRP: {vrp_source}."
+        )
 
         vrp_model = BakshiVRP(
             vrp_annualized=round(vrp_decimal, 4),
             vrp_pct_of_premium=round(vrp_pct, 1),
             regime=regime,
             description=desc,
+            vrp_source=vrp_source,
+            rv_30d=round(rv_30d, 4) if rv_30d is not None else None,
+            vrp_reference_pct=round(vrp_ref_pct, 1),
         )
 
         # 7. Analisi per strike
@@ -1118,8 +1163,16 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
         atm_vega_val = _black_scholes_vega(spot, spot, T_years, r, avg_iv)
 
         for K in selected_strikes:
-            vega = _black_scholes_vega(spot, K, T_years, r, avg_iv)
-            premium = _black_scholes_price(spot, K, T_years, r, avg_iv, "call")
+            # Per-strike IV from the chain: the smile must price each strike,
+            # not a single flat ATM sigma across the whole wing.
+            row_iv = calls.loc[calls["strike"] == K, "impliedVolatility"]
+            iv_strike = avg_iv
+            if not row_iv.empty:
+                candidate = float(row_iv.iloc[0])
+                if candidate > 0.0:
+                    iv_strike = candidate
+            vega = _black_scholes_vega(spot, K, T_years, r, iv_strike)
+            premium = _black_scholes_price(spot, K, T_years, r, iv_strike, "call")
             expected_seller_profit_per_option = vrp_decimal * premium
             moneyness = spot / K
             vega_ratio = vega / atm_vega_val if atm_vega_val > 0 else 0
@@ -1475,7 +1528,13 @@ def register_quant_tools(mcp_server: FastMCP, _skills_dir: str) -> None:
 # ── LGBM helper functions ─────────────────────────────────────────────
 
 def _sigmoid(x: np.ndarray) -> np.ndarray:
-    """Sigmoid per convertire raw predictions in probabilita'."""
+    """Sigmoid per convertire raw predictions in probabilita'.
+
+    The regressor is trained on the discrete triple-barrier target in
+    {-1, 0, +1}, so the raw output is bounded. Callers scale it by 3.0
+    before this function, mapping -1 -> 4.7 and +1 -> 95.3 so the public
+    score can span the full 0-100 range.
+    """
     return 1.0 / (1.0 + np.exp(-np.clip(x, -50.0, 50.0)))
 
 
@@ -1573,7 +1632,7 @@ def _predict_stacking(ensemble: Any, df: pd.DataFrame) -> dict[str, Any]:
     elif "pred_final" in preds.columns and preds["pred_final"].notna().any():
         last_score = float(
             _sigmoid(
-                pd.Series(preds["pred_final"].dropna().iloc[-1:]).to_numpy()
+                pd.Series(preds["pred_final"].dropna().iloc[-1:]).to_numpy() * 3.0
             )
             * 100.0
         )
@@ -1582,7 +1641,7 @@ def _predict_stacking(ensemble: Any, df: pd.DataFrame) -> dict[str, Any]:
         if pred_cols:
             last_row = preds[pred_cols].iloc[-1].dropna()
             if not last_row.empty:
-                last_score = float(_sigmoid(last_row.to_numpy()).mean()) * 100.0
+                last_score = float(_sigmoid(last_row.to_numpy() * 3.0).mean()) * 100.0
 
     if last_score is None:
         raise ValueError(
@@ -1632,7 +1691,7 @@ def _predict_single(trainer: Any, df: pd.DataFrame) -> dict[str, Any]:
             "LGBMTrainer.predict ha restituito array vuoto — "
             "il modello non ha prodotto predizioni"
         )
-    score = float(_sigmoid(np.asarray(raw))[-1]) * 100.0
+    score = float(_sigmoid(np.asarray(raw) * 3.0)[-1]) * 100.0
 
     individual: dict[str, float] = {}
     if len(raw) > 0:

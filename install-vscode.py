@@ -475,7 +475,9 @@ definition below is your operating manual. Apply these translations:
 - `permission`, `steps`, and `hidden` are opencode-only. Your tool access is
   set by the `tools` list in this file's frontmatter.
 - End every response with a `## VERIFICA` section (confidenza, evidenza,
-  non_verificato, escalation_consigliata).
+  non_verificato, escalation_consigliata). Write the VERIFICA block in the
+  SAME message as the answer, after the full body. Never send a message that
+  contains only the VERIFICA block: the caller would lose your deliverable.
 
 ---
 

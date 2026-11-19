@@ -604,10 +604,31 @@ class DataProvider:
         except Exception:  # pylint: disable=broad-exception-caught
             logger.warning("Failed to fetch BTC", exc_info=True)
 
+        # Equity trend is needed to separate a low-volatility bull market
+        # from a genuine range: VIX < 25 alone cannot tell them apart, and
+        # without it every calm bull tape was labelled RANGE_BOUND.
+        equity_trend = None
+        try:
+            hist = self.get_hist("^GSPC", period="1y")
+            if not hist.empty and len(hist) >= 60:
+                close = hist["Close"].dropna()
+                ma50 = float(close.rolling(50).mean().iloc[-1])
+                price = float(close.iloc[-1])
+                ret_60 = price / float(close.iloc[-60]) - 1.0
+                if price > ma50 and ret_60 > 0.02:
+                    equity_trend = "up"
+                elif price < ma50 and ret_60 < -0.02:
+                    equity_trend = "down"
+                else:
+                    equity_trend = "range"
+        except Exception:  # pylint: disable=broad-exception-caught
+            logger.warning("Failed to fetch SPX trend", exc_info=True)
+
         return {
             "vix": vix_val,
             "dxy": dxy_val,
             "dxy_prev": dxy_prev,
+            "equity_trend": equity_trend,
             "btc_price": btc_price,
             "btc_dominance": _fetch_btc_dominance(),
             "fear_greed": _fetch_fear_greed(),

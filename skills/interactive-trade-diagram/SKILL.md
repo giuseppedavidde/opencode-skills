@@ -66,12 +66,13 @@ Il file è interattivo. Il file non richiede rete. Il file si apre con doppio cl
 | `asOf` | string | Sì | Data dei dati. Formato `gg.mm.aaaa`. |
 | `spot` | number | Sì | Prezzo corrente del sottostante. |
 | `r` | number | Sì | Tasso privo di rischio. Usa `^IRX / 100`. |
-| `dte` | number | Sì | Giorni alla scadenza. |
+| `q` | number | No | Dividend yield continuo. Default `0`. |
+| `dte` | number | Sì | Giorni alla scadenza globale. |
 | `expiryLabel` | string | Sì | Esempio `21.01.2028`. |
 | `ivToday` | number | Sì | IV usata per la curva "oggi". Calibrala sul mark. |
 | `realized` | number | No | P&L già incassato sulle gambe chiuse. Sommato a tutti i calcoli. |
 | `daily` | object | No | Vista giornaliera: `{iv, paths, heat, hist, lineNote, dayNote, histNote}`. Default: `iv` = `ivToday`, `paths` auto, `heat` auto, `hist` null. |
-| `legs` | array | Sì | Gamba: `{kind, side, strike, qty, entry, iv, mark}`. |
+| `legs` | array | Sì | Gamba: `{kind, side, strike, qty, entry, iv, mark}`. Campo opzionale `dte` per scadenze multiple (calendar, diagonal). |
 | `chips` | array | Sì | `{label, value, tone}`. `tone` = `pos`, `neg`, `warn`. |
 | `zones` | array | No | Se manca, le card si generano dai dati. Meglio lasciarlo vuoto. |
 | `greeks` | array | No | `{name, value, note}`. Prendi i valori da `analyze_options`. |

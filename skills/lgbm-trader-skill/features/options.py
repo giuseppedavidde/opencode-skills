@@ -62,18 +62,16 @@ def add_options_features(
             if col.startswith("opt_"):
                 out[col] = options_df[col].reindex(out.index)
     else:
-        logger.info("No pre-computed options frame, computing from OHLCV")
-        close = out["close"] if "close" in out.columns else out["Close"]
-        returns = close.pct_change()
-        rv_21d = returns.rolling(21).std() * np.sqrt(252)
-        iv_est = rv_21d * 1.2 + 0.05
-        vrp = iv_est - rv_21d
-
-        out["opt_rv_21d"] = rv_21d
-        out["opt_iv_est"] = iv_est
-        out["opt_vrp"] = vrp
-        out["opt_iv_rank_252d"] = iv_est.rolling(252).rank(pct=True)
-        out["opt_iv_percentile_252d"] = out["opt_iv_rank_252d"]
+        # No historical option surface: do NOT synthesise IV/VRP from realized
+        # volatility. `iv_est = rv*1.2 + 0.05` and `vrp = iv_est - rv` are exact
+        # affine functions of RV, so the "options" model would learn nothing
+        # beyond a duplicate of the technical volatility features. Leaving the
+        # opt_ group empty makes StackingEnsemble skip that base model instead.
+        logger.info(
+            "No pre-computed options frame: skipping synthetic opt_ features "
+            "(they would be collinear with realized volatility)"
+        )
+        return out
 
     # Feature derivate (calcolate sempre, idempotenti)
     if "opt_vrp" in out.columns:

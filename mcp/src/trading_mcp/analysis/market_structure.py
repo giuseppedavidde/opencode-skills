@@ -86,15 +86,36 @@ def compute_market_structure(hist: pd.DataFrame) -> tuple[int, str]:
     if l2_highs and l2_lows:
         l2_resistance = max(l2_highs)
         l2_support = min(l2_lows)
+        bullish_structure = uptrend_count >= 3 and downtrend_count == 0
+        bearish_structure = downtrend_count >= 3 and uptrend_count == 0
+
         if l2_support < last_close < l2_resistance:
             score = min(100, score + 5)
             details.append(f"Price within L2 structure ({l2_support:.2f}-{l2_resistance:.2f}) (+5)")
         elif last_close > l2_resistance * 1.02:
-            score = max(0, score - 10)
-            details.append(f"Price breakout above L2 resistance ({l2_resistance:.2f}) (-10)")
+            # A breakout out of an uptrend is continuation, not exhaustion.
+            # Penalising it systematically contradicts the momentum guard.
+            if bullish_structure:
+                score = min(100, score + 10)
+                details.append(
+                    f"Breakout above L2 resistance ({l2_resistance:.2f}) in uptrend (continuation +10)"
+                )
+            else:
+                score = max(0, score - 10)
+                details.append(
+                    f"Breakout above L2 resistance ({l2_resistance:.2f}) without trend support (false breakout -10)"
+                )
         elif last_close < l2_support * 0.98:
-            score = max(0, score - 10)
-            details.append(f"Price breakdown below L2 support ({l2_support:.2f}) (-10)")
+            if bearish_structure:
+                score = min(100, score + 10)
+                details.append(
+                    f"Breakdown below L2 support ({l2_support:.2f}) in downtrend (continuation +10)"
+                )
+            else:
+                score = max(0, score - 10)
+                details.append(
+                    f"Breakdown below L2 support ({l2_support:.2f}) without trend support (-10)"
+                )
 
     details.append(f"ATR={current_atr:.4f}")
     return min(100, max(0, score)), " | ".join(details)

@@ -110,9 +110,13 @@ def register_analysis_tools(
             for t_dict in universe_list:
                 symbol = t_dict["symbol"]
                 if t_dict.get("market") == "CRYPTO":
-                    future = executor.submit(_safe_process, process_crypto_ticker, t_dict, symbol, fetch_news)
+                    future = executor.submit(
+                        _safe_process, process_crypto_ticker, t_dict, symbol, fetch_news, regime
+                    )
                 else:
-                    future = executor.submit(_safe_process, process_ticker, t_dict, symbol, fetch_news)
+                    future = executor.submit(
+                        _safe_process, process_ticker, t_dict, symbol, fetch_news, regime
+                    )
                 future_map[future] = symbol
 
             completed = 0
@@ -471,9 +475,9 @@ def register_analysis_tools(
         return payload
 
 
-def _safe_process(fn, t_dict, symbol, fetch_news=True):
+def _safe_process(fn, t_dict, symbol, fetch_news=True, regime=None):
     try:
-        return fn(t_dict, fetch_news=fetch_news)
+        return fn(t_dict, fetch_news=fetch_news, regime=regime)
     except Exception as e:
         logger.error("_safe_process failed for %s via %s: %s: %s",
                      symbol, fn.__name__, type(e).__name__, e)
@@ -577,6 +581,9 @@ def _compute_verdict(
         confidence = "LOW"
 
     vp_score = result.get("profile_levels", {}).get("score", 50)
+    # `profile_levels["score"]` is the RAW extension score (<=40 discount,
+    # >=60 extended). The "Volume Profile" dimension is already inverted to
+    # favorability upstream, so the >=60 bullish rule above stays valid.
 
     # Mean-reversion semantics (allineata a signal_engine.py):
     # VP alto → AVOID, VP basso → BUY, VP medio → HOLD

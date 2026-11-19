@@ -529,6 +529,11 @@ export default {
         if (!verifica.present) {
           warning += "\n\n⚠️ [verifica-gate] Il subagent NON ha compilato il blocco ## VERIFICA. Non riassumere come verificato: ri-delega UNA volta chiedendo di compilare il blocco, oppure segnala all'utente che il risultato non e' verificato.";
           logEvent(subagentType, "missing_verifica", null, promptSnippet);
+        } else if (outputText.trim().length < 300) {
+          // Footer-only reply: the subagent sent the VERIFICA block alone and
+          // replaced the deliverable. The router must re-ask for the body.
+          warning += "\n\n⚠️ [verifica-gate] Il subagent ha restituito SOLO il blocco ## VERIFICA, senza il corpo dell'analisi. Ri-delega chiedendo la risposta COMPLETA con il blocco in coda.";
+          logEvent(subagentType, "verifica_only_followup", verifica.confidenza, promptSnippet);
         } else if ((verifica.confidenza !== null && verifica.confidenza < 40) || hasRealFailure) {
           if (!hasRealFailure) {
             warning += "\n\n⚠️ [verifica-gate] Confidenza < 40: ri-delega a @coder per un'analisi approfondita o segnala l'incompiutezza all'utente.";

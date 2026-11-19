@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import statistics
 import subprocess
 import sys
 from pathlib import Path
@@ -119,12 +120,27 @@ def _gate_decision(
     conf_with = sum(weights_with[key] * conf[key] for key in _GATE_COMPONENTS)
     conf_with += weights_with["lgbm"] * c_best
     uplift = conf_with - conf_without
-    approve = uplift >= threshold
+
+    # Ambiguity gate (additive only, never blocks a training the linear
+    # uplift already approved). When the fallback signals disagree strongly,
+    # a learned blend adds value even if the optimistic bound `c_best` keeps
+    # the linear uplift small. All-neutral signals do not qualify: there is
+    # nothing to arbitrate and training would just fit noise.
+    values = [conf[key] for key in _GATE_COMPONENTS]
+    dispersion = float(statistics.pstdev(values))
+    ambiguous = dispersion >= 15.0 and not all(45.0 <= value <= 55.0 for value in values)
+
+    approve = uplift >= threshold or ambiguous
     metrics = {
         "conf_with_lgbm": round(conf_with, 2),
         "conf_without_lgbm": round(conf_without, 2),
         "uplift": round(uplift, 2),
         "threshold": round(threshold, 2),
+        "dispersion": round(dispersion, 2),
+        "ambiguous": ambiguous,
+        "gate_reason": (
+            "uplift" if uplift >= threshold else "ambiguity" if ambiguous else "below-threshold"
+        ),
         "decision": "train" if approve else "skip",
     }
     return approve, metrics

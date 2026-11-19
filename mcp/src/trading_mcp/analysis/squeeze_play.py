@@ -48,16 +48,26 @@ def compute_squeeze_play(
                     continue
 
             if len(pc_ratios) >= 2:
-                pc_series = pd.Series(pc_ratios)
-                ema_fast = float(pc_series.ewm(span=2).mean().iloc[-1])
-                ema_slow = float(pc_series.ewm(span=4).mean().iloc[-1])
-                if ema_slow > 0:
-                    if ema_fast < ema_slow * 0.8:
-                        score += 20
-                        details.append("Squeeze I: P/C EMA fast < slow (bullish divergence +20)")
-                    elif ema_fast > ema_slow * 1.2:
+                # The ratios come from different expiries of the SAME snapshot:
+                # that is a term structure, not a time series. An EMA over four
+                # points is degenerate (span > sample), so compare the near end
+                # of the curve against the far end instead.
+                pc_near = float(pd.Series(pc_ratios[:2]).mean())
+                pc_far = float(pd.Series(pc_ratios[2:]).mean()) if len(pc_ratios) > 2 else pc_near
+                if pc_near > 0:
+                    ratio = pc_far / pc_near
+                    if ratio > 1.15:
                         score -= 15
-                        details.append("Squeeze I: P/C EMA fast > slow (bearish divergence -15)")
+                        details.append(
+                            f"Squeeze I: P/C term structure rising (near {pc_near:.2f} -> "
+                            f"far {pc_far:.2f}), hedging demand on long expiries (-15)"
+                        )
+                    elif ratio < 0.85:
+                        score += 20
+                        details.append(
+                            f"Squeeze I: P/C term structure falling (near {pc_near:.2f} -> "
+                            f"far {pc_far:.2f}), complacency on long expiries (+20)"
+                        )
     except Exception:
         pass
 

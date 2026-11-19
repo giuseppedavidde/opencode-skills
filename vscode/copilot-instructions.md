@@ -42,7 +42,8 @@ Rules:
 - The PDF and graph categories win over trading/coding when the request is
   about reading a document or building/querying a graph.
 
-Every subagent response must end with:
+Every subagent response must end with this block, in the SAME message as the
+answer:
 
 ```markdown
 ## VERIFICA
@@ -52,9 +53,19 @@ Every subagent response must end with:
 - escalation_consigliata: <sì/no>
 ```
 
-The `SubagentStop` hook in `{{HOOKS_DIR}}/verifica-gate.json` blocks a subagent
-that omits this block and appends an audit event to
-`~/.config/opencode/stats/gate_events.jsonl`.
+Never send a message that contains only the VERIFICA block. A footer-only reply
+replaces the deliverable and the caller receives no analysis.
+
+The `SubagentStop` hook in `{{HOOKS_DIR}}/verifica-gate.json` enforces the
+contract and appends an audit event to
+`~/.config/opencode/stats/gate_events.jsonl`. Policy:
+
+| Final message | Hook action |
+|---|---|
+| Contains `## VERIFICA` | allow |
+| Long (>= 600 chars), no block | allow, log `missing_verifica_soft` |
+| Short (< 600 chars), no block | block, ask for the COMPLETE answer |
+| Footer only (< 300 chars) after a long answer | allow, log `verifica_only_followup` |
 
 ## Writing directive (ASD-STE100)
 

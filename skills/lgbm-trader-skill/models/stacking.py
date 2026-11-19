@@ -235,6 +235,26 @@ class StackingEnsemble:
                 logger.warning("No features for group '%s', skipping", name)
                 continue
 
+            # A group made only of constant or all-NaN columns carries no
+            # information (e.g. short interest left blank because no history
+            # exists). Training it wastes a fold and yields a dead base model.
+            informative = [
+                col for col in feats
+                if df[col].notna().any() and df[col].nunique(dropna=True) > 1
+            ]
+            # ``full`` is the catch-all model: only reject it when it is
+            # entirely dead. Specialised groups are rejected when most of
+            # their columns are inert, because a base model built from one
+            # live column overfits that single column.
+            if not informative or (name != "full" and len(informative) < max(1, len(feats) // 2)):
+                logger.warning(
+                    "Group '%s' has too few informative columns (%d/%d), skipping",
+                    name, len(informative), len(feats),
+                )
+                continue
+            if name != "full":
+                feats = informative
+
             X = df[feats]
             y = df["target"]
 
@@ -244,6 +264,7 @@ class StackingEnsemble:
                 logger.warning("Group '%s' produced no models, skipping", name)
                 continue
             self.models[name] = trainer
+            self.feature_groups[name] = feats
 
             oof = self._collect_oof_predictions(df, feats, trainer.models)
             oof_matrix[f"pred_{name}"] = oof
@@ -347,7 +368,11 @@ class StackingEnsemble:
             X_val = df.loc[mask, feats]
             if X_val.empty:
                 continue
-            oof[mask] = fr.model.predict(X_val.fillna(0.0))
+            # Base models are trained on the raw frame, so LightGBM learned a
+            # dedicated branch for NaN. Substituting 0.0 at prediction time
+            # would move missing samples onto the numeric branch and change
+            # every split on zero-centred features (fd_*, mom_*, z-scores).
+            oof[mask] = fr.model.predict(X_val)
         return oof
 
     @staticmethod
@@ -420,7 +445,10 @@ class StackingEnsemble:
             4. Predici con il modello decorr -> ``pred_decorr`` (se presente).
             5. Predici con il modello full -> ``pred_full``.
             6. Combina con il meta-modello -> ``pred_final``.
-            7. ``score`` = sigmoid(``pred_final``) * 100.
+            7. ``score`` = sigmoid(``3 * pred_final``) * 100. The 3x factor
+               matches ``_quant_tools._sigmoid`` and ``lgbm_trainer``: the
+               target lives in {-1, 0, +1}, so an unscaled sigmoid would cap
+               the public score at ~[26.8, 73.1] instead of [0, 100].
 
         Returns
         -------
@@ -438,16 +466,22 @@ class StackingEnsemble:
             feats = self.feature_groups.get(name, [])
             if not feats:
                 continue
-            preds = trainer.predict(df[feats].fillna(0.0))
+            # Same reason as ``_collect_oof_predictions``: keep NaN so the
+            # prediction path mirrors the training path exactly.
+            preds = trainer.predict(df[feats])
             result[f"pred_{name}"] = preds
 
         if self.meta_model is not None:
             meta_input = result.dropna()
             if not meta_input.empty:
+                # meta_input is already dropna(), so the fillna is inert here;
+                # it stays only as a defensive guard for a caller-provided edge.
                 meta_pred = self.meta_model.predict(meta_input.fillna(0.0))
                 result["pred_final"] = np.nan
                 result.loc[meta_input.index, "pred_final"] = meta_pred
-                result["score"] = sigmoid(np.clip(meta_pred, -10, 10)) * 100.0
+                result["score"] = (
+                    sigmoid(np.clip(meta_pred * 3.0, -50.0, 50.0)) * 100.0
+                )
         return result
 
     # ------------------------------------------------------------------ #

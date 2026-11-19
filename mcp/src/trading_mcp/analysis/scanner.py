@@ -84,6 +84,7 @@ from trading_mcp.analysis.volatility_hawkes import compute_volatility_hawkes, ge
 from trading_mcp.analysis.meta_label import compute_meta_label, get_meta_label_setup
 from trading_mcp.analysis.taa_patterns import compute_taa_patterns, get_taa_patterns
 from trading_mcp.analysis.vsa import compute_vsa, get_vsa_signals
+from trading_mcp.analysis.macro import Regime, get_dynamic_weights
 from trading_mcp.weights_config import get_weights
 
 
@@ -488,7 +489,27 @@ def _fetch_with_retry(symbol: str, max_retries: int = 2) -> tuple:
         return None, {}, None
 
 
-def process_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict[str, Any] | None:
+def _regime_weights(regime: str | None, is_crypto: bool = False) -> dict[str, float]:
+    """Dimensional weights for the requested regime (static when unknown).
+
+    ``get_dynamic_weights`` already normalises to 1.0; the static config is
+    kept as the fallback so a missing/unknown regime never changes the score.
+    """
+    if regime is None:
+        base = get_weights().crypto if is_crypto else get_weights().stocks
+        return base.to_dict()
+    try:
+        return get_dynamic_weights(Regime(regime.lower()), is_crypto=is_crypto)
+    except (ValueError, KeyError):
+        base = get_weights().crypto if is_crypto else get_weights().stocks
+        return base.to_dict()
+
+
+def process_ticker(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+    ticker_dict: dict[str, str],
+    fetch_news: bool = True,
+    regime: str | None = None,
+) -> dict[str, Any] | None:
     """Process a single stock ticker through all analysis dimensions.
 
     P0 Aug 2026: returns explicit short-history result (status='insufficient_data',
@@ -590,12 +611,14 @@ def process_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict
         )
 
         earnings_adj = None
+        earnings_days: int | None = None
         earnings_dates = info.get("earningsDate")
         if earnings_dates:
             try:
                 next_earn = earnings_dates[0] if isinstance(earnings_dates, list) else earnings_dates
                 if hasattr(next_earn, "timestamp"):
                     days_to = int((next_earn.timestamp() - time.time()) / 86400)
+                    earnings_days = days_to
                 else:
                     days_to = None
                 iv_rank_val = info.get("impliedVolatility")
@@ -660,13 +683,21 @@ def process_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict
             + (pf_score - 50) * ind.point_figure
         )
 
-        sw = wcfg.stocks
+        # Regime-aware weights: HIGH_VOLATILITY, CRISIS and TRENDING_* shift
+        # the dimensional mix. Ignoring them silently discarded the macro
+        # matrix the knowledge tool advertises.
+        sw = _regime_weights(regime, is_crypto=False)
+        # Volume Profile is a mean-reversion signal: a high raw score means the
+        # price is extended above the value area, which is bearish for forward
+        # returns (IC rank -0.068 OOS). The scanner must therefore use the
+        # inverted score as its bullish contribution.
+        vp_bullish = 100.0 - volprof_score
         final = (
-            wyckoff_adj * sw.wyckoff
-            + volprof_score * sw.volume_profile
-            + pa_adj * sw.price_action
-            + sentiment_adj * sw.sentiment
-            + fundamentals_adj * sw.fundamentals
+            wyckoff_adj * sw["wyckoff"]
+            + vp_bullish * sw["volume_profile"]
+            + pa_adj * sw["price_action"]
+            + sentiment_adj * sw["sentiment"]
+            + fundamentals_adj * sw["fundamentals"]
             + new_mod
         )
         final = min(100.0, max(0.0, round(final, 1)))
@@ -700,7 +731,7 @@ def process_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict
         profile_levels = get_profile_levels(hist)
 
         pattern = identify_pattern(
-            int(wyckoff_score), int(volprof_score), int(pa_score),
+            int(wyckoff_score), int(vp_bullish), int(pa_score),
             int(sentiment_score), int(fundamentals_score), info, wyckoff_d,
             sentiment_subs,
         )
@@ -708,8 +739,10 @@ def process_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict
         flags = []
         if pattern == "Squeeze Setup":
             flags.append("squeeze_candidate")
-        if earnings_adj is not None and earnings_adj > 0:
-            flags.append(f"earnings_in_{int(earnings_adj*100)}d")
+        # ``earnings_adj`` is a scoring multiplier (0.05-0.15), not a number of
+        # days. Reporting int(adj*100) printed 15d for an event three days out.
+        if earnings_days is not None and 0 <= earnings_days <= 14:
+            flags.append(f"earnings_in_{earnings_days}d")
 
         return {
             "symbol": symbol,
@@ -720,7 +753,8 @@ def process_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict
             "final_score": round(final, 1),
             "dimensions": [
                 {"name": "Wyckoff Phase", "weight": 0.20, "score": wyckoff_score, "detail": wyckoff_d},
-                {"name": "Volume Profile", "weight": 0.20, "score": volprof_score, "detail": volprof_d},
+                {"name": "Volume Profile", "weight": 0.20, "score": round(vp_bullish, 1),
+                 "detail": f"{volprof_d} | favorability {vp_bullish:.0f}/100 (100 = deep value)"},
                 {"name": "Price Action", "weight": 0.15, "score": pa_score, "detail": pa_d},
                 {"name": "Sentiment", "weight": 0.20, "score": sentiment_score, "detail": sentiment_d},
                 {"name": "Fundamentals", "weight": 0.25, "score": fundamentals_score, "detail": fundamentals_d},
@@ -761,7 +795,11 @@ def process_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict
     except Exception as e:
         logger.error("process_ticker failed for %s: %s", symbol, e)
         return None
-def process_crypto_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) -> dict[str, Any] | None:
+def process_crypto_ticker(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+    ticker_dict: dict[str, str],
+    fetch_news: bool = True,
+    regime: str | None = None,
+) -> dict[str, Any] | None:
     """Process a single crypto ticker through analysis dimensions.
 
     P0 Aug 2026: explicit short-history guard (< 50 bars).
@@ -840,12 +878,13 @@ def process_crypto_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) 
             + (pf_score - 50) * ind.point_figure
         )
 
-        cw = wcfg.crypto
+        cw = _regime_weights(regime, is_crypto=True)
+        vp_bullish = 100.0 - volprof_score
         final = (
-            wyckoff_adj * cw.wyckoff
-            + volprof_score * cw.volume_profile
-            + pa_adj * cw.price_action
-            + crypto_score * cw.crypto_apc
+            wyckoff_adj * cw["wyckoff"]
+            + vp_bullish * cw["volume_profile"]
+            + pa_adj * cw["price_action"]
+            + crypto_score * cw["crypto_apc"]
             + new_mod
         )
         final = min(100.0, max(0.0, round(final, 1)))
@@ -861,7 +900,8 @@ def process_crypto_ticker(ticker_dict: dict[str, str], fetch_news: bool = True) 
             "final_score": round(final, 1),
             "dimensions": [
                 {"name": "Wyckoff Phase", "weight": 0.25, "score": wyckoff_score, "detail": wyckoff_d},
-                {"name": "Volume Profile", "weight": 0.25, "score": volprof_score, "detail": volprof_d},
+                {"name": "Volume Profile", "weight": 0.25, "score": round(vp_bullish, 1),
+                 "detail": f"{volprof_d} | favorability {vp_bullish:.0f}/100 (100 = deep value)"},
                 {"name": "Price Action", "weight": 0.20, "score": pa_score, "detail": pa_d},
                 {"name": "Crypto APC", "weight": 0.30, "score": crypto_score, "detail": crypto_d},
             ],

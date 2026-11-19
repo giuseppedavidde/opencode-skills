@@ -5,6 +5,9 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+# Annualised pace a moving average must clear before it counts as a trend.
+_MA_SLOPE_ANNUAL_THRESHOLD = 0.10
+
 
 def compute_price_action(hist: pd.DataFrame) -> tuple[int, str]:
     """Compute price action score (0-100).
@@ -129,9 +132,14 @@ def compute_multiframe_trend(hist: pd.DataFrame) -> tuple[int, str]:
         if len(ma) < 5:
             return "unknown"
         slope = (float(ma.iloc[-1]) - float(ma.iloc[-5])) / float(ma.iloc[-5])
-        if slope > 0.02:
+        # The slope always spans five bars, whatever the MA window, so the
+        # threshold is a price pace, not a window-dependent number: 0.02 over
+        # five bars meant ~100% annualised and labelled almost every durable
+        # trend "flat". Require instead ~10% annualised (5/252 of a year).
+        threshold = _MA_SLOPE_ANNUAL_THRESHOLD * 5.0 / 252.0
+        if slope > threshold:
             return "up"
-        if slope < -0.02:
+        if slope < -threshold:
             return "down"
         return "flat"
 

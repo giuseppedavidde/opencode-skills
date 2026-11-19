@@ -7,6 +7,25 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# yfinance reports ``debtToEquity`` as a PERCENTAGE (150.0 == 1.5x). Some
+# backends (FMP, Omega) return a plain ratio. Normalise before comparing
+# against ratio thresholds, otherwise every listed company looks distressed.
+_DE_PERCENT_THRESHOLD = 10.0
+
+
+def _de_ratio(info: dict[str, Any]) -> float | None:
+    """Return debt-to-equity as a plain ratio, or None when unavailable."""
+    raw = info.get("debtToEquity")
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if value != value:  # NaN
+        return None
+    return value / 100.0 if value > _DE_PERCENT_THRESHOLD else value
+
 
 def compute_fundamentals(info: dict[str, Any]) -> tuple[int, str]:
     """Compute fundamentals score (0-100).
@@ -62,11 +81,11 @@ def compute_fundamentals(info: dict[str, Any]) -> tuple[int, str]:
             score -= 15
             vt_count += 1
             details.append("WARN: Value Trap: P/E low + revenue < 2% (-15)")
-        de = info.get("debtToEquity")
-        if de is not None and float(de) > 2.0:
+        de_ratio = _de_ratio(info)
+        if de_ratio is not None and de_ratio > 2.0:
             score -= 15
             vt_count += 1
-            details.append(f"WARN: Value Trap: D/E {float(de):.2f} > 2.0 (-15)")
+            details.append(f"WARN: Value Trap: D/E {de_ratio:.2f}x > 2.0 (-15)")
     if vt_count >= 2:
         score = min(score, 40)
         details.append(f"WARN: VALUE TRAP ALERT ({vt_count} signals) -- score capped at 40")
@@ -80,15 +99,14 @@ def compute_fundamentals(info: dict[str, Any]) -> tuple[int, str]:
         score += 15
         details.append(f"Margins {float(margins)*100:.1f}% (+15)")
 
-    de = info.get("debtToEquity")
-    if de is not None:
-        de_val = float(de)
+    de_val = _de_ratio(info)
+    if de_val is not None:
         if de_val < 0.5:
             score += 20
-            details.append(f"D/E {de_val:.2f} < 0.5 (+20)")
+            details.append(f"D/E {de_val:.2f}x < 0.5 (+20)")
         elif de_val < 1.0:
             score += 10
-            details.append(f"D/E {de_val:.2f} < 1.0 (+10)")
+            details.append(f"D/E {de_val:.2f}x < 1.0 (+10)")
 
     roe = info.get("returnOnEquity")
     if roe is not None:

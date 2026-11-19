@@ -14,6 +14,11 @@ from the source frameworks.
 | 4 | Sentiment (9 sub-dimensions) | 20% |
 | 5 | Fundamentals + Competitive Positioning | 25% |
 
+Note: the `Volume Profile` dimension is reported as **favorability**
+(`100 - extension`), so a higher value is more bullish. In the pseudo-code
+below, `volprof` is that favorability score. The raw extension score lives in
+`profile_levels["score"]`.
+
 ## 1. Accumulation Spring (Strong Long)
 
 **Source**: Wyckoff 2.0 + Trades About to Happen + Web News Confirmation

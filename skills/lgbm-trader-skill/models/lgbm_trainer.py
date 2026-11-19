@@ -162,11 +162,18 @@ class LGBMTrainer:
             purged_folds: list[dict] = []
             for sp in splits:
                 val_start = sp["val_idx"].min()
+                val_end = sp["val_idx"].max()
                 val_start_pos = date_to_pos.get(val_start, 0)
+                val_end_pos = date_to_pos.get(val_end, val_start_pos)
                 cutoff_pos = val_start_pos - total_purge
+                # Embargo also blocks any bar that starts inside the label
+                # horizon after the validation window, so nonexpanding folds
+                # cannot leak forward labels back into training.
+                after_pos = val_end_pos + embargo_bars
                 purged_train = [
                     d for d in sp["train_idx"]
                     if date_to_pos.get(d, 0) < cutoff_pos
+                    or date_to_pos.get(d, 0) > after_pos
                 ]
                 if len(purged_train) < 21:
                     logger.warning(
@@ -393,7 +400,7 @@ class LGBMTrainer:
         """
         oof = self.predict_oof(X)
         out = pd.DataFrame(index=X.index)
-        out["score"] = _sigmoid_np(oof.fillna(0.0).to_numpy()) * 100.0
+        out["score"] = _sigmoid_np(oof.fillna(0.0).to_numpy() * 3.0) * 100.0
         # Restore NaN where OOF was unavailable so downstream code can mask
         out.loc[oof.isna(), "score"] = np.nan
 

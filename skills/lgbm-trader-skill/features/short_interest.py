@@ -48,13 +48,17 @@ def build_historical_short_interest(ticker: str, ohlcv: pd.DataFrame) -> pd.Data
     df = pd.DataFrame(index=ohlcv.index)
     si = fetch_short_interest(ticker)
     if si:
+        # Same rule as the point-in-time builder: a snapshot is not a history.
         for col, val in si.items():
-            df[col] = val if val is not None else np.nan
+            df[col] = np.nan
+            if val is not None and len(df.index) > 0:
+                df.iloc[-1, df.columns.get_loc(col)] = val
     else:
         avg_vol = ohlcv["volume"].rolling(21).mean()
         df["si_short_ratio"] = ohlcv["volume"] / avg_vol
         df["si_squeeze_score"] = df["si_short_ratio"] / 100.0
-    df = df.ffill().bfill()
+    # No fill: a single observation at the latest bar stays a single
+    # observation. Backfilling it would recreate the look-ahead just removed.
     # Drop columns entirely NaN (yfinance occasionally returns None for some keys)
     df = df.loc[:, df.notna().any()]
     return df
@@ -82,12 +86,17 @@ def build_point_in_time_short_interest(ticker: str, ohlcv: pd.DataFrame) -> pd.D
     si = fetch_short_interest(ticker)
 
     if si:
+        # There is no free historical short-interest series. Writing today's
+        # snapshot on every row would leak future information into the whole
+        # training history and make the ``decorr`` group a flat constant.
+        # Instead the values are published only on the last bar; older bars
+        # stay NaN, so the trainer treats the group as missing history and the
+        # live path fills it from the current snapshot.
         for col, val in si.items():
             if col.startswith("si_"):
-                df[col] = val if val is not None else np.nan
-        # Propaga SOLO dal primo giorno del dataset (no backward-fill):
-        # approssimazione onesta, niente look-ahead.
-        df = df.ffill()
+                df[col] = np.nan
+                if val is not None and len(df.index) > 0:
+                    df.iloc[-1, df.columns.get_loc(col)] = val
     else:
         # Fallback: volume proxy
         avg_vol = ohlcv["volume"].rolling(21).mean()

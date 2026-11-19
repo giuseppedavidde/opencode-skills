@@ -204,7 +204,12 @@ def compute_sentiment_6d(
 def earnings_proximity_adjustment(
     _symbol: str, days_to_earnings: int | None, _iv_rank: float | None
 ) -> float | None:
-    """Compute earnings proximity adjustment factor."""
+    """Return a scoring multiplier for the upcoming earnings date.
+
+    The return value is a *factor* added to the composite (0.15 / 0.10 /
+    0.05), never a number of days. Callers that need the day count must keep
+    ``days_to_earnings`` themselves.
+    """
     if days_to_earnings is None:
         return None
     if days_to_earnings <= 3:

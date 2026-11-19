@@ -34,6 +34,7 @@ def detect_regime(
     dxy_trend: str = "neutral",
     macro_window: str = "normal",
     fear_greed: int | None = None,
+    equity_trend: str | None = None,
 ) -> Regime:
     """Detect market regime from macro indicators.
 
@@ -42,6 +43,10 @@ def detect_regime(
         dxy_trend: 'rising', 'falling', or 'neutral'.
         macro_window: Adaptive Macro Matrix window.
         fear_greed: Crypto Fear & Greed index (0-100).
+        equity_trend: 'up', 'down', 'range', or None. Breadth comes from the
+            index trend, because a low VIX is compatible with both a calm
+            bull market and a genuine range; without it the default answer
+            was always RANGE_BOUND.
     """
     if macro_window.upper() == "DEFENSIVE":
         return Regime.CRISIS
@@ -53,6 +58,13 @@ def detect_regime(
         return Regime.HIGH_VOLATILITY
     if fear_greed is not None and (fear_greed > 75 or fear_greed < 20):
         return Regime.HIGH_VOLATILITY
+
+    # Equity breadth breaks the tie before the FX-only fallbacks.
+    if equity_trend == "up" and dxy_trend != "rising":
+        return Regime.TRENDING_BULL
+    if equity_trend == "down" and dxy_trend != "falling":
+        return Regime.TRENDING_BEAR
+
     if vix is not None and vix < 25 and dxy_trend == "neutral":
         return Regime.RANGE_BOUND
     if dxy_trend == "falling":
@@ -98,7 +110,10 @@ def get_dynamic_weights(regime: Regime, is_crypto: bool = False) -> dict[str, fl
     if regime == Regime.CRISIS:
         for k in weights:
             weights[k] *= 0.80
-        weights["sentiment"] = min(1.0, weights.get("sentiment", 0.20) * 1.4)
+        # Crypto has no sentiment dimension: injecting one would leave part of
+        # the normalised weight mass unapplied in the composite score.
+        if "sentiment" in weights:
+            weights["sentiment"] = min(1.0, weights["sentiment"] * 1.4)
     elif regime == Regime.HIGH_VOLATILITY:
         weights["wyckoff"] = min(1.0, weights.get("wyckoff", 0.20) * 1.2)
         weights["price_action"] = min(1.0, weights.get("price_action", 0.15) * 0.8)
@@ -106,9 +121,11 @@ def get_dynamic_weights(regime: Regime, is_crypto: bool = False) -> dict[str, fl
         weights["volume_profile"] = min(1.0, weights.get("volume_profile", 0.20) * 1.3)
     elif regime == Regime.TRENDING_BULL:
         weights["wyckoff"] = min(1.0, weights.get("wyckoff", 0.20) * 1.15)
-        weights["sentiment"] = min(1.0, weights.get("sentiment", 0.20) * 1.1)
+        if "sentiment" in weights:
+            weights["sentiment"] = min(1.0, weights["sentiment"] * 1.1)
     elif regime == Regime.TRENDING_BEAR:
-        weights["sentiment"] = min(1.0, weights.get("sentiment", 0.20) * 1.3)
+        if "sentiment" in weights:
+            weights["sentiment"] = min(1.0, weights["sentiment"] * 1.3)
         weights["volume_profile"] = min(1.0, weights.get("volume_profile", 0.20) * 1.15)
 
     total = sum(weights.values())
