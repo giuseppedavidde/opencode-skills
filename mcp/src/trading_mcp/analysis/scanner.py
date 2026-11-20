@@ -81,7 +81,6 @@ from trading_mcp.analysis.indicators import (
 from trading_mcp.analysis.sentiment_6d import compute_sentiment_6d, earnings_proximity_adjustment
 from trading_mcp.analysis.market_structure import compute_market_structure, get_structure_levels
 from trading_mcp.analysis.volatility_hawkes import compute_volatility_hawkes, get_vol_regime
-from trading_mcp.analysis.meta_label import compute_meta_label, get_meta_label_setup
 from trading_mcp.analysis.taa_patterns import compute_taa_patterns, get_taa_patterns
 from trading_mcp.analysis.vsa import compute_vsa, get_vsa_signals
 from trading_mcp.analysis.macro import Regime, get_dynamic_weights
@@ -489,6 +488,18 @@ def _fetch_with_retry(symbol: str, max_retries: int = 2) -> tuple:
         return None, {}, None
 
 
+def _spot_price(symbol: str, hist: pd.DataFrame) -> tuple[float | None, str | None, str | None]:
+    """``(price, as_of, source)`` from the quote layer, else the last complete close."""
+    quote = data_provider.get_quote(symbol)
+    if quote.price is not None:
+        return float(quote.price), quote.as_of, quote.source
+    meta = data_provider.last_hist_meta(symbol, "1y")
+    closes = hist["Close"].dropna() if hist is not None and not hist.empty else None
+    if closes is None or closes.empty:
+        return None, None, None
+    return float(closes.iloc[-1]), meta.as_of if meta is not None else None, "daily_close"
+
+
 def _regime_weights(regime: str | None, is_crypto: bool = False) -> dict[str, float]:
     """Dimensional weights for the requested regime (static when unknown).
 
@@ -534,7 +545,7 @@ def process_ticker(  # pylint: disable=too-many-locals,too-many-branches,too-man
                 "name": ticker_dict.get("name", symbol),
                 "market": ticker_dict.get("market", "US"),
                 "sector": "",
-                "price": 0.0,
+                "price": None,
                 "final_score": None,
                 "status": "insufficient_data",
                 "history_bars": valid_bars,
@@ -556,10 +567,9 @@ def process_ticker(  # pylint: disable=too-many-locals,too-many-branches,too-man
                 "profile_levels": {},
             }
 
-        price = info.get("currentPrice")
-        if price is None:
-            last_close = hist["Close"].dropna()
-            price = float(last_close.iloc[-1]) if not last_close.empty else None
+        # Spot comes from the quote layer (data time in price_as_of), never
+        # from info["currentPrice"]; the last complete close is the fallback.
+        price, price_as_of, price_source = _spot_price(symbol, hist)
         if price is None or float(price) < 1.0:
             return None
         price = float(price)
@@ -627,10 +637,6 @@ def process_ticker(  # pylint: disable=too-many-locals,too-many-branches,too-man
                 earnings_adj = earnings_proximity_adjustment(symbol, days_to, iv_rank_val)
             except Exception:
                 pass
-
-        hist.attrs["ticker"] = symbol
-        ml_score, ml_d = compute_meta_label(hist)
-        ml_setup = get_meta_label_setup(hist)
 
         taa_score, taa_d = compute_taa_patterns(hist)
         taa_patterns = get_taa_patterns(hist)
@@ -712,13 +718,6 @@ def process_ticker(  # pylint: disable=too-many-locals,too-many-branches,too-man
             vol_adj = 5
         final = min(100.0, max(0.0, final + vol_adj))
 
-        # Meta-label breakout filter
-        if ml_setup.get("breakout"):
-            if ml_setup.get("ml_probability", 0.5) > 0.6:
-                final = min(100.0, final + 10)
-            elif ml_setup.get("ml_probability", 0.5) < 0.3:
-                final = max(0.0, final - 10)
-
         # TAA patterns post-adjustment
         if taa_patterns["support_resistance"]["signal"] == "bullish":
             final = min(100.0, final + 5)
@@ -750,6 +749,8 @@ def process_ticker(  # pylint: disable=too-many-locals,too-many-branches,too-man
             "market": ticker_dict.get("market", "US"),
             "sector": str(info.get("sector", "")),
             "price": round(price, 2),
+            "price_as_of": price_as_of,
+            "price_source": price_source,
             "final_score": round(final, 1),
             "dimensions": [
                 {"name": "Wyckoff Phase", "weight": 0.20, "score": wyckoff_score, "detail": wyckoff_d},
@@ -772,8 +773,6 @@ def process_ticker(  # pylint: disable=too-many-locals,too-many-branches,too-man
                 "vol_regime": vol_regime,
                 "vsa": {"score": vsa_score, "detail": vsa_d},
                 "vsa_signals": vsa_signals,
-                "meta_label": {"score": ml_score, "detail": ml_d},
-                "meta_label_setup": ml_setup,
                 "taa_patterns": {"score": taa_score, "detail": taa_d},
                 "taa_detailed": taa_patterns,
             },
@@ -815,7 +814,7 @@ def process_crypto_ticker(  # pylint: disable=too-many-locals,too-many-branches,
                 "name": ticker_dict["name"],
                 "market": "CRYPTO",
                 "sector": "Cryptocurrency",
-                "price": 0.0,
+                "price": None,
                 "final_score": None,
                 "status": "insufficient_data",
                 "history_bars": valid_bars,
@@ -833,8 +832,8 @@ def process_crypto_ticker(  # pylint: disable=too-many-locals,too-many-branches,
                 "profile_levels": {},
             }
 
-        price = float(hist["Close"].iloc[-1])
-        if price < 0.01:
+        price, price_as_of, price_source = _spot_price(symbol, hist)
+        if price is None or price < 0.01:
             return None
 
         wyckoff_score, wyckoff_d = compute_wyckoff(hist, {})
@@ -897,6 +896,8 @@ def process_crypto_ticker(  # pylint: disable=too-many-locals,too-many-branches,
             "market": "CRYPTO",
             "sector": "Cryptocurrency",
             "price": round(price, 4),
+            "price_as_of": price_as_of,
+            "price_source": price_source,
             "final_score": round(final, 1),
             "dimensions": [
                 {"name": "Wyckoff Phase", "weight": 0.25, "score": wyckoff_score, "detail": wyckoff_d},

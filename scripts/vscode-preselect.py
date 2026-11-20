@@ -26,9 +26,19 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_SRC = REPO_ROOT / "config"
+MODELS_FILE = REPO_ROOT / "vscode" / "models.json"
 STATE_DB = Path.home() / ".config" / "Code" / "User" / "globalStorage" / "state.vscdb"
 DEFAULT_SCHEME = "agent-host-copilotcli"
-PROVIDER_VENDOR = "opencodego"
+
+
+def provider_vendor() -> str:
+    """Return the VS Code vendor id of the OpenCode Go models (vscode/models.json)."""
+    try:
+        data = json.loads(MODELS_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = {}
+    prefix = data.get("provider_prefix") if isinstance(data, dict) else None
+    return str(prefix or "opencodego")
 
 
 def opencode_config() -> dict:
@@ -49,8 +59,16 @@ def model_id(raw: str) -> str:
 
 
 def vscode_is_running() -> bool:
-    """Return True when a VS Code process owns the storage database."""
-    markers = ("/usr/share/code/code", "/usr/lib/code/code")
+    """Return True when a VS Code process (any common install) owns the storage database."""
+    names = {"code", "code-insiders", "code-oss", "codium"}
+    markers = (
+        "/usr/share/code",
+        "/usr/lib/code",
+        "/opt/visual-studio-code",
+        "/usr/share/code-insiders",
+        "/snap/code",
+        "/var/lib/flatpak/app/com.visualstudio.code",
+    )
     for entry in Path("/proc").iterdir():
         if not entry.name.isdigit():
             continue
@@ -58,9 +76,30 @@ def vscode_is_running() -> bool:
             exe = Path(entry / "exe").resolve()
         except OSError:
             continue
-        if any(str(exe).startswith(marker) for marker in markers):
+        if exe.name in names or any(str(exe).startswith(marker) for marker in markers):
             return True
     return False
+
+
+def agent_file_for(agent: str, workspace: Path) -> Path | None:
+    """Return the generated agent file: user scope (~/.copilot) first, then the workspace."""
+    for candidate in (
+        Path.home() / ".copilot" / "agents" / f"{agent}.agent.md",
+        workspace / ".github" / "agents" / f"{agent}.agent.md",
+    ):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def prune_backups(state_db: Path, keep: int = 3) -> None:
+    """Keep only the newest `keep` database backups that this script made."""
+    backups = sorted(state_db.parent.glob(f"{state_db.name}.bak-preselect-*"))
+    for old in backups[:-keep]:
+        try:
+            old.unlink()
+        except OSError:
+            pass
 
 
 def read_keys(db: Path, keys: list[str]) -> dict[str, str]:
@@ -111,7 +150,7 @@ def write_keys(db: Path, values: dict[str, str], overwrite: set[str]) -> list[st
 def main() -> int:
     """Run the preselect step."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--workspace", type=Path, default=REPO_ROOT.parent.parent)
+    parser.add_argument("--workspace", type=Path, default=REPO_ROOT.parent)
     parser.add_argument("--state-db", type=Path, default=STATE_DB, help="VS Code state database")
     parser.add_argument("--scheme", default=DEFAULT_SCHEME)
     parser.add_argument("--agent", default=None, help="Agent name (default: config default_agent)")
@@ -130,10 +169,10 @@ def main() -> int:
     agent = args.agent or str(config.get("default_agent") or "router")
     model = model_id(args.model or str(config.get("model") or ""))
     workspace = args.workspace.expanduser().resolve()
-    agent_file = workspace / ".github" / "agents" / f"{agent}.agent.md"
+    agent_file = agent_file_for(agent, workspace)
 
-    if not agent_file.is_file():
-        print(f"preselect: missing agent file {agent_file}", file=sys.stderr)
+    if agent_file is None:
+        print(f"preselect: no generated agent file for {agent!r}; run ./install.sh first", file=sys.stderr)
         return 1
     if not model:
         print("preselect: no model in config/opencode.json", file=sys.stderr)
@@ -147,7 +186,7 @@ def main() -> int:
             agent_file.as_uri(),
     }
     model_key = f"chat.currentLanguageModel.panel.{args.scheme}"
-    values[model_key] = f"{args.scheme}:{PROVIDER_VENDOR}/{model}"
+    values[model_key] = f"{args.scheme}:{provider_vendor()}/{model}"
 
     if args.dry_run:
         print(f"Target: {state_db}")
@@ -162,6 +201,7 @@ def main() -> int:
 
     backup = state_db.with_name(f"{state_db.name}.bak-preselect-{time.time_ns()}")
     shutil.copy2(state_db, backup)
+    prune_backups(state_db)
     print(f"Backup: {backup}")
 
     overwrite = set() if args.keep_user_choice else set(values)

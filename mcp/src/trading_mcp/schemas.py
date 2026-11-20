@@ -14,7 +14,7 @@ the legacy ``GexResult`` duplicate was removed in favour of the live model in
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
@@ -198,7 +198,7 @@ class UnifiedVerdict(BaseModel):
 
     ticker: str
     is_crypto: bool = False
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     schema_version: str = "1.0"
 
     composite_score: float = Field(..., ge=0.0, le=100.0)
@@ -245,7 +245,7 @@ class ScannerResult(BaseModel):
     """Output of a single ticker scan."""
 
     ticker: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     universe: str = ""
     final_score: float = Field(..., ge=0.0, le=100.0)
     dimensions: list[DimensionScore] = Field(default_factory=list)
@@ -263,7 +263,7 @@ class ScannerBatchResult(BaseModel):
     """Aggregate output of a scanner run over a universe."""
 
     universe: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     tickers_scanned: int
     tickers_passed: int
     min_score_threshold: int = 50
@@ -292,7 +292,7 @@ class StrategySuggestion(BaseModel):
     """Output of options-strategy-suggestions."""
 
     ticker: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     strategy_name: str
     strategy_description: str
     legs: list[dict] = Field(default_factory=list)

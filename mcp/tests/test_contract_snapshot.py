@@ -40,7 +40,7 @@ def test_snapshot_is_fresh() -> None:
 def test_snapshot_records_every_tool() -> None:
     """Every tool is present with a non-empty output schema."""
     document = _snapshot()
-    assert len(document["tools"]) == 17
+    assert len(document["tools"]) == 15
     for name, tool in document["tools"].items():
         assert tool["output_schema"], f"{name} has no output_schema"
         assert tool["output_schema"].get("properties"), f"{name} has an empty schema"

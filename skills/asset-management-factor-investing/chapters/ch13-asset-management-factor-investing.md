@@ -1,5 +1,7 @@
 # Chapter 13: Illiquid Assets
 
+> **Source note**: this chapter file is based on the table of contents and the structure of the book, not on the full text. Check the book before you quote a number or a claim.
+
 ## Core Idea
 After correcting for biases induced by infrequent trading and selection, it is unlikely that illiquid asset classes have *higher risk-adjusted* returns, on average, than traditional liquid stock and bond markets. However, there are *significant illiquidity premiums within asset classes*. Portfolio choice models that incorporate illiquidity risk recommend only *modest* holdings of illiquid assets, and investors should demand high risk premiums for holding them. Harvard's 2008 crisis — liquidating and slashing budgets while private-asset marks lagged reality — is the cautionary archetype.
 

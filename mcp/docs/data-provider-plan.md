@@ -1,9 +1,15 @@
 # Piano di progettazione — DataProvider pluggable per i dati opzioni (GEX & analisi)
 
-> Documento di progettazione. **Nessun codice implementato** in questo passaggio.
-> Obiettivo: rendere pluggable il `DataProvider` del trading MCP per migliorare la
-> qualità dei dati opzioni usati dal computo GEX e dall'analisi in generale, con
-> provenienza dati esplicita (`data_source`) e degradazione controllata senza chiave.
+> **Status (2026-11-20):** implemented. The options backends live in
+> `mcp/src/trading_mcp/data/backends/`, and the provider rules (quote layer,
+> complete bars, failure policy, JSON cache) are in the docstring of
+> `mcp/src/trading_mcp/data/provider.py`. The line numbers below refer to the
+> code before the 4.0 data-layer rewrite and the tool split (`tools/_options_tools.py`,
+> `tools/_stock_tools.py`, `tools/_market_tools.py`); they are historical.
+>
+> Original goal: make the trading MCP `DataProvider` pluggable to improve the
+> quality of the option data that GEX and the analysis use, with explicit data
+> provenance (`data_source`) and controlled degradation without a key.
 
 ---
 

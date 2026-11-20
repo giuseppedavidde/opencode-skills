@@ -8,7 +8,7 @@
   :root{
     --bg:#0d1117; --panel:#161b22; --panel2:#1c232c; --line:#242c38;
     --text:#e6edf3; --muted:#8b949e; --red:#f85149; --green:#3fb950;
-    --amber:#d29922; --blue:#58a6ff; --violet:#bc8cff;
+    --amber:#d29922; --blue:#58a6ff; --violet:#bc8cff; --orange:#e66101; --sky:#4393c3;
     --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box}
@@ -18,10 +18,15 @@
   h1{font-size:24px;margin:0 0 6px;letter-spacing:-.3px}
   h2{font-size:15px;margin:34px 0 12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:600}
   .sub{color:var(--muted);font-size:13px;margin:0 0 18px}
+  .banner{border-radius:10px;padding:10px 14px;margin:0 0 14px;font-size:13px;line-height:1.5}
+  .banner ul{margin:6px 0 0 18px;padding:0}
+  .banner.err{background:#3d1214;border:1px solid var(--red);color:#ffd7d5}
+  .banner.warn{background:#2e2410;border:1px solid var(--amber);color:#f5e0b5}
   .chips{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 4px}
   .chip{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:13px}
   .chip b{font-family:var(--mono);font-weight:600}
   .chip.pos b{color:var(--green)} .chip.neg b{color:var(--red)} .chip.warn b{color:var(--amber)}
+  .chip.auto{border-style:dashed}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
@@ -29,22 +34,27 @@
   .k{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
   .v{font-family:var(--mono);font-size:20px;font-weight:600;margin-top:2px}
   .unit{font-size:12px;color:var(--muted);font-family:inherit;font-weight:400}
-  .green{color:var(--green)} .red{color:var(--red)} .amber{color:var(--amber)} .blue{color:var(--blue)} .muted{color:var(--muted)}
+  .green{color:var(--green)} .red{color:var(--red)} .amber{color:var(--amber)} .blue{color:var(--blue)} .orange{color:var(--orange)} .muted{color:var(--muted)}
   .mono{font-family:var(--mono)}
   .pos2{color:var(--green)} .neg2{color:var(--red)}
+  .basis{font-size:10px;color:var(--amber);font-family:var(--mono);margin-left:4px}
+  .scroll{overflow-x:auto}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
   .chartbox{position:relative}
   .chartscroll{overflow-x:auto;overflow-y:hidden}
   @media(max-width:760px){.chartscroll svg{min-width:700px}}
   svg{display:block;width:100%;height:auto;touch-action:none}
+  svg:focus{outline:2px solid var(--blue);outline-offset:2px}
   .gridline{stroke:#1f2732;stroke-width:1}
   .axis{fill:var(--muted);font-size:11px;font-family:var(--mono)}
   .lbl{fill:var(--muted);font-size:10px;font-family:var(--mono);letter-spacing:.04em}
   .payoff{fill:none;stroke:var(--blue);stroke-width:2.5}
   .nowcurve{fill:none;stroke:var(--violet);stroke-width:2;stroke-dasharray:6 4;opacity:.9}
-  .fillpos{fill:rgba(63,185,80,.14)}
-  .fillneg{fill:rgba(248,81,73,.10)}
-  .refline{stroke:#3a4553;stroke-width:1;stroke-dasharray:3 3}
+  .fillpos{fill:rgba(67,147,195,.18)}
+  .fillneg{fill:rgba(230,97,1,.14)}
+  .refline{stroke:#9aa4b1;stroke-width:1;stroke-dasharray:3 3}
+  .refstrike{stroke:#6e5a91;stroke-width:1;stroke-dasharray:2 4}
   .refspot{stroke:var(--amber);stroke-width:1.5;stroke-dasharray:5 4;opacity:.85}
   .cursor{stroke:#fff;stroke-width:1;opacity:.55}
   .dot{fill:#fff;stroke:var(--blue);stroke-width:2}
@@ -94,11 +104,9 @@
   tr[data-price]{cursor:pointer;transition:.12s}
   tr[data-price]:hover{background:#1f6feb14}
   tr.hi{background:#1f6feb22}
-  td.n{text-align:right}
+  td.n,th.n{text-align:right}
   tbody tr:last-child td{border-bottom:none}
 
-  .bar{height:9px;background:#222b36;border-radius:5px;overflow:hidden;margin-top:7px}
-  .bar>span{display:block;height:100%;border-radius:5px}
   .wf{display:flex;align-items:flex-end;gap:14px;height:auto;min-height:230px;padding-top:10px}
   .wf .col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%}
   .wf .bx{width:100%;min-height:3px;border-radius:3px 3px 0 0;transition:.4s}
@@ -122,8 +130,8 @@
   .dotday{fill:#fff;stroke:#39d2c0;stroke-width:2}
   .heatlegend{display:flex;align-items:center;gap:10px;margin-top:10px;font-family:var(--mono);
     font-size:11px;color:var(--muted)}
-  .heatlegend .bar{flex:1;height:8px;border-radius:4px;
-    background:linear-gradient(90deg,#f85149 0%,#161b22 50%,#2ea043 100%);border:1px solid var(--line)}
+  .heatlegend .hbar{flex:1;height:8px;border-radius:4px;
+    background:linear-gradient(90deg,#e66101 0%,#161b22 50%,#4393c3 100%);border:1px solid var(--line)}
   .heatlegend b{font-weight:600;color:var(--text)}
   .tblwrap{max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:10px}
   .tblwrap table{margin:0;min-width:660px}
@@ -131,11 +139,14 @@
   .tblwrap::-webkit-scrollbar{width:9px}
   .tblwrap::-webkit-scrollbar-thumb{background:#2c3644;border-radius:5px}
   .hm{stroke:#0d1117;stroke-width:1}
+  .hmfocus{fill:none;stroke:#fff;stroke-width:2;pointer-events:none}
   #heatTip{position:fixed}
 </style>
 </head>
 <body>
 <div class="wrap">
+  <div id="errBanner" class="banner err hide" role="alert"></div>
+  <div id="warnBanner" class="banner warn hide" role="status"></div>
   <h1 id="title"></h1>
   <p class="sub" id="subtitle"></p>
   <div class="chips" id="chips"></div>
@@ -145,7 +156,7 @@
     <div class="card chartbox" id="chartbox">
       <div class="legend">
         <span><i style="background:var(--blue)"></i><span id="legExpiry">P&amp;L a scadenza</span></span>
-        <span><i style="background:var(--violet)"></i>P&amp;L oggi (valore di mercato)</span>
+        <span><i style="background:var(--violet)"></i>P&amp;L oggi (modello, mid)</span>
         <span id="legDayWrap"><i style="background:#39d2c0"></i><span id="legDay">P&amp;L al giorno selezionato</span></span>
         <span><i style="background:var(--amber)"></i><span id="legSpot">Spot</span></span>
       </div>
@@ -157,10 +168,10 @@
         <input class="slider" id="slider" type="range" aria-label="Prezzo ipotetico del sottostante">
         <div class="qval" id="qval"></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="btn on" data-series="both">Entrambe</button>
-          <button class="btn" data-series="exp">Scadenza</button>
-          <button class="btn" data-series="now">Oggi</button>
-          <button class="btn hide" data-series="day" id="dayBtn">Giorno d</button>
+          <button class="btn on" id="serBoth" data-series="both">Entrambe</button>
+          <button class="btn" id="serExp" data-series="exp">Scadenza</button>
+          <button class="btn" id="serNow" data-series="now">Oggi</button>
+          <button class="btn hide" id="dayBtn" data-series="day">Giorno d</button>
         </div>
         <button class="btn" id="reset">Reset spot</button>
       </div>
@@ -169,7 +180,7 @@
         <input class="slider" id="daySlider" type="range" min="0" max="0" step="1" value="0" aria-label="Giorno di calendario">
         <div class="qval" id="dayLabel" style="min-width:250px;font-size:13px"></div>
       </div>
-      <div class="readout r6">
+      <div class="readout r6" id="readoutMain">
         <div class="ro"><div class="k">Prezzo ipotetico</div><div class="v amber" id="rPrice"></div></div>
         <div class="ro"><div class="k">P&amp;L a scadenza</div><div class="v" id="rExp"></div></div>
         <div class="ro"><div class="k">P&amp;L oggi</div><div class="v" id="rNow"></div></div>
@@ -193,9 +204,9 @@
       <div class="controls" style="margin-top:10px">
         <span class="k">Volatilità implicita</span>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="btn on" data-iv="0">IV invariata</button>
-          <button class="btn" data-iv="-10">IV −10 punti</button>
-          <button class="btn" data-iv="10">IV +10 punti</button>
+          <button class="btn on" id="ivBase" data-iv="0">IV invariata</button>
+          <button class="btn" id="ivDn" data-iv="-10">IV −10 punti</button>
+          <button class="btn" id="ivUp" data-iv="10">IV +10 punti</button>
         </div>
       </div>
       <div class="readout">
@@ -213,7 +224,8 @@
         <svg id="heat" viewBox="0 0 920 520" role="img" aria-label="Mappa di calore del P&amp;L"></svg>
       </div>
       <div class="tip" id="heatTip"></div>
-      <div class="heatlegend"><b id="heatMin">—</b><div class="bar"></div><b id="heatMax">—</b><span style="margin-left:8px">grigio = P&amp;L zero</span></div>
+      <div class="sr" id="heatLive" aria-live="polite"></div>
+      <div class="heatlegend"><b id="heatMin">—</b><div class="hbar"></div><b id="heatMax">—</b><span style="margin-left:8px">scuro = P&amp;L zero</span></div>
       <div class="note" id="heatNote"></div>
     </div>
 
@@ -221,7 +233,7 @@
       <div class="k" id="tblTitle">Tabella giornaliera · spot costante</div>
       <div class="tblwrap" style="margin-top:10px">
         <table>
-          <thead><tr><th>Giorno</th><th>Data</th><th class="n">DTE</th><th class="n">Spot</th><th class="n">Mark</th><th class="n">P&amp;L</th><th class="n">Theta</th></tr></thead>
+          <thead><tr><th>Giorno</th><th>Data</th><th class="n">DTE</th><th class="n">Spot</th><th class="n">Valore posizione</th><th class="n">P&amp;L</th><th class="n">Theta 1 g</th></tr></thead>
           <tbody id="dayRows"></tbody>
         </table>
       </div>
@@ -230,7 +242,7 @@
 
     <div class="card" id="histCard" style="margin-top:14px">
       <div class="k">Ricostruzione storica · chiusure reali</div>
-      <div id="histWrap" style="margin-top:10px;overflow-x:auto"></div>
+      <div id="histWrap" class="scroll" style="margin-top:10px"></div>
       <div class="note" id="histNote" style="margin-top:12px"></div>
     </div>
   </div>
@@ -238,7 +250,7 @@
   <div id="sec3">
     <h2 id="h3">3 · Anatomia della posizione</h2>
     <div class="grid2">
-      <div class="card" id="legsCard"></div>
+      <div class="card scroll" id="legsCard"></div>
       <div class="card" id="econCard"></div>
     </div>
   </div>
@@ -255,9 +267,9 @@
 
   <div id="sec6">
     <h2 id="h6">6 · Scenari: clicca una riga per vederla sul grafico</h2>
-    <div class="card">
+    <div class="card scroll">
       <table>
-        <thead><tr><th>Prezzo a scadenza</th><th class="n">Gap vs spot</th><th class="n">P&amp;L a scadenza</th><th class="n">P&amp;L oggi</th><th style="padding-left:18px">Esito</th></tr></thead>
+        <thead><tr><th>Prezzo</th><th class="n">Gap vs spot</th><th class="n">P&amp;L a scadenza</th><th class="n">P&amp;L oggi</th><th class="n" id="thIvDn">Oggi IV −10</th><th class="n" id="thIvUp">Oggi IV +10</th><th style="padding-left:18px">Esito</th></tr></thead>
         <tbody id="scen"></tbody>
       </table>
       <div class="note" id="scenNote"></div>
@@ -273,14 +285,64 @@
 </div>
 
 <script>
-/* ============================================================================
-   MODIFICA SOLO QUESTO BLOCCO. Il motore sotto non si tocca.
-   ========================================================================== */
+/* Gestione errori: ogni errore va nel titolo (ERR: …) e nel banner rosso. */
+(function(){
+  "use strict";
+  var TDI = window.__TDI__ = { errors: [], warnings: [] };
+  function fill(box, head, list){
+    if (!box) return;
+    while (box.firstChild) box.removeChild(box.firstChild);
+    if (!list.length){ box.classList.add("hide"); return; }
+    var b = document.createElement("b");
+    b.textContent = head + " (" + list.length + ")";
+    box.appendChild(b);
+    var ul = document.createElement("ul");
+    for (var i = 0; i < list.length; i++){
+      var li = document.createElement("li");
+      li.textContent = list[i];
+      ul.appendChild(li);
+    }
+    box.appendChild(ul);
+    box.classList.remove("hide");
+  }
+  TDI.paint = function(){
+    try {
+      fill(document.getElementById("errBanner"), "Errori", TDI.errors);
+      fill(document.getElementById("warnBanner"), "Avvisi", TDI.warnings);
+    } catch (e) { /* il titolo resta l'ultimo segnale */ }
+    if (TDI.errors.length) document.title = "ERR: " + TDI.errors[0];
+  };
+  TDI.error = function(m){
+    m = String(m);
+    if (TDI.errors.indexOf(m) < 0) TDI.errors.push(m);
+    TDI.paint();
+  };
+  TDI.warn = function(m){
+    m = String(m);
+    if (TDI.warnings.indexOf(m) < 0) TDI.warnings.push(m);
+    TDI.paint();
+  };
+  window.onerror = function(message, source, line, col, error){
+    var msg = error && error.message ? error.message : String(message);
+    TDI.error("JavaScript: " + msg + (line ? " (riga " + line + ")" : ""));
+    return false;
+  };
+  window.addEventListener("unhandledrejection", function(ev){
+    var r = ev ? ev.reason : null;
+    TDI.error("JavaScript (promise): " + (r && r.message ? r.message : String(r)));
+  });
+})();
+</script>
+
+<script>
+/* ==== CONFIG-BEGIN · MODIFICA SOLO QUESTO BLOCCO. Il motore sotto non si tocca. ==== */
 const CONFIG = {
   ticker: "STX",
   title: "STX — Short Put 280 · 21.01.2028",
   subtitle: "Dati del 05.11.2026 · spot $472.94 · 442 giorni alla scadenza.",
   asOf: "05.11.2026",
+  asOfTime: "16:00",
+  currency: "USD",
 
   spot: 472.94,
   r: 0.04025,
@@ -293,36 +355,36 @@ const CONFIG = {
   /* realized = P&L già incassato sulle gambe chiuse. Sommato a ogni calcolo. */
   realized: -1919,
 
+  /* volModel: regola spot-vol. sticky-strike = IV fissa per strike. slope = punti di IV per +1% di spot. */
+  volModel: { rule: "sticky-strike", slope: 0 },
+
   legs: [
-    { kind: "put", side: "short", strike: 280, qty: 1, entry: 26.19, iv: 0.754506, mark: 40.83 }
+    { kind: "put", side: "short", strike: 280, qty: 1, entry: 26.19, iv: 0.754506,
+      mark: 40.83, bid: 40.10, ask: 41.50, mult: 100, currency: "USD",
+      expiry: "2028-01-21", opened: "2026-11-04", style: "american" }
   ],
 
   /* daily: opzionale. Se manca, la vista giornaliera usa i default. */
-  daily: { iv: 0.754506, hist: null },
+  daily: { iv: 0.754506, ivStress: 10, hist: null },
 
+  /* chips: solo fatti di input. Il motore genera P&L, BE, max profit, max loss e DTE. */
   chips: [
     { label: "Strike", value: "280" },
     { label: "Entry", value: "+$26.19" },
     { label: "Mark", value: "$40.83" },
-    { label: "P&L totale", value: "−$3,383.54", tone: "neg" },
-    { label: "BE", value: "$273.00", tone: "warn" },
-    { label: "Max profit", value: "+$700", tone: "pos" },
-    { label: "Max loss", value: "−$27,300", tone: "neg" },
-    { label: "DTE", value: "442" }
+    { label: "IV", value: "75.45%" }
   ],
 
-  /* zones: opzionale. Se manca, le card si generano dai dati. */
+  /* zones: opzionale. Lascia null: le card si generano dai segni del payoff. */
   zones: null,
 
-
-  legsNote: "Credito incassato in data 04.11.2026. Il valore di mercato è il mark IBKR.",
+  legsNote: "Credito incassato il 04.11.2026. Mark IBKR. Bid e ask sono un esempio.",
 
   greeks: [
-    { name: "Delta", value: "+0.1315", note: "13.15 azioni equivalenti" },
-    { name: "Theta", value: "+$6.51/g", note: "dato 04.11" },
-    { name: "Vega", value: "−$95.5/pt", note: "dato 04.11" },
-    { name: "IV", value: "72.0%", note: "RV30 72.9%" },
-    { name: "P(ITM)", value: "15–18%", note: "modello Black-Scholes" }
+    { name: "Delta", value: "+0.1315", note: "13.15 azioni equivalenti · analyze_options" },
+    { name: "Theta", value: "+$6.51/g", note: "analyze_options, dato 04.11" },
+    { name: "Vega", value: "−$95.5/pt", note: "analyze_options, dato 04.11" },
+    { name: "IV", value: "72.0%", note: "RV30 72.9%" }
   ],
 
   bridge: [
@@ -339,19 +401,19 @@ const CONFIG = {
     { date: "OTT 2026 · apertura", title: "SELL 1× put 490 · 18.12.2026",
       detail: "+$5.01 / azione → credito +$501 · STX ≈ $750", price: 750, cls: "" },
     { date: "04.11.2026 · chiusura", title: "BUY 1× put 490 · 18.12.2026",
-      detail: "−$24.20 / azione → realized −$1,919 · STX $565.69", price: 566, cls: "close" },
+      detail: "−$24.20 / azione → realized −$1,919 · STX $565.69", price: 565.69, cls: "close" },
     { date: "04.11.2026 · riapertura", title: "SELL 1× put 280 · 21.01.2028",
-      detail: "+$26.19 / azione → credito +$2,619 · STX $472.94", price: 473, cls: "open" }
+      detail: "+$26.19 / azione → credito +$2,619 · STX $565.69", price: 565.69, cls: "open" }
   ],
   timelineSide: {
     title: "Cosa ha cambiato il roll",
     rows: [
       ["Strike", "490 → 280", "pos"],
       ["Esposizione", "−$21,000", "pos"],
-      ["Buffer", "13.4% → 40.8%", "pos"],
-      ["Scadenza", "44 → 442 giorni", "neg"]
+      ["Buffer al roll", "13.4% → 50.5%", "pos"],
+      ["Scadenza", "44 → 443 giorni", "neg"]
     ],
-    note: "Il roll ha ridotto il rischio di coda. In cambio ha allungato il tempo."
+    note: "Il roll ha ridotto strike ed esposizione. Il roll ha allungato la scadenza di 399 giorni. Confronta sempre il roll con la chiusura."
   },
 
   alerts: [
@@ -362,186 +424,647 @@ const CONFIG = {
 
   verifica: {
     confidence: 88,
-    evidence: "Calcoli ricontrollati in Python e nel browser.",
-    unverified: "Mark è il prezzo IBKR, non il costo di chiusura.",
+    evidence: "Calcoli ricontrollati con check_diagram.mjs e in Python.",
+    unverified: "Mark IBKR. Bid e ask dell'esempio non sono quotazioni.",
     escalation: "no"
   }
 };
-/* ========================================================================== */
+/* ==== CONFIG-END ==== */
+</script>
 
+<script>
+/* ============================================================================
+   MOTORE. Non modificare. Verifica: node skills/interactive-trade-diagram/scripts/check_diagram.mjs <file>
+   ========================================================================== */
 (function(){
   "use strict";
-  const CFG = CONFIG;
-  const MULT = 100;
-  const Q = CFG.q || 0;
-  const T0 = (CFG.dte || 365) / 365;
-  const $ = id => document.getElementById(id);
+  /* ---------- 0. infrastruttura ---------- */
+  const TDI = window.__TDI__;
+  const TD = (window.__TD__ = { ready: false, summary: null });
+  const ERR = m => TDI.error(m);
+  const WARN = m => TDI.warn(m);
+  const ESC_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ESC_MAP[c]);
+  const $ = id => {
+    const n = document.getElementById(id);
+    if (!n) throw new Error("elemento #" + id + " mancante nel template");
+    return n;
+  };
   const NS = "http://www.w3.org/2000/svg";
+  const isNum = v => typeof v === "number" && Number.isFinite(v);
+  const SECTIONS = ["sec1", "sec2", "sec3", "sec4", "sec5", "sec6", "sec7"];
 
-  /* ---------- modello ---------- */
-  function normCdf(x){
-    const t = 1/(1 + 0.2316419*Math.abs(x));
-    const d = 0.3989423*Math.exp(-x*x/2);
-    const p = d*t*(0.3193815 + t*(-0.3565638 + t*(1.781478 + t*(-1.821256 + t*1.330274))));
-    return x > 0 ? 1 - p : p;
-  }
-  function legsIv(leg){ return leg.iv != null ? leg.iv : (CFG.ivToday || 0.5); }
-  /* Per-leg time to expiry. A leg may override the global DTE (calendars,
-     diagonals); elapsed days are reconstructed from the caller's T so no
-     call site has to thread an extra argument. */
-  function legT(leg, T){
-    if (leg.dte == null) return T;
-    const total = CFG.dte || 365;
-    const elapsed = Math.max(0, total - T*365);
-    return Math.max(0, (leg.dte - elapsed)/365);
-  }
+  if (typeof CONFIG !== "object" || CONFIG === null) throw new Error("CONFIG mancante o non valido");
+  const CFG = CONFIG;
+  document.title = String(CFG.title ?? "Diagramma");
+  $("title").textContent = String(CFG.title ?? "");
+  $("subtitle").textContent = String(CFG.subtitle ?? "");
 
-  function intrinsic(leg, S){
-    if (leg.kind === "stock") return S;
-    if (leg.kind === "put") return Math.max(0, leg.strike - S);
-    return Math.max(0, S - leg.strike);
+  /* ---------- 1. date e ore (America/New_York) ---------- */
+  const DAY_MS = 86400000, YEAR_MS = 365*DAY_MS;
+  const CLOSE_MIN = 16*60;
+  function parseISO(s){
+    if (typeof s !== "string") return null;
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s.trim());
+    if (!m) return null;
+    const y = +m[1], mo = +m[2], d = +m[3];
+    const t = Date.UTC(y, mo - 1, d), c = new Date(t);
+    return (c.getUTCFullYear() === y && c.getUTCMonth() === mo - 1 && c.getUTCDate() === d) ? t : null;
   }
-  function bsValue(leg, S, T, ivShift = 0){
-    if (leg.kind === "stock") return S;
-    T = legT(leg, T);
-    const K = leg.strike, s = Math.max(1e-4, legsIv(leg) + ivShift), r = CFG.r || 0.04;
-    if (T <= 0) return intrinsic(leg, S);
-    const sT = s*Math.sqrt(T), dq = Math.exp(-Q*T), dr = Math.exp(-r*T);
-    const d1 = (Math.log(S/K) + (r - Q + s*s/2)*T)/sT;
-    const d2 = d1 - sT;
-    if (leg.kind === "put") return K*dr*normCdf(-d2) - S*dq*normCdf(-d1);
-    return S*dq*normCdf(d1) - K*dr*normCdf(d2);
+  function parseDay(s){
+    if (typeof s !== "string") return null;
+    const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(s.trim());
+    return m ? parseISO(m[3] + "-" + m[2] + "-" + m[1]) : parseISO(s);
   }
-  function bsDelta(leg, S, T, ivShift = 0){
-    if (leg.kind === "stock") return 1;
-    T = legT(leg, T);
-    const K = leg.strike, s = Math.max(1e-4, legsIv(leg) + ivShift), r = CFG.r || 0.04;
-    if (T <= 0) return (leg.kind === "put" ? (S < K ? -1 : 0) : (S > K ? 1 : 0));
-    const sT = s*Math.sqrt(T), dq = Math.exp(-Q*T);
-    const d1 = (Math.log(S/K) + (r - Q + s*s/2)*T)/sT;
-    return leg.kind === "put" ? -dq*normCdf(-d1) : dq*normCdf(d1);
+  function parseHM(s){
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(s).trim());
+    if (!m || +m[1] > 23 || +m[2] > 59) return null;
+    return (+m[1])*60 + (+m[2]);
   }
-  const sideSign = leg => (leg.side === "short" ? -1 : 1);
-  const legMult = leg => (leg.kind === "stock" ? 1 : MULT);
+  const isoOf = t => new Date(t).toISOString().slice(0, 10);
+  const itOf = t => { const s = isoOf(t); return s.slice(8, 10) + "." + s.slice(5, 7) + "." + s.slice(0, 4); };
+  function nthSunday(y, m0, n){
+    const first = new Date(Date.UTC(y, m0, 1)).getUTCDay();
+    return Date.UTC(y, m0, 1 + (7 - first) % 7 + 7*(n - 1));
+  }
+  function lastSunday(y, m0){
+    const last = new Date(Date.UTC(y, m0 + 1, 0));
+    return Date.UTC(y, m0, last.getUTCDate() - last.getUTCDay());
+  }
+  /* offset di New York in minuti: −240 con l'ora legale (EDT), −300 senza (EST) */
+  function nyOffset(day, minutes){
+    const y = new Date(day).getUTCFullYear();
+    const start = y >= 2007 ? nthSunday(y, 2, 2) : nthSunday(y, 3, 1);
+    const end = y >= 2007 ? nthSunday(y, 10, 1) : lastSunday(y, 9);
+    let dst;
+    if (day < start || day > end) dst = false;
+    else if (day > start && day < end) dst = true;
+    else if (day === start) dst = minutes >= 120;
+    else dst = minutes < 120;
+    return dst ? -240 : -300;
+  }
+  const nyInstant = (day, minutes) => day + (minutes - nyOffset(day, minutes))*60000;
+  const yearsTo = (fromMs, toMs) => Math.max(0, (toMs - fromMs)/YEAR_MS);
 
-  function legPnl(leg, S, T, ivShift = 0){
-    const v = T > 0 ? bsValue(leg, S, T, ivShift) : intrinsic(leg, S);
-    return sideSign(leg) * (v - leg.entry) * (leg.qty || 1) * legMult(leg);
-  }
-  const CARRY = CFG.realized || 0;
-  const pnlExp = S => CARRY + CFG.legs.reduce((a,l) => a + legPnl(l, S, 0), 0);
-  const pnlNow = S => CARRY + CFG.legs.reduce((a,l) => a + legPnl(l, S, T0), 0);
-  const deltaNow = S => CFG.legs.reduce((a,l) => a + sideSign(l)*(l.qty||1)*legMult(l)*bsDelta(l, S, T0), 0);
-  const pnlAtShift = (S, T, ivShift) => CARRY + CFG.legs.reduce((a,l) =>
-    a + legPnl(l, S, Math.max(0, T), ivShift), 0);
-  const deltaAtShift = (S, T, ivShift) => CFG.legs.reduce((a,l) =>
-    a + sideSign(l)*(l.qty||1)*legMult(l)*bsDelta(l, S, Math.max(0, T), ivShift), 0);
-  const posMark = (S, T, ivShift) => CFG.legs.reduce((a,l) =>
-    a + sideSign(l)*(l.qty||1)*legMult(l)*bsValue(l, S, Math.max(0, T), ivShift), 0);
+  /* ---------- 2. CONFIG: validazione ---------- */
+  const fatal = [];
+  const ASOF_DAY = parseDay(CFG.asOf);
+  if (ASOF_DAY == null) fatal.push("asOf non valido (" + CFG.asOf + "): usa gg.mm.aaaa o aaaa-mm-gg");
+  const ASOF_MIN = CFG.asOfTime == null ? CLOSE_MIN : parseHM(CFG.asOfTime);
+  if (ASOF_MIN == null) fatal.push("asOfTime non valido (" + CFG.asOfTime + "): usa HH:MM, ora di New York");
+  if (!isNum(CFG.spot) || CFG.spot <= 0) fatal.push("spot mancante o non positivo");
+  if (!isNum(CFG.r)) fatal.push("r mancante: usa ^IRX / 100. Il valore 0 è valido");
+  else if (Math.abs(CFG.r) > 0.3) fatal.push("r fuori scala (" + CFG.r + "): scrivi 0.04 per 4%");
+  const Q = CFG.q ?? 0;
+  if (!isNum(Q) || Q < -0.2 || Q > 0.3) fatal.push("q fuori scala (" + CFG.q + "): scrivi 0.015 per 1.5%");
+  const CARRY = CFG.realized ?? 0;
+  if (!isNum(CARRY)) fatal.push("realized non è un numero");
+  const CUR = CFG.currency ?? "USD";
+  if (typeof CUR !== "string" || !/^[A-Z]{3}$/.test(CUR)) fatal.push("currency non valida: usa un codice di 3 lettere, per esempio USD");
+  if (CFG.ivToday != null && (!isNum(CFG.ivToday) || CFG.ivToday <= 0 || CFG.ivToday > 5))
+    fatal.push("ivToday fuori scala (" + CFG.ivToday + "): scrivi 0.45 per 45%");
+  if (!Array.isArray(CFG.legs) || !CFG.legs.length) fatal.push("legs mancante o vuoto");
+  const FRONT_RAW = CFG.expiryISO;
+  const FRONT_DAY0 = FRONT_RAW == null ? null : parseISO(FRONT_RAW);
+  if (FRONT_RAW != null && FRONT_DAY0 == null) fatal.push("expiryISO non valido (" + FRONT_RAW + "): usa aaaa-mm-gg");
+  const VM = CFG.volModel ?? {};
+  const VM_RULE = VM.rule ?? "sticky-strike";
+  const VM_SLOPE = VM.slope ?? 0;
+  if (VM_RULE !== "sticky-strike" && VM_RULE !== "sticky-delta") fatal.push("volModel.rule deve essere sticky-strike o sticky-delta");
+  if (!isNum(VM_SLOPE) || Math.abs(VM_SLOPE) > 5) fatal.push("volModel.slope fuori scala: punti di IV per +1% di spot, per esempio -0.5");
+  const DD = CFG.daily ?? {};
+  const IV_STRESS = DD.ivStress ?? 10;
+  if (!isNum(IV_STRESS) || IV_STRESS <= 0 || IV_STRESS > 50) fatal.push("daily.ivStress fuori scala: punti di IV tra 1 e 50");
+  if (CFG.style != null && CFG.style !== "european" && CFG.style !== "american") fatal.push("style deve essere european o american");
 
-  /* ---------- dominio ---------- */
-  const strikes = CFG.legs.filter(l => l.kind !== "stock").map(l => l.strike);
-  const anchorMin = Math.min(...[CFG.spot, ...strikes]);
-  const anchorMax = Math.max(...[CFG.spot, ...strikes]);
-  const X0 = CFG.xmin != null ? CFG.xmin : Math.max(1, Math.round(anchorMin*0.62/5)*5);
-  const X1 = CFG.xmax != null ? CFG.xmax : Math.round(anchorMax*1.32/5)*5;
-
-  function scanPnl(){
-    let lo = Infinity, hi = -Infinity;
-    for (let i = 0; i <= 400; i++){
-      const S = X0 + (X1-X0)*i/400;
-      const v = pnlExp(S);
-      if (v < lo) lo = v;
-      if (v > hi) hi = v;
-    }
-    return [lo, hi];
-  }
-  function roundTo(v, step, dir){
-    const q = v/step;
-    return (dir > 0 ? Math.ceil(q) : Math.floor(q))*step;
-  }
-  const [rawLo, rawHi] = scanPnl();
-  const stepY = Math.abs(rawHi - rawLo) > 40000 ? 10000
-              : Math.abs(rawHi - rawLo) > 12000 ? 2000
-              : Math.abs(rawHi - rawLo) > 5000 ? 1000 : 500;
-  const Y0 = Math.min(roundTo(rawLo*1.06, stepY, -1), -stepY);
-  const Y1 = Math.max(roundTo(rawHi + stepY*0.2, stepY, 1), stepY);
-
-  function breakevens(){
-    const out = [];
-    let prevS = X0, prev = pnlExp(X0);
-    for (let i = 1; i <= 800; i++){
-      const S = X0 + (X1-X0)*i/800;
-      const v = pnlExp(S);
-      if ((prev < 0 && v >= 0) || (prev > 0 && v <= 0)){
-        let a = prevS, b = S;
-        for (let k = 0; k < 60; k++){
-          const m = (a+b)/2;
-          if ((pnlExp(a) < 0) === (pnlExp(m) < 0)) a = m; else b = m;
+  function normLeg(l, i, refDay){
+    const ref = refDay ?? ASOF_DAY;
+    const w = "Gamba " + (i + 1);
+    if (typeof l !== "object" || l === null){ fatal.push(w + ": non è un oggetto"); return null; }
+    const kind = l.kind;
+    const opt = kind === "call" || kind === "put";
+    if (!opt && kind !== "stock"){ fatal.push(w + ": kind deve essere call, put o stock"); return null; }
+    if (l.side !== "long" && l.side !== "short") fatal.push(w + ": side deve essere long o short");
+    if (!isNum(l.qty) || l.qty <= 0) fatal.push(w + ": qty mancante o non positivo");
+    if (!isNum(l.entry) || l.entry < 0) fatal.push(w + ": entry mancante o negativo");
+    if (opt && (!isNum(l.strike) || l.strike <= 0)) fatal.push(w + ": strike mancante o non positivo");
+    const iv = opt ? (l.iv ?? CFG.ivToday) : null;
+    if (opt && (!isNum(iv) || iv <= 0)) fatal.push(w + ": iv mancante (né iv della gamba né ivToday)");
+    else if (opt && iv > 5) fatal.push(w + ": iv fuori scala (" + iv + "): scrivi 0.75 per 75%");
+    else if (opt && iv > 2.5) WARN(w + ": iv molto alta (" + (iv*100).toFixed(0) + "%). Controlla l'unità.");
+    const mult = l.mult ?? (opt ? 100 : 1);
+    if (!isNum(mult) || mult <= 0) fatal.push(w + ": mult non valido");
+    const cur = l.currency ?? CUR;
+    if (cur !== CUR) fatal.push(w + ": valuta " + cur + " diversa da " + CUR + ". Converti i prezzi in una sola valuta.");
+    ["mark", "bid", "ask"].forEach(k => {
+      if (l[k] != null && (!isNum(l[k]) || l[k] < 0)) fatal.push(w + ": " + k + " non valido");
+    });
+    if (isNum(l.bid) && isNum(l.ask) && l.ask < l.bid) fatal.push(w + ": ask minore del bid");
+    let expDay = null;
+    if (opt){
+      if (l.expiry != null){
+        expDay = parseISO(l.expiry);
+        if (expDay == null) fatal.push(w + ": expiry non valida (" + l.expiry + "): usa aaaa-mm-gg");
+        else if (l.dte != null && ref != null && Math.round((expDay - ref)/DAY_MS) !== l.dte)
+          fatal.push(w + ": expiry e dte della gamba non coincidono");
+      } else if (l.dte != null){
+        if (!isNum(l.dte) || l.dte < 0 || Math.round(l.dte) !== l.dte) fatal.push(w + ": dte della gamba non valido");
+        else if (ref != null){
+          expDay = ref + l.dte*DAY_MS;
+          WARN(w + ": il campo dte della gamba è superato. Scrivi expiry: \"" + isoOf(expDay) + "\".");
         }
-        out.push((a+b)/2);
+      } else {
+        expDay = FRONT_DAY0;
+        if (expDay == null && FRONT_RAW == null) fatal.push(w + ": scadenza mancante. Dai expiry alla gamba ed expiryISO al CONFIG");
       }
-      prevS = S; prev = v;
+      if (expDay != null && ref != null && expDay < ref) fatal.push(w + ": la gamba è già scaduta (" + isoOf(expDay) + ")");
     }
-    return out;
+    const style = l.style ?? CFG.style ?? "european";
+    if (style !== "european" && style !== "american") fatal.push(w + ": style deve essere european o american");
+    let opened = null;
+    if (l.opened != null){
+      opened = parseISO(l.opened);
+      if (opened == null) fatal.push(w + ": opened non valida (" + l.opened + "): usa aaaa-mm-gg");
+    }
+    return {
+      i, w, kind, opt, side: l.side, sgn: l.side === "short" ? -1 : 1, qty: l.qty, entry: l.entry,
+      strike: opt ? l.strike : null, iv, mult, mark: l.mark ?? null, bid: l.bid ?? null, ask: l.ask ?? null,
+      expDay, expMs: (opt && expDay != null) ? nyInstant(expDay, CLOSE_MIN) : null, style, opened
+    };
   }
-  const BES = breakevens();
 
-  /* ---------- vista giornaliera: giorni, passo, date ---------- */
-  const DAYN = (CFG.dte > 0 && CFG.legs.some(l => l.kind === "put" || l.kind === "call"))
-    ? Math.floor(CFG.dte) : 0;
+  const LEGS = [];
+  if (Array.isArray(CFG.legs) && ASOF_DAY != null) CFG.legs.forEach((l, i) => { const n = normLeg(l, i); if (n) LEGS.push(n); });
+  const OPTS = LEGS.filter(l => l.opt);
+  const HAS_OPT = OPTS.length > 0;
+  let FRONT_DAY = FRONT_DAY0;
+  if (HAS_OPT){
+    if (FRONT_RAW == null) fatal.push("expiryISO mancante: è la scadenza front, formato aaaa-mm-gg");
+    else if (FRONT_DAY0 != null){
+      const exps = OPTS.map(l => l.expDay).filter(v => v != null);
+      const minExp = exps.length ? Math.min(...exps) : FRONT_DAY0;
+      if (minExp !== FRONT_DAY0)
+        fatal.push("expiryISO (" + FRONT_RAW + ") deve essere la scadenza più vicina tra le gambe (" + isoOf(minExp) + ")");
+    }
+  } else if (FRONT_DAY == null) FRONT_DAY = ASOF_DAY;
+  if (FRONT_DAY != null && ASOF_DAY != null){
+    const days = Math.round((FRONT_DAY - ASOF_DAY)/DAY_MS);
+    if (days < 0) fatal.push("asOf (" + isoOf(ASOF_DAY) + ") è dopo la scadenza front (" + isoOf(FRONT_DAY) + ")");
+    else if (HAS_OPT || CFG.dte != null){
+      if (!isNum(CFG.dte)) ERR("dte mancante: i giorni di calendario da asOf a expiryISO sono " + days);
+      else if (CFG.dte !== days)
+        ERR("dte (" + CFG.dte + ") non coincide con le date: asOf + " + CFG.dte + " giorni = " +
+            isoOf(ASOF_DAY + Math.round(CFG.dte)*DAY_MS) + ", expiryISO = " + isoOf(FRONT_DAY) + ". Il motore usa expiryISO.");
+    }
+  }
+  if (CFG.xmin != null && (!isNum(CFG.xmin) || CFG.xmin < 0)) fatal.push("xmin non valido");
+  if (CFG.xmax != null && (!isNum(CFG.xmax) || CFG.xmax <= (CFG.xmin ?? 0))) fatal.push("xmax non valido");
+
+  if (fatal.length){
+    fatal.forEach(ERR);
+    SECTIONS.forEach(id => $(id).classList.add("hide"));
+    TD.summary = { ok: false, errors: fatal.slice() };
+    TD.ready = true;
+    TDI.paint();
+    return;
+  }
+
+  /* ---------- 3. modello di valutazione (Black-Scholes-Merton per gamba) ---------- */
+  const SPOT = CFG.spot, R = CFG.r;
+  const ASOF_MS = nyInstant(ASOF_DAY, ASOF_MIN);
+  const FRONT_MS = nyInstant(FRONT_DAY, CLOSE_MIN);
+  const DAYN = HAS_OPT ? Math.round((FRONT_DAY - ASOF_DAY)/DAY_MS) : 0;
+  if (HAS_OPT && DAYN === 0 && CFG.asOfTime == null)
+    WARN("0DTE senza asOfTime: il motore usa le 16:00 di New York, quindi il tempo residuo è zero. Scrivi asOfTime, per esempio \"10:30\".");
+  if (HAS_OPT && ASOF_MS >= FRONT_MS)
+    WARN("asOf è dopo le 16:00 di New York del giorno di scadenza front: le gambe front valgono il valore intrinseco.");
+  const legT = (l, atMs) => (l.opt ? yearsTo(atMs, l.expMs) : 0);
+
+  /* normale cumulata: Hart (1968), errore assoluto < 1e-15 */
+  function Ncdf(x){
+    const a = Math.abs(x);
+    let c;
+    if (a > 37) c = 0;
+    else {
+      const e = Math.exp(-a*a/2);
+      if (a < 7.07106781186547){
+        let n = 3.52624965998911e-2*a + 0.700383064443688;
+        n = n*a + 6.37396220353165; n = n*a + 33.912866078383; n = n*a + 112.079291497871;
+        n = n*a + 221.213596169931; n = n*a + 220.206867912376;
+        let d = 8.83883476483184e-2*a + 1.75566716318264;
+        d = d*a + 16.064177579207; d = d*a + 86.7807322029461; d = d*a + 296.564248779674;
+        d = d*a + 637.333633378831; d = d*a + 793.826512519948; d = d*a + 440.413735824752;
+        c = e*n/d;
+      } else {
+        let b = a + 0.65;
+        b = a + 4/b; b = a + 3/b; b = a + 2/b; b = a + 1/b;
+        c = e/b/2.506628274631;
+      }
+    }
+    return x > 0 ? 1 - c : c;
+  }
+
+  /* smile per scadenza: punti (strike, iv) delle gambe, per la regola sticky-delta */
+  const SMILE = new Map();
+  OPTS.forEach(l => {
+    const a = SMILE.get(l.expDay) || [];
+    a.push([l.strike, l.iv]);
+    SMILE.set(l.expDay, a);
+  });
+  SMILE.forEach((a, k) => {
+    a.sort((p, q) => p[0] - q[0]);
+    const m = [];
+    a.forEach(p => {
+      const last = m[m.length - 1];
+      if (last && last[0] === p[0]){ last[1] = (last[1]*last[2] + p[1])/(last[2] + 1); last[2] += 1; }
+      else m.push([p[0], p[1], 1]);
+    });
+    SMILE.set(k, m);
+  });
+  function interpIv(pts, K){
+    if (!pts || !pts.length) return null;
+    if (K <= pts[0][0]) return pts[0][1];
+    for (let j = 1; j < pts.length; j++){
+      if (K <= pts[j][0]){
+        const t = (K - pts[j - 1][0])/(pts[j][0] - pts[j - 1][0]);
+        return pts[j - 1][1] + t*(pts[j][1] - pts[j - 1][1]);
+      }
+    }
+    return pts[pts.length - 1][1];
+  }
+  /* IV della gamba al prezzo S: regola spot-vol + slope + shift di stress */
+  function sigmaOf(l, S, shift){
+    let s = l.iv;
+    if (VM_RULE === "sticky-delta" && S > 0){
+      const pts = SMILE.get(l.expDay);
+      if (pts && pts.length > 1) s = l.iv + interpIv(pts, l.strike*SPOT/S) - interpIv(pts, l.strike);
+    }
+    if (VM_SLOPE !== 0 && S > 0) s += VM_SLOPE*Math.log(S/SPOT);
+    return Math.min(10, Math.max(0.001, s + shift));
+  }
+  function bsm(kind, S, K, T, s){
+    if (S <= 0) return kind === "call" ? 0 : K*Math.exp(-R*T);
+    const sT = s*Math.sqrt(T);
+    const d1 = (Math.log(S/K) + (R - Q + 0.5*s*s)*T)/sT, d2 = d1 - sT;
+    const dq = Math.exp(-Q*T), dr = Math.exp(-R*T);
+    return kind === "call" ? S*dq*Ncdf(d1) - K*dr*Ncdf(d2) : K*dr*Ncdf(-d2) - S*dq*Ncdf(-d1);
+  }
+  function intrinsic(l, S){
+    if (!l.opt) return S;
+    return l.kind === "put" ? Math.max(0, l.strike - S) : Math.max(0, S - l.strike);
+  }
+  /* valore di una gamba: viva → BSM con il suo tempo residuo; scaduta → intrinseco */
+  function legValue(l, S, atMs, shift){
+    if (!l.opt) return S;
+    const T = legT(l, atMs);
+    if (T <= 0) return intrinsic(l, S);
+    const v = bsm(l.kind, S, l.strike, T, sigmaOf(l, S, shift));
+    return l.style === "american" ? Math.max(v, intrinsic(l, S)) : v;
+  }
+  function legDelta(l, S, atMs, shift){
+    if (!l.opt) return 1;
+    const T = legT(l, atMs);
+    const itm = l.kind === "put" ? (S < l.strike ? -1 : 0) : (S > l.strike ? 1 : 0);
+    if (T <= 0) return itm;
+    if (S <= 0) return l.kind === "put" ? -Math.exp(-Q*T) : 0;
+    const s = sigmaOf(l, S, shift);
+    if (l.style === "american" && bsm(l.kind, S, l.strike, T, s) <= intrinsic(l, S)) return itm;
+    const d1 = (Math.log(S/l.strike) + (R - Q + 0.5*s*s)*T)/(s*Math.sqrt(T)), dq = Math.exp(-Q*T);
+    return l.kind === "put" ? -dq*Ncdf(-d1) : dq*Ncdf(d1);
+  }
+  const legPnl = (l, S, atMs, shift) => l.sgn*(legValue(l, S, atMs, shift) - l.entry)*l.qty*l.mult;
+  function pnlAt(S, atMs, shift){ let a = CARRY; for (const l of LEGS) a += legPnl(l, S, atMs, shift || 0); return a; }
+  function deltaAt(S, atMs, shift){ let a = 0; for (const l of LEGS) a += l.sgn*l.qty*l.mult*legDelta(l, S, atMs, shift || 0); return a; }
+  function valueAt(S, atMs, shift){ let a = 0; for (const l of LEGS) a += l.sgn*l.qty*l.mult*legValue(l, S, atMs, shift || 0); return a; }
+  const pnlExp = S => pnlAt(S, FRONT_MS, 0);
+  const pnlNow = S => pnlAt(S, ASOF_MS, 0);
+
+  /* pendenza del P&L per S → ∞ (call vive: e^(−qT), call americane: almeno 1) */
+  function slopeInf(atMs){
+    let b = 0;
+    for (const l of LEGS){
+      const w = l.sgn*l.qty*l.mult;
+      if (!l.opt) b += w;
+      else if (l.kind === "call"){
+        const T = legT(l, atMs);
+        const e = Math.exp(-Q*T);
+        b += T <= 0 ? w : w*(l.style === "american" ? Math.max(1, e) : e);
+      }
+    }
+    return b;
+  }
+
+  /* ---------- 4. analisi delle curve: break-even, zone, estremi su [0, ∞) ---------- */
+  const KINKS = [...new Set(OPTS.map(l => l.strike))].sort((a, b) => a - b);
+  const SCALE = LEGS.reduce((a, l) => a + l.qty*l.mult*(l.opt ? l.strike : SPOT), 0) + Math.abs(CARRY) + 1;
+  const ZTOL = 1e-9*SCALE;
+  const SLOPE_TOL = 1e-9*LEGS.reduce((a, l) => a + l.qty*l.mult, 0);
+  const sgnz = v => (v > ZTOL ? 1 : v < -ZTOL ? -1 : 0);
+  const aliveAt = atMs => OPTS.some(l => legT(l, atMs) > 0);
+
+  function bisect(f, a, b, fa){
+    let lo = a, hi = b, flo = fa;
+    for (let k = 0; k < 300 && hi - lo > 1e-13*Math.max(1, hi); k++){
+      const m = 0.5*(lo + hi), fm = f(m);
+      if (fm === 0) return m;
+      if ((fm < 0) === (flo < 0)){ lo = m; flo = fm; } else hi = m;
+    }
+    return 0.5*(lo + hi);
+  }
+  function golden(f, a, b, dir){
+    const g = (Math.sqrt(5) - 1)/2;
+    let c = b - g*(b - a), d = a + g*(b - a), fc = dir*f(c), fd = dir*f(d);
+    for (let k = 0; k < 160; k++){
+      if (fc > fd){ b = d; d = c; fd = fc; c = b - g*(b - a); fc = dir*f(c); }
+      else { a = c; c = d; fc = fd; d = a + g*(b - a); fd = dir*f(d); }
+    }
+    const x = 0.5*(a + b);
+    return { at: x, v: f(x) };
+  }
+  function gridFor(atMs, shift){
+    let sMax = 0, tMax = 0;
+    OPTS.forEach(l => {
+      const T = legT(l, atMs);
+      if (T > 0){ tMax = Math.max(tMax, T); sMax = Math.max(sMax, sigmaOf(l, SPOT, shift)); }
+    });
+    const w = Math.max(1, 10*sMax*Math.sqrt(tMax));
+    const hiA = Math.max(SPOT, ...KINKS), loA = Math.min(SPOT, ...KINKS);
+    const sLo = loA*Math.exp(-w), sHi = hiA*Math.exp(w), n = 3000, L = Math.log(sHi/sLo);
+    const g = [0, SPOT, ...KINKS];
+    for (let i = 0; i <= n; i++) g.push(sLo*Math.exp(L*i/n));
+    const a0 = loA*0.6, a1 = hiA*1.4;
+    for (let i = 0; i <= 1500; i++) g.push(a0 + (a1 - a0)*i/1500);
+    g.sort((a, b) => a - b);
+    return g.filter((v, i) => i === 0 || v > g[i - 1]);
+  }
+  /* analisi completa di una curva P&L(S) a una data di valutazione */
+  function analyze(atMs, shift){
+    const f = S => pnlAt(S, atMs, shift);
+    const linear = !aliveAt(atMs);
+    const B = slopeInf(atMs);
+    const upUnb = B > SLOPE_TOL, dnUnb = B < -SLOPE_TOL;
+    const pts = linear ? [0, ...KINKS, ...(KINKS.length ? [] : [SPOT])] : gridFor(atMs, shift);
+    const vals = pts.map(f);
+    const roots = [];
+    for (let i = 0; i < pts.length - 1; i++){
+      const a = pts[i], b = pts[i + 1], fa = vals[i], fb = vals[i + 1];
+      if (Math.abs(fa) <= ZTOL){ roots.push(a); continue; }
+      if (Math.abs(fb) <= ZTOL) continue;
+      if (fa*fb < 0) roots.push(linear ? a - fa*(b - a)/(fb - fa) : bisect(f, a, b, fa));
+    }
+    const lastP = pts[pts.length - 1], lastV = vals[vals.length - 1];
+    if (Math.abs(lastV) <= ZTOL) roots.push(lastP);
+    else if ((upUnb || dnUnb) && lastV*B < 0){
+      if (linear) roots.push(lastP - lastV/B);
+      else {
+        let b = lastP*2, fb = f(b), k = 0;
+        while (fb*lastV > 0 && k++ < 200){ b *= 2; fb = f(b); }
+        if (fb*lastV <= 0) roots.push(bisect(f, lastP, b, lastV));
+      }
+    }
+    roots.sort((a, b) => a - b);
+    const rs = roots.filter((v, i) => i === 0 || v - roots[i - 1] > 1e-9*Math.max(1, v));
+    const edges = [0, ...rs.filter(v => v > 0), Infinity];
+    let zones = [];
+    for (let i = 0; i < edges.length - 1; i++){
+      const a = edges[i], b = edges[i + 1];
+      const m = b === Infinity ? (a > 0 ? a*2 : Math.max(SPOT, lastP)) : 0.5*(a + b);
+      zones.push({ from: a, to: b, sign: sgnz(f(m)) });
+    }
+    zones = zones.reduce((acc, z) => {
+      const last = acc[acc.length - 1];
+      if (last && last.sign === z.sign) last.to = z.to; else acc.push(Object.assign({}, z));
+      return acc;
+    }, []);
+    const farV = linear ? lastV : f(lastP*4);
+    zones.forEach(z => {
+      const dir = z.sign >= 0 ? 1 : -1;
+      let bi = -1;
+      for (let i = 0; i < pts.length; i++){
+        if (pts[i] < z.from || pts[i] > z.to) continue;
+        if (bi < 0 || dir*vals[i] > dir*vals[bi]) bi = i;
+      }
+      if (bi < 0){
+        const m = z.to === Infinity ? z.from*2 + 1 : 0.5*(z.from + z.to);
+        z.best = f(m); z.at = m;
+      } else if (linear || pts[bi] === 0){
+        z.best = vals[bi]; z.at = pts[bi];
+      } else {
+        const lo = Math.max(z.from, pts[Math.max(0, bi - 1)]), hi = Math.min(z.to, pts[Math.min(pts.length - 1, bi + 1)]);
+        const r = golden(f, lo, hi, dir);
+        if (dir*r.v >= dir*vals[bi]){ z.best = r.v; z.at = r.at; } else { z.best = vals[bi]; z.at = pts[bi]; }
+      }
+      z.unbounded = z.to === Infinity && ((dir > 0 && upUnb) || (dir < 0 && dnUnb));
+      if (z.to === Infinity && !z.unbounded && dir*farV > dir*z.best){ z.best = farV; z.at = Infinity; }
+    });
+    const prof = zones.filter(z => z.sign > 0), loss = zones.filter(z => z.sign < 0);
+    let max, min;
+    if (upUnb) max = { v: Infinity, at: Infinity, unbounded: true };
+    else if (prof.length){ const z = prof.reduce((a, b) => (b.best > a.best ? b : a)); max = { v: z.best, at: z.at }; }
+    else { let bi = 0; vals.forEach((v, i) => { if (v > vals[bi]) bi = i; }); max = { v: vals[bi], at: pts[bi] }; }
+    if (dnUnb) min = { v: -Infinity, at: Infinity, unbounded: true };
+    else if (loss.length){ const z = loss.reduce((a, b) => (b.best < a.best ? b : a)); min = { v: z.best, at: z.at }; }
+    else { let bi = 0; vals.forEach((v, i) => { if (v < vals[bi]) bi = i; }); min = { v: vals[bi], at: pts[bi] }; }
+    return { f, linear, B, roots: rs, bes: zones.slice(1).map(z => z.from), zones, max, min, pts, vals };
+  }
+  const EXP = analyze(FRONT_MS, 0);
+  const NOW = analyze(ASOF_MS, 0);
+  if (EXP.B < -SLOPE_TOL && OPTS.some(l => l.kind === "call" && l.sgn > 0 && l.style === "european" && legT(l, FRONT_MS) > 0) && Q > 0)
+    WARN("Il modello europeo con q > 0 dà una perdita senza limite per S → ∞. Per opzioni americane scrivi style: \"american\".");
+
+  /* ---------- probabilità: misura risk-neutral, lognormale ---------- */
+  const T0F = yearsTo(ASOF_MS, FRONT_MS);
+  const FRONT_PTS = SMILE.get(FRONT_DAY) || null;
+  const SIG_ATM = FRONT_PTS ? interpIv(FRONT_PTS, SPOT) : null;
+  function probBelow(x){
+    if (x <= 0) return 0;
+    if (x === Infinity) return 1;
+    if (T0F <= 0) return SPOT < x ? 1 : 0;
+    const s = SIG_ATM, d2 = (Math.log(SPOT/x) + (R - Q - 0.5*s*s)*T0F)/(s*Math.sqrt(T0F));
+    return Ncdf(-d2);
+  }
+  EXP.zones.forEach(z => { z.prob = SIG_ATM == null ? null : probBelow(z.to) - probBelow(z.from); });
+  function pItm(l){
+    if (!l.opt) return null;
+    const T = legT(l, ASOF_MS);
+    if (T <= 0) return intrinsic(l, SPOT) > 0 ? 1 : 0;
+    const s = l.iv, d2 = (Math.log(SPOT/l.strike) + (R - Q - 0.5*s*s)*T)/(s*Math.sqrt(T));
+    return l.kind === "call" ? Ncdf(d2) : Ncdf(-d2);
+  }
+
+  /* ---------- valore di chiusura: bid per le long, ask per le short ---------- */
+  const POS = { pnlMark: CARRY, pnlClose: CARRY, basis: "bid/ask", rows: [] };
+  const BASIS_RANK = { "bid/ask": 0, "mid/mark": 1, "modello": 2 };
+  LEGS.forEach(l => {
+    const model0 = legValue(l, SPOT, ASOF_MS, 0);
+    const markV = l.mark ?? (l.opt ? model0 : SPOT);
+    const markSrc = l.mark != null ? "mark" : (l.opt ? "modello" : "spot");
+    let exitV, exitSrc;
+    if (l.sgn > 0 && l.bid != null){ exitV = l.bid; exitSrc = "bid"; }
+    else if (l.sgn < 0 && l.ask != null){ exitV = l.ask; exitSrc = "ask"; }
+    else { exitV = markV; exitSrc = markSrc === "modello" ? "modello" : "mid/mark"; }
+    const basis = exitSrc === "bid" || exitSrc === "ask" ? "bid/ask" : exitSrc;
+    if (BASIS_RANK[basis] > BASIS_RANK[POS.basis]) POS.basis = basis;
+    const pm = l.sgn*(markV - l.entry)*l.qty*l.mult, pc = l.sgn*(exitV - l.entry)*l.qty*l.mult;
+    POS.pnlMark += pm; POS.pnlClose += pc;
+    POS.rows.push({ l, model0, markV, markSrc, exitV, exitSrc, pm, pc, pItm: pItm(l) });
+    if (l.opt && l.mark != null){
+      const half = (l.bid != null && l.ask != null) ? (l.ask - l.bid)/2 : 0;
+      const tol = Math.max(0.02, 0.02*l.mark, half);
+      if (Math.abs(model0 - l.mark) > tol)
+        WARN(l.w + ": BSM con iv " + (l.iv*100).toFixed(2) + "% vale " + model0.toFixed(2) + ", il mark è " +
+             l.mark.toFixed(2) + ". Calibra iv sul mark.");
+    }
+    if (l.bid != null && l.ask != null && l.ask > 0){
+      const mid = (l.bid + l.ask)/2;
+      if (mid > 0 && (l.ask - l.bid)/mid > 0.25) WARN(l.w + ": spread bid/ask largo (" + ((l.ask - l.bid)/mid*100).toFixed(0) + "% del mid).");
+    }
+  });
+
+  /* ---------- giorni: 0 = asOf, DAYN = scadenza front; ogni giorno chiude alle 16:00 ---------- */
   const DAY_ON = DAYN > 0;
   const STEP = DAYN > 120 ? Math.ceil(DAYN/120) : 1;
   const DAYS = [];
-  if (DAY_ON){
-    for (let d = 0; d < DAYN; d += STEP) DAYS.push(d);
-    DAYS.push(DAYN);
+  if (DAY_ON){ for (let d = 0; d < DAYN; d += STEP) DAYS.push(d); DAYS.push(DAYN); }
+  const dayMs = d => (d === 0 ? ASOF_MS : nyInstant(ASOF_DAY + d*DAY_MS, CLOSE_MIN));
+  const dateOf = d => isoOf(ASOF_DAY + d*DAY_MS);
+  let BASE_SHIFT = 0;
+  if (DD.iv != null){
+    if (!isNum(DD.iv) || DD.iv <= 0 || DD.iv > 5) ERR("daily.iv fuori scala: scrivi 0.45 per 45%");
+    else if (CFG.ivToday == null) WARN("daily.iv ignorata: manca ivToday, il riferimento dello shift.");
+    else BASE_SHIFT = DD.iv - CFG.ivToday;
   }
-  const isoUTC = iso => {
-    const q = String(iso || "2026-12-18").split("-").map(Number);
-    return new Date(Date.UTC(q[0], q[1] - 1, q[2]));
-  };
-  const addD = (base, n) => { const c = new Date(base.getTime()); c.setUTCDate(c.getUTCDate() + n); return c; };
-  const isoOf = dt0 => dt0.toISOString().slice(0, 10);
-  const EXP_D = isoUTC(CFG.expiryISO);
-  const BASE_D = addD(EXP_D, -DAYN);
-  const dateOf = d => isoOf(addD(BASE_D, d));
-  const DD = CFG.daily || {};
-  const DAILY_IV = DD.iv != null ? DD.iv : (CFG.ivToday != null ? CFG.ivToday : 0.5);
-  const BASE_SHIFT = (CFG.ivToday != null ? DAILY_IV - CFG.ivToday : 0);
+  const HIST_SHIFT = (DD.histIv != null && isNum(DD.histIv) && CFG.ivToday != null) ? DD.histIv - CFG.ivToday : BASE_SHIFT;
+  const theta1 = (S, d, shift) => pnlAt(S, dayMs(d + 1), shift) - pnlAt(S, dayMs(d), shift);
+  const vega1 = S => (pnlAt(S, ASOF_MS, 0.01) - pnlAt(S, ASOF_MS, -0.01))/2;
 
-  /* ---------- formattazione ---------- */
-  const money = v => (v < 0 ? "−$" : "+$") + Math.abs(Math.round(v)).toLocaleString("en-US");
-  const moneyPlain = v => (v < 0 ? "−$" : "$") + Math.abs(Math.round(v)).toLocaleString("en-US");
-  const money2 = v => (v < 0 ? "−$" : "+$") + Math.abs(v).toLocaleString("en-US",
-    {minimumFractionDigits: 2, maximumFractionDigits: 2});
-  const moneyAbs2 = v => (v < 0 ? "−$" : "$") + Math.abs(v).toLocaleString("en-US",
-    {minimumFractionDigits: 2, maximumFractionDigits: 2});
-  const price2 = v => "$" + v.toFixed(2);
-  const num1 = v => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(1) + "%";
-  const tone = v => v >= 0 ? "pos2" : "neg2";
+  /* ---------- 5. formattazione, dominio e riepilogo ---------- */
+  const CUR_SYM = ({ USD: "$", EUR: "€", GBP: "£", JPY: "¥", CAD: "C$", AUD: "A$", HKD: "HK$", CHF: "CHF " })[CUR] ?? (CUR + " ");
+  const BADS = new Set();
+  const bad = (v, ctx) => { if (!Number.isFinite(v)){ BADS.add(ctx); if (TD.ready) ERR("Valore non finito in " + ctx); return true; } return false; };
+  const nf = (v, d) => Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+  const sgnCh = r => (r > 0 ? "+" : r < 0 ? "−" : "");
+  function money(v, ctx){ if (bad(v, ctx || "importo")) return "n/d"; const r = Math.round(v); return sgnCh(r) + CUR_SYM + nf(r, 0); }
+  function money2(v, ctx){ if (bad(v, ctx || "importo")) return "n/d"; const r = Math.round(v*100)/100; return sgnCh(r) + CUR_SYM + nf(r, 2); }
+  function amount2(v, ctx){ if (bad(v, ctx || "importo")) return "n/d"; const r = Math.round(v*100)/100; return (r < 0 ? "−" : "") + CUR_SYM + nf(r, 2); }
+  const PX_DEC = SPOT >= 1 ? 2 : SPOT >= 0.1 ? 3 : SPOT >= 0.01 ? 4 : 6;
+  function px(v, ctx){ if (bad(v, ctx || "prezzo")) return "n/d"; return CUR_SYM + nf(v, PX_DEC); }
+  function pct(v, ctx){ if (bad(v, ctx || "percentuale")) return "n/d"; return sgnCh(Math.round(v*10)) + Math.abs(v).toFixed(1) + "%"; }
+  function prob(p, ctx){ if (p == null) return "n/d"; if (bad(p, ctx || "probabilità")) return "n/d"; return (p*100).toFixed(1) + "%"; }
+  function signed3(v, ctx){ if (bad(v, ctx || "delta")) return "n/d"; return sgnCh(Math.round(v*1000)) + Math.abs(v).toFixed(3); }
+  const tone = v => (v >= 0 ? "pos2" : "neg2");
+  const boundTxt = (o, ctx) => (o.unbounded ? "illimitato" : money2(o.v, ctx));
+  const COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;
 
-  /* ---------- intestazione ---------- */
-  document.title = CFG.title;
-  $("title").textContent = CFG.title;
-  $("subtitle").textContent = CFG.subtitle;
-  $("legSpot").textContent = "Spot " + price2(CFG.spot);
-  $("legExpiry").textContent = "P&L a scadenza" + (CFG.expiryLabel ? " (" + CFG.expiryLabel + ")" : "");
+  function niceStep(raw){
+    if (!(raw > 0) || !Number.isFinite(raw)) return 1;
+    const p = Math.pow(10, Math.floor(Math.log10(raw)));
+    for (const c of [1, 2, 2.5, 5, 10]) if (c*p >= raw*(1 - 1e-9)) return c*p;
+    return 10*p;
+  }
+  const inBand = v => v > SPOT/4 && v < SPOT*4;
+  const BE_OUT = EXP.bes.filter(v => !inBand(v));
+  const anchors = [SPOT, ...KINKS, ...EXP.bes.filter(inBand)];
+  const aMin = Math.min(...anchors), aMax = Math.max(...anchors);
+  const x0r = Math.max(0, aMin*0.62), x1r = aMax*1.32;
+  const XT0 = niceStep((x1r - x0r)/8);
+  const X0 = CFG.xmin ?? Math.max(0, Math.floor(x0r/XT0)*XT0);
+  const X1 = CFG.xmax ?? Math.ceil(x1r/XT0)*XT0;
+  const XT = niceStep((X1 - X0)/8);
+  const SLIDER_STEP = niceStep((X1 - X0)/500);
+  if (BE_OUT.length) WARN("Break-even fuori dal grafico: " + BE_OUT.map(b => px(b)).join(" / ") + ".");
 
-  const chips = $("chips");
-  (CFG.chips || []).forEach(c => {
-    const d = document.createElement("div");
-    d.className = "chip" + (c.tone ? " " + c.tone : "");
-    d.innerHTML = c.label + " <b>" + c.value + "</b>";
-    chips.appendChild(d);
+  const PRICE_UNIT = niceStep(SPOT*0.01);
+  function scenarioRows(){
+    const rows = [];
+    const push = (p, tag) => {
+      if (!(p > 0) || rows.some(r => Math.abs(r.price - p) < PRICE_UNIT*0.5 && (r.tag || !tag))) return;
+      rows.push({ price: p, tag });
+    };
+    if (Array.isArray(CFG.scenarios) && CFG.scenarios.length){
+      CFG.scenarios.forEach((s, i) => {
+        const p = typeof s === "number" ? s : (s && s.price);
+        if (isNum(p) && p > 0) rows.push({ price: p, tag: null }); else ERR("scenarios[" + i + "] non valido");
+      });
+    } else {
+      EXP.bes.filter(v => v >= X0 && v <= X1).forEach(b => push(b, "Break-even"));
+      push(SPOT, "Spot");
+      KINKS.filter(v => v >= X0 && v <= X1).forEach(k => push(k, "Strike"));
+      [1.3, 1.1, 0.9, 0.75, 0.6, 0.45].forEach(k => {
+        const v = Math.round(SPOT*k/PRICE_UNIT)*PRICE_UNIT;
+        if (v >= X0 && v <= X1) push(+v.toPrecision(12), null);
+      });
+    }
+    rows.sort((a, b) => b.price - a.price);
+    return rows.map(r => Object.assign(r, {
+      exp: pnlExp(r.price), now: pnlNow(r.price),
+      ivDn: pnlAt(r.price, ASOF_MS, -IV_STRESS/100), ivUp: pnlAt(r.price, ASOF_MS, IV_STRESS/100)
+    }));
+  }
+  const SCEN = scenarioRows();
+
+  const unb = o => !!o.unbounded;
+  const SUM = (TD.summary = {
+    ok: true, version: 2, currency: CUR, spot: SPOT,
+    asOf: isoOf(ASOF_DAY), asOfMinutes: ASOF_MIN, frontExpiry: isoOf(FRONT_DAY), T0front: T0F, dayCount: DAYN,
+    bes: EXP.bes.slice(), besToday: NOW.bes.slice(), besOffChart: BE_OUT.slice(),
+    zones: EXP.zones.map(z => ({ from: z.from, to: z.to === Infinity ? null : z.to, sign: z.sign,
+      best: (z.unbounded || !Number.isFinite(z.best)) ? null : z.best, unbounded: !!z.unbounded, prob: z.prob })),
+    maxProfit: unb(EXP.max) ? null : EXP.max.v, maxProfitUnbounded: unb(EXP.max),
+    maxLoss: unb(EXP.min) ? null : EXP.min.v, maxLossUnbounded: unb(EXP.min),
+    pnlExpSpot: pnlExp(SPOT), pnlNowSpot: pnlNow(SPOT), deltaNow: deltaAt(SPOT, ASOF_MS, 0),
+    pnlMark: POS.pnlMark, pnlClose: POS.pnlClose, closeBasis: POS.basis,
+    thetaDay: theta1(SPOT, 0, 0), vegaPt: vega1(SPOT), sigmaAtm: SIG_ATM,
+    legs: POS.rows.map(r => ({ kind: r.l.kind, side: r.l.side, expiry: r.l.opt ? isoOf(r.l.expDay) : null,
+      T0: legT(r.l, ASOF_MS), model0: r.model0, mark: r.markV, exit: r.exitV, exitSrc: r.exitSrc, pItm: r.pItm })),
+    scenarios: SCEN.map(r => ({ price: r.price, exp: r.exp, now: r.now, ivDn: r.ivDn, ivUp: r.ivUp })),
+    ivStress: IV_STRESS, grid: { x0: X0, x1: X1, tick: XT, sliderStep: SLIDER_STEP }, daily: null
   });
 
-  /* ---------- grafico ---------- */
-  const W = 920, H = 470, PAD = {l:74, r:26, t:20, b:48};
+  /* ---------- 6. intestazione e chips ---------- */
+  $("legSpot").textContent = "Spot " + px(SPOT);
+  $("legExpiry").textContent = "P&L alla scadenza front (" + String(CFG.expiryLabel ?? itOf(FRONT_DAY)) + ")";
+  const chipsBox = $("chips");
+  function addChip(label, value, toneName, auto){
+    const d = document.createElement("div");
+    d.className = "chip" + ((toneName === "pos" || toneName === "neg" || toneName === "warn") ? " " + toneName : "") + (auto ? " auto" : "");
+    d.appendChild(document.createTextNode(String(label) + " "));
+    const b = document.createElement("b");
+    b.textContent = String(value);
+    d.appendChild(b);
+    if (auto) d.setAttribute("title", "Valore calcolato dal motore");
+    chipsBox.appendChild(d);
+  }
+  const BASIS_TXT = { "bid/ask": "bid/ask", "mid/mark": "mid/mark", "modello": "modello BSM" };
+  if (CFG.autoChips ?? true){
+    addChip("P&L al mark", money2(POS.pnlMark, "chip P&L"), POS.pnlMark >= 0 ? "pos" : "neg", true);
+    addChip("P&L chiusura · " + BASIS_TXT[POS.basis], money2(POS.pnlClose, "chip chiusura"), POS.pnlClose >= 0 ? "pos" : "neg", true);
+    addChip("BE", EXP.bes.length ? EXP.bes.map(b => px(b, "chip BE")).join(" / ") : "nessuno", "warn", true);
+    addChip("Max profit", boundTxt(EXP.max, "chip max profit"), "pos", true);
+    addChip("Max loss", boundTxt(EXP.min, "chip max loss"), "neg", true);
+    if (HAS_OPT) addChip("DTE front", String(DAYN) + (DAYN === 0 ? " · " + (T0F*365*24).toFixed(1) + " h" : ""), "", true);
+  }
+  (Array.isArray(CFG.chips) ? CFG.chips : []).forEach(c => { if (c) addChip(c.label ?? "", c.value ?? "", c.tone, false); });
+
+  /* ---------- 7. grafico del payoff ---------- */
+  const W = 920, H = 470, PAD = { l: 82, r: 26, t: 20, b: 48 };
   const iw = W - PAD.l - PAD.r, ih = H - PAD.t - PAD.b;
+  let ylo = Infinity, yhi = -Infinity;
+  for (let i = 0; i <= 400; i++){
+    const S = X0 + (X1 - X0)*i/400;
+    const a = pnlExp(S), b = pnlNow(S);
+    ylo = Math.min(ylo, a, b); yhi = Math.max(yhi, a, b);
+  }
+  let yspan = yhi - ylo;
+  if (!(yspan > 1e-9*SCALE)) yspan = Math.max(Math.abs(yhi), 1);
+  const YT = niceStep(yspan/6);
+  const Y0 = Math.min(Math.floor((ylo - 0.06*yspan)/YT)*YT, -YT);
+  const Y1 = Math.max(Math.ceil((yhi + 0.06*yspan)/YT)*YT, YT);
+  const yTick = v => (YT < 1 ? money2(v, "asse Y") : money(v, "asse Y"));
   const x = S => PAD.l + (S - X0)/(X1 - X0)*iw;
   const y = v => PAD.t + (Y1 - v)/(Y1 - Y0)*ih;
-  const invX = px => X0 + (px - PAD.l)/iw*(X1 - X0);
+  const invX = p => X0 + (p - PAD.l)/iw*(X1 - X0);
+  const clampY = v => Math.min(PAD.t + ih - 1, Math.max(PAD.t + 1, v));
 
   const svg = $("chart"), tip = $("tip");
   function el(tag, attrs, parent){
@@ -550,51 +1073,52 @@ const CONFIG = {
     if (parent) parent.appendChild(e);
     return e;
   }
+  function haloText(t, color){
+    t.style.fill = color;
+    t.style.paintOrder = "stroke";
+    t.style.stroke = "#0d1117";
+    t.style.strokeWidth = "3px";
+  }
   const defs = el("defs", {}, svg);
-  const cp = el("clipPath", {id:"plotclip"}, defs);
-  el("rect", {x:PAD.l, y:PAD.t, width:iw, height:ih}, cp);
-
+  const cp = el("clipPath", { id: "plotclip" }, defs);
+  el("rect", { x: PAD.l, y: PAD.t, width: iw, height: ih }, cp);
   const gGrid = el("g", {}, svg);
-  for (let v = Y0; v <= Y1; v += stepY){
-    el("line", {x1:PAD.l, y1:y(v), x2:PAD.l+iw, y2:y(v), class:"gridline"}, gGrid);
-    const t = el("text", {x:PAD.l-10, y:y(v)+4, "text-anchor":"end", class:"axis"}, gGrid);
-    t.textContent = (v > 0 ? "+$" : v < 0 ? "−$" : "$") + Math.abs(v).toLocaleString("en-US");
+  for (let k = Math.ceil(Y0/YT - 1e-9); k*YT <= Y1 + 1e-9*YT; k++){
+    const v = k*YT;
+    el("line", { x1: PAD.l, y1: y(v), x2: PAD.l + iw, y2: y(v), class: "gridline" }, gGrid);
+    el("text", { x: PAD.l - 10, y: y(v) + 4, "text-anchor": "end", class: "axis" }, gGrid).textContent = yTick(v);
   }
-  const stepX = (() => {
-    const span = X1 - X0;
-    return span > 700 ? 100 : span > 350 ? 50 : span > 140 ? 25 : 10;
-  })();
-  for (let s = Math.ceil(X0/stepX)*stepX; s <= X1; s += stepX){
-    el("line", {x1:x(s), y1:PAD.t, x2:x(s), y2:PAD.t+ih, class:"gridline"}, gGrid);
-    const t = el("text", {x:x(s), y:PAD.t+ih+20, "text-anchor":"middle", class:"axis"}, gGrid);
-    t.textContent = "$" + s;
+  for (let k = Math.ceil(X0/XT - 1e-9); k*XT <= X1 + 1e-9*XT; k++){
+    const s = k*XT;
+    el("line", { x1: x(s), y1: PAD.t, x2: x(s), y2: PAD.t + ih, class: "gridline" }, gGrid);
+    el("text", { x: x(s), y: PAD.t + ih + 20, "text-anchor": "middle", class: "axis" }, gGrid).textContent = px(s, "asse X");
   }
-  const xl = el("text", {x:PAD.l+iw/2, y:H-8, "text-anchor":"middle", class:"lbl"}, svg);
-  xl.textContent = "PREZZO DEL SOTTOSTANTE A SCADENZA";
-  const yl = el("text", {x:14, y:PAD.t+ih/2, "text-anchor":"middle", class:"lbl",
-    transform:"rotate(-90 14 " + (PAD.t+ih/2) + ")"}, svg);
-  yl.textContent = "P&L (USD)";
+  el("text", { x: PAD.l + iw/2, y: H - 8, "text-anchor": "middle", class: "lbl" }, svg).textContent = "PREZZO DEL SOTTOSTANTE";
+  el("text", { x: 14, y: PAD.t + ih/2, "text-anchor": "middle", class: "lbl",
+    transform: "rotate(-90 14 " + (PAD.t + ih/2) + ")" }, svg).textContent = "P&L (" + CUR + ")";
+  el("line", { x1: PAD.l, y1: y(0), x2: PAD.l + iw, y2: y(0), stroke: "#4a5563", "stroke-width": 1.2 }, svg);
 
-  el("line", {x1:PAD.l, y1:y(0), x2:PAD.l+iw, y2:y(0), stroke:"#4a5563", "stroke-width":1.2}, svg);
-
-  /* aree: verde dove il payoff a scadenza è positivo, rosso dove è negativo */
+  function samplePts(n, extra){
+    const s = [];
+    for (let i = 0; i <= n; i++) s.push(X0 + (X1 - X0)*i/n);
+    (extra || []).forEach(v => { if (v > X0 && v < X1) s.push(v); });
+    return s.sort((a, b) => a - b);
+  }
+  const PLOT_X = samplePts(800, [...KINKS, ...EXP.bes]);
   function splitAreas(){
-    const N = 800, out = {pos: [], neg: []};
+    const out = { pos: [], neg: [] };
     let run = null, prev = null;
-    for (let i = 0; i <= N; i++){
-      const S = X0 + (X1-X0)*i/N, v = pnlExp(S);
+    PLOT_X.forEach(S => {
+      const v = pnlExp(S);
       if (!run) run = { sign: v >= 0 ? 1 : -1, pts: [[S, v]] };
-      else if (prev && (prev.v >= 0) !== (v >= 0)){
-        const t = prev.v/(prev.v - v);
-        const Sc = prev.S + (S - prev.S)*t;
+      else if ((prev.v >= 0) !== (v >= 0)){
+        const t = prev.v/(prev.v - v), Sc = prev.S + (S - prev.S)*t;
         run.pts.push([Sc, 0]);
         out[run.sign > 0 ? "pos" : "neg"].push(run.pts);
         run = { sign: v >= 0 ? 1 : -1, pts: [[Sc, 0], [S, v]] };
-      } else {
-        run.pts.push([S, v]);
-      }
-      prev = { S: S, v: v };
-    }
+      } else run.pts.push([S, v]);
+      prev = { S, v };
+    });
     if (run) out[run.sign > 0 ? "pos" : "neg"].push(run.pts);
     return out;
   }
@@ -602,165 +1126,122 @@ const CONFIG = {
     if (pts.length < 2) return "";
     let d = "M" + x(pts[0][0]).toFixed(1) + "," + y(0).toFixed(1);
     pts.forEach(pt => { d += "L" + x(pt[0]).toFixed(1) + "," + y(pt[1]).toFixed(1); });
-    return d + "L" + x(pts[pts.length-1][0]).toFixed(1) + "," + y(0).toFixed(1) + "Z";
+    return d + "L" + x(pts[pts.length - 1][0]).toFixed(1) + "," + y(0).toFixed(1) + "Z";
   }
-
-  const gPlot = el("g", {"clip-path":"url(#plotclip)"}, svg);
-  const areas = splitAreas();
-  const areaPos = el("path", {class:"fillpos", d: areas.pos.map(polyPath).join(" ")}, gPlot);
-  const areaNeg = el("path", {class:"fillneg", d: areas.neg.map(polyPath).join(" ")}, gPlot);
-
-  function pathFor(fn, step){
+  function pathFor(fn, xs){
     let d = "";
-    for (let S = X0; S <= X1; S += step) d += (d ? "L" : "M") + x(S).toFixed(1) + "," + y(fn(S)).toFixed(1);
-    d += "L" + x(X1).toFixed(1) + "," + y(fn(X1)).toFixed(1);
+    xs.forEach(S => { d += (d ? "L" : "M") + x(S).toFixed(1) + "," + y(fn(S)).toFixed(1); });
     return d;
   }
-  const lineExp = el("path", {class:"payoff", d: pathFor(pnlExp, stepX/8)}, gPlot);
-  const lineNow = el("path", {class:"nowcurve", d: pathFor(pnlNow, stepX/20)}, gPlot);
+  const gPlot = el("g", { "clip-path": "url(#plotclip)" }, svg);
+  const areas = splitAreas();
+  const areaPos = el("path", { class: "fillpos", d: areas.pos.map(polyPath).join(" ") }, gPlot);
+  const areaNeg = el("path", { class: "fillneg", d: areas.neg.map(polyPath).join(" ") }, gPlot);
+  const lineExp = el("path", { class: "payoff", d: pathFor(pnlExp, PLOT_X) }, gPlot);
+  const NOW_X = samplePts(600, KINKS);
+  const lineNow = el("path", { class: "nowcurve", d: pathFor(pnlNow, NOW_X) }, gPlot);
 
-  /* linee di riferimento */
+  /* linee verticali: spot, ogni strike, ogni break-even; etichette su righe diverse */
   const gMark = el("g", {}, svg);
-  function vline(price, cls, label, color){
-    el("line", {x1:x(price), y1:PAD.t, x2:x(price), y2:PAD.t+ih, class:cls}, gMark);
-    const onRight = x(price) > W - 190;
-    const t = el("text", { x: x(price) + (onRight ? -6 : 6), y: PAD.t+ih-9,
-      class:"lbl", "text-anchor": onRight ? "end" : "start" }, gMark);
-    t.style.fill = color;
-    t.style.paintOrder = "stroke";
-    t.style.stroke = "#0d1117";
-    t.style.strokeWidth = "3px";
+  const labelRows = { top: [], bottom: [] };
+  function vline(price, cls, label, color, pos){
+    if (!(price >= X0 && price <= X1)) return;
+    const xp = x(price), wpx = label.length*6.3 + 10;
+    const onRight = xp + wpx > W - PAD.r;
+    const start = onRight ? xp - wpx : xp, rows = labelRows[pos];
+    let r = 0;
+    while (r < 6 && rows[r] != null && rows[r] > start - 4) r++;
+    rows[r] = start + wpx;
+    el("line", { x1: xp, y1: PAD.t, x2: xp, y2: PAD.t + ih, class: cls }, gMark);
+    const ty = pos === "top" ? PAD.t + 12 + 12*r : PAD.t + ih - 9 - 12*r;
+    const t = el("text", { x: onRight ? xp - 6 : xp + 6, y: ty, class: "lbl", "text-anchor": onRight ? "end" : "start" }, gMark);
+    haloText(t, color);
     t.textContent = label;
   }
-  vline(CFG.spot, "refspot", "SPOT " + price2(CFG.spot), "#d29922");
-  const beLabel = (strikes.length ? strikes.map(s => "K " + s).join(" · ") + " · " : "")
-                + (BES.length ? "BE " + BES.map(b => b.toFixed(2)).join(" / ") : "");
-  if (beLabel) vline(BES.length ? BES[0] : strikes[0], "refline", beLabel, "#9aa4b1");
+  KINKS.forEach(k => vline(k, "refstrike", "K " + px(k), "#bc8cff", "top"));
+  [{ p: SPOT, spot: true }, ...EXP.bes.map(b => ({ p: b, spot: false }))]
+    .sort((a, b) => a.p - b.p)
+    .forEach(m => m.spot ? vline(m.p, "refspot", "SPOT " + px(m.p), "#d29922", "bottom")
+                         : vline(m.p, "refline", "BE " + px(m.p), "#c9d1d9", "bottom"));
 
-  const hoverLine = el("line", {y1:PAD.t, y2:PAD.t+ih, x1:-10, x2:-10,
-    stroke:"#8b949e", "stroke-width":1, "stroke-dasharray":"2 4", opacity:.7}, svg);
-  const cursor = el("line", {class:"cursor", y1:PAD.t, y2:PAD.t+ih, x1:-10, x2:-10}, svg);
-  const dotExp = el("circle", {r:4.5, class:"dot", cx:-10, cy:-10}, svg);
-  const dotNow = el("circle", {r:4.5, class:"dotnow", cx:-10, cy:-10}, svg);
+  const hoverLine = el("line", { y1: PAD.t, y2: PAD.t + ih, x1: -10, x2: -10,
+    stroke: "#8b949e", "stroke-width": 1, "stroke-dasharray": "2 4", opacity: .7 }, svg);
+  const cursor = el("line", { class: "cursor", y1: PAD.t, y2: PAD.t + ih, x1: -10, x2: -10 }, svg);
+  const dotExp = el("circle", { r: 4.5, class: "dot", cx: -10, cy: -10 }, svg);
+  const dotNow = el("circle", { r: 4.5, class: "dotnow", cx: -10, cy: -10 }, svg);
 
-  /* ---------- stato e interazione ---------- */
+  /* ---------- 8. stato e interazione ---------- */
   const slider = $("slider");
-  slider.min = X0; slider.max = X1; slider.step = 1; slider.value = CFG.spot;
-
-  const clampY = v => Math.min(PAD.t+ih-1, Math.max(PAD.t+1, v));
-  let cur = CFG.spot;
-
-  /* slider del giorno: 0 = oggi, DAYN = scadenza. Passo 1 giorno. */
-  let daySel = 0;
-  let ivShiftPts = 0;
-  const dayT = () => Math.max(0, (DAYN - daySel)/365);
+  slider.min = String(X0); slider.max = String(X1); slider.step = String(SLIDER_STEP); slider.value = String(SPOT);
+  let cur = SPOT, daySel = 0, ivShiftPts = 0;
   const dayShift = () => BASE_SHIFT + ivShiftPts/100;
   let lineDay = null, dotDay = null;
-
+  const DAY_X = samplePts(600, KINKS);
   function dayCurve(){
-    if (!lineDay) return;
-    lineDay.setAttribute("d", pathFor(S => pnlAtShift(S, dayT(), dayShift()), stepX/20));
+    if (lineDay) lineDay.setAttribute("d", pathFor(S => pnlAt(S, dayMs(daySel), dayShift()), DAY_X));
   }
   function dayText(){
     if (!DAY_ON) return;
-    $("dayLabel").textContent = dateOf(daySel) + " · " + (DAYN - daySel) + " giorni alla scadenza";
+    $("dayLabel").textContent = dateOf(daySel) + " · " + (DAYN - daySel) + " giorni alla scadenza front";
     $("legDay").textContent = "P&L al giorno " + daySel + " (" + dateOf(daySel) + ")";
     $("rDayK").textContent = "P&L al giorno " + daySel;
     $("rDeltaDayK").textContent = "Delta al giorno " + daySel;
   }
-
-  if (DAY_ON){
-    lineDay = el("path", {class: "daycurve", d: ""}, gPlot);
-    dotDay = el("circle", {r: 4.5, class: "dotday", cx: -10, cy: -10}, svg);
-    const ds = $("daySlider");
-    ds.min = 0; ds.max = DAYN; ds.step = 1; ds.value = 0;
-    $("dayCtlLabel").textContent = "Giorno 0…" + DAYN;
-    $("dayCtl").classList.remove("hide");
-    $("dayBtn").classList.remove("hide");
-    $("legDayWrap").classList.remove("hide");
-    $("roDay").classList.remove("hide");
-    $("roDayDelta").classList.remove("hide");
-    ds.addEventListener("input", e => {
-      daySel = parseInt(e.target.value, 10) || 0;
-      dayCurve(); dayText(); applySeries(); render(cur);
-      tip.classList.remove("show");
-    });
-  } else {
-    $("dayCtl").classList.add("hide");
-    $("dayBtn").classList.add("hide");
-    $("legDayWrap").classList.add("hide");
-    $("roDay").classList.add("hide");
-    $("roDayDelta").classList.add("hide");
-    const ro = document.querySelector("#chartbox .readout");
-    if (ro) ro.classList.remove("r6");
-  }
-
+  const SCEN_TR = [];
   function render(p){
     cur = p;
-    slider.value = p;
-    $("qval").textContent = moneyPlain(p);
+    slider.value = String(p);
+    $("qval").textContent = px(p, "slider");
     const xe = x(p);
     cursor.setAttribute("x1", xe); cursor.setAttribute("x2", xe);
-    const pe = pnlExp(p), pn = pnlNow(p), dl = deltaNow(p);
+    const pe = pnlExp(p), pn = pnlNow(p), dl = deltaAt(p, ASOF_MS, 0);
     dotExp.setAttribute("cx", xe); dotExp.setAttribute("cy", clampY(y(pe)));
     dotNow.setAttribute("cx", xe); dotNow.setAttribute("cy", clampY(y(pn)));
     if (DAY_ON){
-      const pd = pnlAtShift(p, dayT(), dayShift());
-      const dd = deltaAtShift(p, dayT(), dayShift());
-      if (dotDay){
-        dotDay.setAttribute("cx", xe);
-        dotDay.setAttribute("cy", clampY(y(pd)));
-      }
-      $("rDay").textContent = money2(pd);
+      const pd = pnlAt(p, dayMs(daySel), dayShift()), dd = deltaAt(p, dayMs(daySel), dayShift());
+      dotDay.setAttribute("cx", xe); dotDay.setAttribute("cy", clampY(y(pd)));
+      $("rDay").textContent = money2(pd, "P&L giorno");
       $("rDay").className = "v " + (pd >= 0 ? "green" : "red");
-      $("rDeltaDay").textContent = (dd > 0 ? "+" : "") + dd.toFixed(3);
+      $("rDeltaDay").textContent = signed3(dd, "delta giorno");
     }
-    $("rPrice").textContent = moneyPlain(p);
-    $("rExp").textContent = money(pe); $("rExp").className = "v " + (pe >= 0 ? "green" : "red");
-    $("rNow").textContent = money(pn); $("rNow").className = "v " + (pn >= 0 ? "green" : "red");
-    $("rDelta").textContent = (dl > 0 ? "+" : "") + dl.toFixed(3);
-    document.querySelectorAll("#scen tr[data-price]").forEach(tr => {
-      tr.classList.toggle("hi", Math.abs(parseFloat(tr.dataset.price) - p) < 1);
-    });
+    $("rPrice").textContent = px(p, "prezzo ipotetico");
+    $("rExp").textContent = money(pe, "P&L scadenza"); $("rExp").className = "v " + (pe >= 0 ? "green" : "red");
+    $("rNow").textContent = money(pn, "P&L oggi"); $("rNow").className = "v " + (pn >= 0 ? "green" : "red");
+    $("rDelta").textContent = signed3(dl, "delta");
+    SCEN_TR.forEach(o => o.tr.classList.toggle("hi", Math.abs(o.price - p) < Math.max(SLIDER_STEP, 1e-9)));
   }
-
   function showTip(p){
-    const pe = pnlExp(p), pn = pnlNow(p), dl = deltaNow(p);
-    const pd = DAY_ON ? pnlAtShift(p, dayT(), dayShift()) : 0;
-    const gap = (p/CFG.spot - 1)*100;
-    const hTip = DAY_ON ? 126 : 100;
-    tip.innerHTML =
-      '<div class="t1">' + CFG.ticker + " " + moneyPlain(p) + " (" + num1(gap) + ")</div>" +
-      '<div class="row"><span class="muted">a scadenza</span><b class="' + tone(pe) + '">' + money(pe) + "</b></div>" +
-      '<div class="row"><span class="muted">oggi</span><b class="' + tone(pn) + '">' + money(pn) + "</b></div>" +
-      (DAY_ON ? '<div class="row"><span class="muted">giorno ' + daySel + '</span><b class="' +
-        tone(pd) + '">' + money(pd) + "</b></div>" : "") +
-      '<div class="row"><span class="muted">delta</span><b>' + (dl > 0 ? "+" : "") + dl.toFixed(3) + "</b></div>";
-    const svgR = svg.getBoundingClientRect();
-    const boxR = tip.parentElement.getBoundingClientRect();
-    const scale = svgR.width / W;
-    const ax = svgR.left - boxR.left + x(p)*scale;
-    const ay = svgR.top - boxR.top + y(pn)*scale;
-    let left = ax + 16;
+    const pe = pnlExp(p), pn = pnlNow(p), dl = deltaAt(p, ASOF_MS, 0);
+    const pd = DAY_ON ? pnlAt(p, dayMs(daySel), dayShift()) : 0;
+    const row = (k, v, cls) => '<div class="row"><span class="muted">' + esc(k) + '</span><b class="' + (cls || "") + '">' + esc(v) + "</b></div>";
+    tip.innerHTML = '<div class="t1">' + esc(CFG.ticker) + " " + esc(px(p)) + " (" + esc(pct((p/SPOT - 1)*100)) + ")</div>" +
+      row("a scadenza", money(pe), tone(pe)) + row("oggi", money(pn), tone(pn)) +
+      (DAY_ON ? row("giorno " + daySel, money(pd), tone(pd)) : "") + row("delta", signed3(dl), "");
+    const svgR = svg.getBoundingClientRect(), boxR = $("chartbox").getBoundingClientRect();
+    const scale = svgR.width/W || 1, hTip = DAY_ON ? 126 : 100;
+    const ax = svgR.left - boxR.left + x(p)*scale, ay = svgR.top - boxR.top + clampY(y(pn))*scale;
+    let left = ax + 16, top = ay - hTip;
     if (left + 210 > boxR.width) left = ax - 216;
-    let top = ay - hTip;
     if (top < 4) top = ay + 18;
     if (top + hTip > boxR.height) top = boxR.height - hTip - 4;
     tip.style.left = Math.max(4, left) + "px";
     tip.style.top = Math.max(0, top) + "px";
     tip.classList.add("show");
   }
-
-  slider.addEventListener("input", e => { render(parseFloat(e.target.value)); tip.classList.remove("show"); });
-
+  slider.addEventListener("input", e => {
+    const v = parseFloat(e.target.value);
+    if (Number.isFinite(v)) render(v);
+    tip.classList.remove("show");
+  });
   let dragging = false;
   function fromEvent(ev){
     const b = svg.getBoundingClientRect();
-    const px = (ev.clientX - b.left)*(W/b.width);
-    return Math.max(X0, Math.min(X1, invX(px)));
+    const p = (ev.clientX - b.left)*(W/(b.width || W));
+    return Math.max(X0, Math.min(X1, invX(p)));
   }
   svg.addEventListener("pointerdown", ev => {
-    dragging = true; svg.setPointerCapture(ev.pointerId);
+    dragging = true;
+    if (svg.setPointerCapture && ev.pointerId != null) svg.setPointerCapture(ev.pointerId);
     const p = fromEvent(ev); render(p); showTip(p);
   });
   svg.addEventListener("pointermove", ev => {
@@ -774,274 +1255,281 @@ const CONFIG = {
     dragging = false; tip.classList.remove("show");
     hoverLine.setAttribute("x1", -10); hoverLine.setAttribute("x2", -10);
   });
-
-  function seriesMode(){
-    const b = document.querySelector(".btn[data-series].on");
-    return b ? b.dataset.series : "both";
-  }
+  const SERIES = ["serBoth", "serExp", "serNow", "dayBtn"].map(id => $(id));
+  let seriesMode = "both";
   function applySeries(){
-    const m = seriesMode();
+    const m = seriesMode;
     const showDay = DAY_ON && (m === "day" || (m === "both" && daySel > 0));
-    lineExp.style.display = (m === "now" || m === "day") ? "none" : "";
+    const hideExp = m === "now" || m === "day";
+    lineExp.style.display = hideExp ? "none" : "";
+    areaPos.style.display = hideExp ? "none" : "";
+    areaNeg.style.display = hideExp ? "none" : "";
     lineNow.style.display = (m === "exp" || m === "day") ? "none" : "";
-    areaPos.style.display = (m === "now" || m === "day") ? "none" : "";
-    areaNeg.style.display = (m === "now" || m === "day") ? "none" : "";
     if (lineDay) lineDay.style.display = showDay ? "" : "none";
     if (dotDay) dotDay.style.display = showDay ? "" : "none";
     if (DAY_ON) $("legDayWrap").style.display = showDay ? "" : "none";
   }
-  document.querySelectorAll(".btn[data-series]").forEach(b => {
-    b.addEventListener("click", () => {
-      document.querySelectorAll(".btn[data-series]").forEach(o => o.classList.remove("on"));
-      b.classList.add("on");
-      applySeries();
+  SERIES.forEach(b => b.addEventListener("click", () => {
+    SERIES.forEach(o => o.classList.remove("on"));
+    b.classList.add("on");
+    seriesMode = b.getAttribute("data-series") || "both";
+    applySeries();
+  }));
+  $("reset").addEventListener("click", () => render(SPOT));
+  if (DAY_ON){
+    lineDay = el("path", { class: "daycurve", d: "" }, gPlot);
+    dotDay = el("circle", { r: 4.5, class: "dotday", cx: -10, cy: -10 }, svg);
+    const ds = $("daySlider");
+    ds.min = "0"; ds.max = String(DAYN); ds.step = "1"; ds.value = "0";
+    $("dayCtlLabel").textContent = "Giorno 0…" + DAYN;
+    ["dayCtl", "dayBtn", "legDayWrap", "roDay", "roDayDelta"].forEach(id => $(id).classList.remove("hide"));
+    ds.addEventListener("input", e => {
+      const v = parseInt(e.target.value, 10);
+      daySel = Number.isFinite(v) ? Math.max(0, Math.min(DAYN, v)) : 0;
+      dayCurve(); dayText(); applySeries(); render(cur);
+      tip.classList.remove("show");
     });
-  });
-  $("reset").addEventListener("click", () => render(CFG.spot));
+  } else {
+    ["dayCtl", "dayBtn", "legDayWrap", "roDay", "roDayDelta"].forEach(id => $(id).classList.add("hide"));
+    $("readoutMain").classList.remove("r6");
+  }
 
-  /* ---------- card di zona ---------- */
+  /* ---------- 9. card di zona: segni del payoff tra i break-even ordinati ---------- */
   const zoneWrap = $("zoneCards");
-  /* estremi reali del payoff: S=0, strike, e pendenza a +infinito */
-  function extremes(){
-    let lo = Infinity, hi = -Infinity;
-    [0].concat(strikes, [CFG.spot]).forEach(S => {
-      const v = pnlExp(S);
-      if (v < lo) lo = v;
-      if (v > hi) hi = v;
-    });
-    /* pendenza per S molto grande: conta call e azioni */
-    const slopeUp = CFG.legs.reduce((a,l) => {
-      const m = (l.kind === "stock" ? 1 : MULT);
-      if (l.kind === "stock" || l.kind === "call") return a + sideSign(l)*(l.qty||1)*m;
-      return a;
-    }, 0);
-    return { lo: lo, hi: hi, unlimitedUp: slopeUp > 0, unlimitedLoss: slopeUp < 0 };
-  }
-  const EXT = extremes();
-  const loV = EXT.lo, hiV = EXT.hi;
-  const hiLabel = EXT.unlimitedUp ? "illimitato" : money(hiV);
-  const loLabel = EXT.unlimitedLoss ? "illimitato" : money(loV);
-  function autoZones(){
-    const out = [];
-    if (BES.length){
-      out.push({ k: "Zona di profitto", v: "sopra " + price2(BES[0]), cls: "green",
-        note: "Guadagno massimo: " + hiLabel + "." });
-      out.push({ k: "Zona di perdita", v: "sotto " + price2(BES[0]), cls: "red",
-        note: "Perdita massima: " + loLabel + "." });
-    }
-    const nearest = strikes.length ? Math.min(...strikes) : CFG.spot;
-    const buf = Math.abs(CFG.spot - nearest)/CFG.spot*100;
-    out.push({ k: "Distanza dallo strike", v: buf.toFixed(1) + "%", cls: "blue",
-      note: "Differenza tra spot e strike più vicino, in percentuale." });
-    return out;
-  }
-  (CFG.zones || autoZones()).forEach(z => {
+  function card(k, v, cls, note){
     const d = document.createElement("div");
     d.className = "card";
-    d.innerHTML = '<div class="k">' + z.k + '</div><div class="v ' + (z.cls||"") + '">' + z.v +
-                  '</div>' + (z.note ? '<div class="note">' + z.note + "</div>" : "");
+    const a = document.createElement("div"); a.className = "k"; a.textContent = k; d.appendChild(a);
+    const b = document.createElement("div"); b.className = "v " + (cls || ""); b.textContent = v; d.appendChild(b);
+    if (note){ const c = document.createElement("div"); c.className = "note"; c.textContent = note; d.appendChild(c); }
     zoneWrap.appendChild(d);
+  }
+  const rangeTxt = z => (z.from <= 0 && z.to === Infinity) ? "ogni prezzo"
+    : z.from <= 0 ? "sotto " + px(z.to) : z.to === Infinity ? "sopra " + px(z.from) : px(z.from) + " – " + px(z.to);
+  const distPct = k => (k/SPOT - 1)*100;
+  if (Array.isArray(CFG.zones) && CFG.zones.length){
+    CFG.zones.forEach(z => card(String(z.k ?? ""), String(z.v ?? ""),
+      ["green", "red", "blue", "amber", "orange"].includes(z.cls) ? z.cls : "", z.note ? String(z.note) : ""));
+  } else {
+    EXP.zones.forEach(z => {
+      const head = z.sign > 0 ? "Zona di profitto" : z.sign < 0 ? "Zona di perdita" : "Zona in pari";
+      const ext = z.sign > 0 ? "Guadagno massimo nella zona: " + (z.unbounded ? "illimitato" : money2(z.best, "zona"))
+                : z.sign < 0 ? "Perdita massima nella zona: " + (z.unbounded ? "illimitata" : money2(z.best, "zona"))
+                : "P&L zero";
+      const pr = z.prob == null ? "" : " Probabilità a scadenza: " + prob(z.prob, "zona") + " (risk-neutral, lognormale).";
+      card(head, rangeTxt(z), z.sign > 0 ? "blue" : z.sign < 0 ? "orange" : "", ext + "." + pr);
+    });
+    const shortK = OPTS.filter(l => l.sgn < 0).map(l => l.strike);
+    const kb = shortK.filter(k => k <= SPOT), ka = shortK.filter(k => k > SPOT);
+    const parts = [];
+    if (kb.length){ const k = Math.max(...kb); parts.push("sotto: K " + px(k) + " (" + pct(distPct(k)) + ")"); }
+    if (ka.length){ const k = Math.min(...ka); parts.push("sopra: K " + px(k) + " (" + pct(distPct(k)) + ")"); }
+    card("Distanza dagli strike short", parts.length ? parts.join(" · ") : "nessuno strike short", "",
+      "Distanza tra lo spot e lo strike short più vicino, su ogni lato.");
+    if (EXP.bes.length){
+      const bb = EXP.bes.filter(b => b <= SPOT), ba = EXP.bes.filter(b => b > SPOT), p2 = [];
+      if (bb.length){ const b = Math.max(...bb); p2.push("sotto: " + px(b) + " (" + pct(distPct(b)) + ")"); }
+      if (ba.length){ const b = Math.min(...ba); p2.push("sopra: " + px(b) + " (" + pct(distPct(b)) + ")"); }
+      card("Distanza dai break-even", p2.join(" · "), "", "Distanza tra lo spot e il break-even più vicino, alla scadenza front.");
+    }
+  }
+
+  /* ---------- 10. gambe ed economia ---------- */
+  const legName = l => (l.side === "short" ? "Short " : "Long ") + l.qty + "× " +
+    (l.opt ? (l.kind === "put" ? "put " : "call ") + px(l.strike) : "azioni");
+  let lh = '<div class="k">Gambe aperte</div><div class="v" style="font-size:16px">' +
+    esc(LEGS.map(legName).join(" · ")) + ' <span class="unit">front ' + esc(CFG.expiryLabel ?? itOf(FRONT_DAY)) + "</span></div>" +
+    '<table style="margin-top:12px"><thead><tr><th>Gamba</th><th>Scad.</th><th class="n">Entry</th><th class="n">Mark</th>' +
+    '<th class="n">Bid / ask</th><th class="n">P&amp;L chiusura</th><th class="n">P(ITM)</th></tr></thead><tbody>';
+  POS.rows.forEach(r => {
+    const l = r.l;
+    const q = (l.bid != null || l.ask != null) ? (l.bid != null ? px(l.bid) : "—") + " / " + (l.ask != null ? px(l.ask) : "—") : "—";
+    lh += '<tr><td class="muted">' + esc(legName(l)) + (l.opt && l.style === "american" ? '<span class="basis">amer.</span>' : "") + "</td>" +
+      "<td>" + (l.opt ? esc(itOf(l.expDay)) : "—") + "</td>" +
+      '<td class="n">' + esc(px(l.entry, "entry")) + "</td>" +
+      '<td class="n">' + esc(px(r.markV, "mark")) + (r.markSrc !== "mark" ? '<span class="basis">' + esc(r.markSrc) + "</span>" : "") + "</td>" +
+      '<td class="n">' + esc(q) + "</td>" +
+      '<td class="n ' + tone(r.pc) + '">' + esc(money2(r.pc, "P&L gamba")) + '<span class="basis">' + esc(r.exitSrc) + "</span></td>" +
+      '<td class="n">' + (r.pItm == null ? "—" : esc(prob(r.pItm, "P(ITM)"))) + "</td></tr>";
   });
+  lh += "</tbody></table>" +
+    '<div class="note">Moltiplicatori ' + esc(LEGS.map(l => l.mult).join(", ")) + " · valuta " + esc(CUR) +
+    ". P&L chiusura: bid per le long, ask per le short. Senza quotazione: mid/mark o modello BSM. " +
+    "P(ITM) alla scadenza della gamba: N(d2) per le call, N(−d2) per le put. Misura risk-neutral, lognormale: non è una previsione reale.</div>" +
+    (CFG.legsNote ? '<div class="note">' + esc(CFG.legsNote) + "</div>" : "");
+  $("legsCard").innerHTML = lh;
 
-  /* ---------- gamba + economia ---------- */
-  const legsCard = $("legsCard");
-  const legRows = CFG.legs.map(l => {
-    const name = l.kind === "stock" ? "Azioni" : (l.kind === "put" ? "Put" : "Call");
-    const pos = (l.side === "short" ? "Short " : "Long ") + (l.qty || 1) + "× " + name +
-                (l.strike != null ? " " + l.strike : "");
-    const mv = l.mark != null ? l.mark : (l.kind === "stock" ? CFG.spot : bsValue(l, CFG.spot, T0));
-    const pnl = sideSign(l)*(mv - l.entry)*(l.qty||1)*legMult(l);
-    const cash = -sideSign(l)*(l.entry||0)*(l.qty||1)*legMult(l);
-    return '<tr><td class="muted">' + pos + '</td><td class="n">' +
-           (cash >= 0 ? "+" : "−") +
-           "$" + Math.abs(Math.round(cash)).toLocaleString("en-US") +
-           '</td><td class="n">' + moneyPlain(mv*legMult(l)*(l.qty||1)) +
-           '</td><td class="n ' + tone(pnl) + '">' + money(pnl) + "</td></tr>";
-  }).join("");
-  legsCard.innerHTML =
-    '<div class="k">Gambe aperte</div>' +
-    '<div class="v">' + CFG.legs.map(l => (l.kind === "stock" ? "Azioni" :
-      (l.side === "short" ? "Short " : "Long ") + (l.kind === "put" ? "put" : "call") + " " + l.strike)).join(" · ") +
-    ' <span class="unit">scad. ' + (CFG.expiryLabel || "—") + "</span></div>" +
-    '<table style="margin-top:12px"><thead><tr><th>Gamba</th><th class="n">Entry</th>' +
-    '<th class="n">Mark</th><th class="n">P&amp;L</th></tr></thead><tbody>' + legRows + "</tbody></table>" +
-    (CFG.legsNote ? '<div class="note">' + CFG.legsNote + "</div>" : "");
-
-  const pnlTotal = pnlNow(CFG.spot);
+  const ratioTxt = (!unb(EXP.max) && !unb(EXP.min) && EXP.max.v > 0 && EXP.min.v < 0)
+    ? (Math.abs(EXP.min.v)/EXP.max.v).toFixed(2) + "×" : "—";
   const econRows = [
-    ["Max profit", hiLabel, "pos"],
-    ["Max loss", loLabel, "neg"],
-    ["Break-even", BES.length ? BES.map(b => price2(b)).join(" / ") : "—", ""],
-    ["P&L oggi", money(pnlTotal), pnlTotal >= 0 ? "pos" : "neg"],
-    ["Rapporto loss/profit", (hiV > 0 && !EXT.unlimitedUp && !EXT.unlimitedLoss ? (Math.abs(loV)/hiV).toFixed(1) + "×" : "—"), "neg"],
-    ["DTE", String(CFG.dte != null ? CFG.dte : "—"), ""]
+    ["Max profit · scadenza front", boundTxt(EXP.max, "max profit"), "pos2"],
+    ["Max loss · scadenza front", boundTxt(EXP.min, "max loss"), "neg2"],
+    ["Break-even · scadenza front", EXP.bes.length ? EXP.bes.map(b => px(b, "BE")).join(" / ") : "nessuno", ""],
+    ["Break-even · oggi (modello)", NOW.bes.length ? NOW.bes.map(b => px(b, "BE oggi")).join(" / ") : "nessuno", ""],
+    ["P&L al mark", money2(POS.pnlMark, "P&L mark"), tone(POS.pnlMark)],
+    ["P&L chiusura · " + BASIS_TXT[POS.basis], money2(POS.pnlClose, "P&L chiusura"), tone(POS.pnlClose)],
+    ["Costo dello spread", money2(POS.pnlClose - POS.pnlMark, "spread"), ""],
+    ["Rapporto loss/profit", ratioTxt, ""],
+    ["DTE front · tempo residuo", DAYN + " g · " + (T0F*365).toFixed(2) + " g", ""],
+    ["Delta (modello, IV fissa)", signed3(SUM.deltaNow, "delta"), ""],
+    ["Theta 1 giorno (modello)", money2(SUM.thetaDay, "theta"), tone(SUM.thetaDay)],
+    ["Vega 1 punto di IV (modello)", money2(SUM.vegaPt, "vega"), ""]
   ];
-  $("econCard").innerHTML =
-    '<div class="k">Economia della posizione</div>' +
-    '<table style="margin-top:12px"><tbody>' +
-    econRows.map(r => '<tr><td class="muted">' + r[0] + '</td><td class="n ' + r[2] + '">' + r[1] + "</td></tr>").join("") +
-    "</tbody></table>" +
-    ((CFG.greeks || []).length
-      ? '<div class="k" style="margin-top:16px">Sensibilità</div><table style="margin-top:6px"><tbody>' +
-        CFG.greeks.map(g => '<tr><td class="muted">' + g.name + '</td><td class="n">' + g.value +
-          (g.note ? ' <span class="muted">· ' + g.note + '</span>' : "") + "</td></tr>").join("") +
-        "</tbody></table>"
-      : "");
+  let eh = '<div class="k">Economia della posizione</div><table style="margin-top:12px"><tbody>' +
+    econRows.map(r => '<tr><td class="muted">' + esc(r[0]) + '</td><td class="n ' + r[2] + '">' + esc(r[1]) + "</td></tr>").join("") +
+    "</tbody></table>";
+  if (Array.isArray(CFG.greeks) && CFG.greeks.length){
+    eh += '<div class="k" style="margin-top:16px">Sensibilità · fonte esterna</div><table style="margin-top:6px"><tbody>' +
+      CFG.greeks.map(g => '<tr><td class="muted">' + esc(g && g.name) + '</td><td class="n">' + esc(g && g.value) +
+        (g && g.note ? ' <span class="muted">· ' + esc(g.note) + "</span>" : "") + "</td></tr>").join("") + "</tbody></table>";
+  }
+  $("econCard").innerHTML = eh;
 
-  /* ---------- waterfall ---------- */
-  if ((CFG.bridge || []).length && $("sec4")){
+  /* ---------- 11. ponte dei flussi di cassa ---------- */
+  if (Array.isArray(CFG.bridge) && CFG.bridge.length){
     const rows = [];
     let run = 0;
-    CFG.bridge.forEach(d => {
-      if (d.kind === "total"){ rows.push({ label: d.label, from: 0, to: run, total: true }); }
-      else { const from = run; run += d.value; rows.push({ label: d.label, from: from, to: run, value: d.value, total: false }); }
+    CFG.bridge.forEach((d, i) => {
+      if (!d) return;
+      if (d.kind === "total") rows.push({ label: d.label, from: 0, to: run, total: true });
+      else if (isNum(d.value)){ const from = run; run += d.value; rows.push({ label: d.label, from, to: run, value: d.value, total: false }); }
+      else ERR("bridge[" + i + "]: value non è un numero");
     });
     const vals = rows.flatMap(r => [r.from, r.to]).concat([0]);
     const lo = Math.min(...vals), hi = Math.max(...vals);
-    const pad = (hi - lo) * 0.08 || 500;
-    const h = 170;
-    const yy = v => (hi + pad - v)/((hi + pad) - (lo - pad || 1))*h;
+    const pad = (hi - lo)*0.08 || 1;
+    const hh = 170, yy = v => (hi + pad - v)/((hi + pad) - (lo - pad))*hh;
     const wf = $("wf");
     rows.forEach((r, i) => {
-      const col = document.createElement("div"); col.className = "col";
-      const top = yy(Math.max(r.from, r.to));
-      const height = Math.max(3, Math.abs(yy(r.from) - yy(r.to)));
+      const col = document.createElement("div");
+      col.className = "col";
+      const top = yy(Math.max(r.from, r.to)), height = Math.max(3, Math.abs(yy(r.from) - yy(r.to)));
       const val = r.total ? r.to : r.value;
       const color = r.total ? (val >= 0 ? "#58a6ff" : "#f85149") : (val >= 0 ? "#3fb950" : "#f85149");
-      let html =
-        '<div class="val" style="color:' + color + '">' + money(val) + "</div>" +
-        '<div style="position:relative;width:100%;height:' + h + 'px">' +
-          '<div style="position:absolute;left:0;right:0;top:' + yy(0) + 'px;border-top:1px solid #3a4553"></div>' +
-          '<div class="bx" style="position:absolute;left:0;right:0;top:' + top + "px;height:" + height +
-            "px;background:" + color + ";opacity:" + (r.total ? 1 : 0.72) + '"></div>';
-      if (i < rows.length - 1) {
-        html += '<div style="position:absolute;right:-14px;width:14px;top:' + yy(r.to) + 'px;border-top:1px dashed #4a5563"></div>';
-      }
-      html += '</div><div class="cap">' + r.label + "</div>";
-      col.innerHTML = html;
+      let h = '<div class="val" style="color:' + color + '">' + esc(money(val, "ponte")) + "</div>" +
+        '<div style="position:relative;width:100%;height:' + hh + 'px">' +
+        '<div style="position:absolute;left:0;right:0;top:' + yy(0).toFixed(1) + 'px;border-top:1px solid #3a4553"></div>' +
+        '<div class="bx" style="position:absolute;left:0;right:0;top:' + top.toFixed(1) + "px;height:" + height.toFixed(1) +
+        "px;background:" + color + ";opacity:" + (r.total ? 1 : 0.72) + '"></div>';
+      if (i < rows.length - 1)
+        h += '<div style="position:absolute;right:-14px;width:14px;top:' + yy(r.to).toFixed(1) + 'px;border-top:1px dashed #4a5563"></div>';
+      h += '</div><div class="cap">' + esc(r.label) + "</div>";
+      col.innerHTML = h;
       wf.appendChild(col);
     });
-    if (CFG.bridgeNote) $("wfNote").textContent = CFG.bridgeNote;
-  } else if ($("sec4")) { $("sec4").classList.add("hide"); }
+    if (CFG.bridgeNote) $("wfNote").textContent = String(CFG.bridgeNote);
+  } else $("sec4").classList.add("hide");
 
-  /* ---------- timeline ---------- */
-  if ((CFG.timeline || []).length && $("sec5")){
+  /* ---------- 12. storia della posizione ---------- */
+  const TONE_CLS = { pos: "pos2", neg: "neg2" };
+  if (Array.isArray(CFG.timeline) && CFG.timeline.length){
     const tl = $("tl");
     CFG.timeline.forEach(s => {
+      if (!s) return;
       const d = document.createElement("div");
-      d.className = "step " + (s.cls || "");
-      if (s.price != null) d.dataset.price = s.price;
-      d.innerHTML = '<div class="d">' + s.date + '</div><div class="a">' + s.title +
-        '</div><div class="c">' + s.detail + "</div>";
-      if (s.price != null) d.addEventListener("click", () => render(s.price));
+      d.className = "step" + (s.cls === "close" || s.cls === "open" ? " " + s.cls : "");
+      d.innerHTML = '<div class="d">' + esc(s.date) + '</div><div class="a">' + esc(s.title) + '</div><div class="c">' + esc(s.detail) + "</div>";
+      if (isNum(s.price) && s.price > 0) d.addEventListener("click", () => render(Math.max(X0, Math.min(X1, s.price))));
       tl.appendChild(d);
     });
-    const side = $("tlSide"), ts = CFG.timelineSide;
-    if (ts){
-      side.innerHTML = '<div class="k">' + ts.title + "</div><table style=\"margin-top:10px\"><tbody>" +
-        ts.rows.map(r => '<tr><td class="muted">' + r[0] + '</td><td class="n ' + r[2] + '">' + r[1] + "</td></tr>").join("") +
-        "</tbody></table>" + (ts.note ? '<div class="note">' + ts.note + "</div>" : "");
-    } else { side.classList.add("hide"); }
-  } else if ($("sec5")) { $("sec5").classList.add("hide"); }
+    const ts = CFG.timelineSide, side = $("tlSide");
+    if (ts && Array.isArray(ts.rows)){
+      side.innerHTML = '<div class="k">' + esc(ts.title) + '</div><table style="margin-top:10px"><tbody>' +
+        ts.rows.map(r => '<tr><td class="muted">' + esc(r && r[0]) + '</td><td class="n ' + (TONE_CLS[r && r[2]] || "") + '">' + esc(r && r[1]) + "</td></tr>").join("") +
+        "</tbody></table>" + (ts.note ? '<div class="note">' + esc(ts.note) + "</div>" : "");
+    } else side.classList.add("hide");
+  } else $("sec5").classList.add("hide");
 
-  /* ---------- scenari ---------- */
-  function scenarioPrices(){
-    if ((CFG.scenarios || []).length) return CFG.scenarios.map(s => typeof s === "number" ? s : s.price);
-    const set = new Set();
-    const anchors = [CFG.spot, ...strikes, ...BES].filter(v => v > X0 && v < X1);
-    anchors.forEach(a => { set.add(Math.round(a)); });
-    [1.3, 1.1, 0.9, 0.75, 0.6, 0.45].forEach(k => {
-      const v = Math.round(CFG.spot*k/5)*5;
-      if (v > X0 && v < X1) set.add(v);
-    });
-    return [...set].sort((a,b) => b - a);
-  }
-  function labelFor(price){
-    if (BES.some(b => Math.abs(b - price) < 0.6)) return "Break-even";
-    if (strikes.some(s => Math.abs(s - price) < 0.6)) return "Soglia ITM";
-    if (price === Math.round(CFG.spot)) return "Spot";
-    if (hiV > 0 && Math.abs(pnlExp(price) - hiV) < 1) return "Max profit";
-    if (pnlExp(price) > 0) return "In profitto";
-    const ratio = Math.abs(pnlExp(price))/Math.max(1, Math.abs(loV));
-    return ratio > 0.5 ? "Perdita grave" : "In perdita";
+  /* ---------- 13. scenari ---------- */
+  $("thIvDn").textContent = "Oggi IV −" + IV_STRESS;
+  $("thIvUp").textContent = "Oggi IV +" + IV_STRESS;
+  function zoneOf(p){ return EXP.zones.find(z => p >= z.from && p <= z.to) || null; }
+  function outcome(r){
+    if (r.tag) return r.tag;
+    const z = zoneOf(r.price);
+    if (!z || z.sign === 0) return "In pari";
+    if (z.sign > 0) return (!unb(EXP.max) && Math.abs(r.exp - EXP.max.v) < Math.max(1, 1e-6*SCALE)) ? "Max profit" : "In profitto";
+    if (!unb(EXP.min) && Math.abs(r.exp - EXP.min.v) < Math.max(1, 1e-6*SCALE)) return "Max loss";
+    return (!unb(EXP.min) && Math.abs(r.exp) > 0.5*Math.abs(EXP.min.v)) ? "Perdita grave" : "In perdita";
   }
   const tbody = $("scen");
-  scenarioPrices().forEach(price => {
-    const pe = pnlExp(price), pn = pnlNow(price);
+  SCEN.forEach(r => {
     const tr = document.createElement("tr");
-    tr.dataset.price = price;
-    tr.innerHTML =
-      "<td>$" + price + "</td>" +
-      '<td class="n">' + num1((price/CFG.spot - 1)*100) + "</td>" +
-      '<td class="n ' + tone(pe) + '">' + money(pe) + "</td>" +
-      '<td class="n ' + tone(pn) + '">' + money(pn) + "</td>" +
-      '<td class="muted">' + labelFor(price) + "</td>";
-    tr.addEventListener("click", () => render(price));
+    tr.setAttribute("data-price", String(r.price));
+    const c = v => '<td class="n ' + tone(v) + '">' + esc(money(v, "scenario")) + "</td>";
+    tr.innerHTML = "<td>" + esc(px(r.price, "scenario")) + '</td><td class="n">' + esc(pct((r.price/SPOT - 1)*100, "gap")) + "</td>" +
+      c(r.exp) + c(r.now) + c(r.ivDn) + c(r.ivUp) + '<td class="muted">' + esc(outcome(r)) + "</td>";
+    tr.addEventListener("click", () => render(Math.max(X0, Math.min(X1, r.price))));
     tbody.appendChild(tr);
+    SCEN_TR.push({ tr, price: r.price });
   });
-  $("scenNote").textContent = "Il P&L a scadenza è esatto. Il P&L di oggi è un modello Black-Scholes (IV " +
-    (CFG.ivToday*100).toFixed(2) + "%, r " + (CFG.r*100).toFixed(3) + "%, " + CFG.dte + " giorni). Non è una quotazione.";
+  const VM_TXT = VM_RULE === "sticky-delta" ? "sticky-delta (smile delle gambe per scadenza)" : "sticky-strike (IV fissa per strike)";
+  $("scenNote").textContent = "P&L a scadenza: valore alla scadenza front " + itOf(FRONT_DAY) +
+    ". Le gambe più lontane valgono BSM con il loro tempo residuo. P&L oggi: modello BSM con IV per gamba, r " +
+    (R*100).toFixed(3) + "%, q " + (Q*100).toFixed(2) + "%, tempo residuo front " + (T0F*365).toFixed(2) + " giorni. " +
+    "Regola spot-vol: " + VM_TXT + (VM_SLOPE !== 0 ? ", slope " + VM_SLOPE + " punti di IV per +1% di spot" : "") +
+    ". Colonne IV ±" + IV_STRESS + ": stesso modello con la IV spostata. Non è una quotazione.";
 
-  /* ---------- alert ---------- */
-  if ((CFG.alerts || []).length && $("sec7")){
+  /* ---------- 14. livelli da monitorare ---------- */
+  if (Array.isArray(CFG.alerts) && CFG.alerts.length){
     const box = $("alerts");
     CFG.alerts.forEach(a => {
-      const d = document.createElement("div");
+      if (!a) return;
       const color = a.tone === "neg" ? "#f85149" : a.tone === "pos" ? "#3fb950" : "#d29922";
+      const d = document.createElement("div");
       d.className = "alert";
       d.style.background = "rgba(255,255,255,.03)";
       d.style.borderLeft = "3px solid " + color;
-      d.innerHTML = '<div class="lv" style="color:' + color + '">' + a.level + '</div>' +
-        '<div><div>' + a.meaning + '</div><div class="ac">' + a.action + "</div></div>";
+      d.innerHTML = '<div class="lv" style="color:' + color + '">' + esc(a.level) + "</div><div><div>" + esc(a.meaning) +
+        '</div><div class="ac">' + esc(a.action) + "</div></div>";
       box.appendChild(d);
     });
-  } else if ($("sec7")) { $("sec7").classList.add("hide"); }
+  } else $("sec7").classList.add("hide");
 
-  /* ================= SEZIONE 2 · ANDAMENTO GIORNALIERO ================= */
-  if (DAY_ON && $("lineChart")){
+  /* ---------- 15. andamento giornaliero ---------- */
+  const clearNode = node => { while (node.firstChild) node.removeChild(node.firstChild); };
+  if (DAY_ON){
     $("sec2").classList.remove("hide");
-
     const PAL = ["#58a6ff", "#3fb950", "#d29922", "#bc8cff", "#f85149", "#db61a2"];
-    const HIST_SHIFT = (DD.histIv != null ? DD.histIv : DAILY_IV) - (CFG.ivToday != null ? CFG.ivToday : DAILY_IV);
-    const shiftNow = () => BASE_SHIFT + ivShiftPts/100;
+    $("ivDn").textContent = "IV −" + IV_STRESS + " punti";
+    $("ivUp").textContent = "IV +" + IV_STRESS + " punti";
+    $("ivDn").setAttribute("data-iv", String(-IV_STRESS));
+    $("ivUp").setAttribute("data-iv", String(IV_STRESS));
 
-    /* ---------- percorsi di prezzo ---------- */
     function autoPaths(){
       const out = [], seen = new Set();
       const push = (label, short, to) => {
-        const key = to == null ? "spot" : String(Math.round(to*100)/100);
+        const key = to == null ? "spot" : to.toPrecision(10);
         if (out.length >= 6 || seen.has(key)) return;
         seen.add(key);
-        out.push({label: label, short: short, color: PAL[out.length], to: to});
+        out.push({ label, short, color: PAL[out.length], to });
       };
-      push("Spot costante USD " + CFG.spot.toFixed(2), "spot", null);
-      [...new Set(strikes)].forEach(k => {
-        if (Math.abs(k/CFG.spot - 1) > 0.02)
-          push("Verso lo strike USD " + k.toFixed(2), "K" + k, k);
-      });
-      const dn = Math.round(CFG.spot*0.90*100)/100;
-      const up = Math.round(CFG.spot*1.10*100)/100;
-      push("Discesa a USD " + dn.toFixed(2), "−10%", dn);
-      push("Salita a USD " + up.toFixed(2), "+10%", up);
+      push("Spot costante " + px(SPOT), "spot", null);
+      KINKS.forEach(k => { if (Math.abs(k/SPOT - 1) > 0.02) push("Verso lo strike " + px(k), "K " + px(k), k); });
+      push("Discesa a " + px(SPOT*0.9), "−10%", SPOT*0.9);
+      push("Salita a " + px(SPOT*1.1), "+10%", SPOT*1.1);
       return out;
     }
-    const PTH = (Array.isArray(DD.paths) && DD.paths.length ? DD.paths : autoPaths())
-      .slice(0, 6)
-      .map((q, i) => ({
-        label: q.label || ("Percorso " + (i + 1)),
-        short: q.short || ("P" + (i + 1)),
-        color: q.color || PAL[i % PAL.length],
-        to: q.to == null ? null : Number(q.to)
-      }));
-    const priceOn = (q, d) => (q.to == null ? CFG.spot : CFG.spot + (q.to - CFG.spot)*d/DAYN);
+    const PTH = (Array.isArray(DD.paths) && DD.paths.length ? DD.paths : autoPaths()).slice(0, 6).map((q, i) => {
+      let to = null;
+      if (q && q.to != null){
+        if (isNum(q.to) && q.to > 0) to = q.to; else ERR("daily.paths[" + i + "].to non valido");
+      }
+      return {
+        label: String((q && q.label) ?? ("Percorso " + (i + 1))),
+        short: String((q && q.short) ?? ("P" + (i + 1))),
+        color: q && COLOR_RE.test(String(q.color)) ? q.color : PAL[i % PAL.length],
+        to
+      };
+    });
+    const priceOn = (q, d) => (q.to == null ? SPOT : SPOT + (q.to - SPOT)*d/DAYN);
 
-    /* ---------- grafico a linee ---------- */
-    const LW = 920, LH = 340, LP = {l: 74, r: 132, t: 16, b: 36};
+    /* grafico a linee */
+    const LW = 920, LH = 340, LP = { l: 82, r: 132, t: 16, b: 36 };
     const liw = LW - LP.l - LP.r, lih = LH - LP.t - LP.b;
     const svgL = $("lineChart");
     const hid = PTH.map(() => false);
     const lastI = DAYS.length - 1;
-
     function tickIdx(n, m){
       if (n <= 1) return [0];
       const out = [];
@@ -1051,318 +1539,391 @@ const CONFIG = {
       }
       return out;
     }
-    function niceStep(span, target){
-      const raw = span/Math.max(3, target);
-      const p10 = Math.pow(10, Math.floor(Math.log10(Math.max(1, raw))));
-      const cand = [1, 2, 2.5, 5, 10];
-      for (let i = 0; i < cand.length; i++) if (p10*cand[i] >= raw) return p10*cand[i];
-      return p10*10;
-    }
-    function lineData(){
-      const sh = shiftNow();
-      return PTH.map(q => ({
-        p: q,
-        v: DAYS.map(d => pnlAtShift(priceOn(q, d), Math.max(0, (DAYN - d)/365), sh))
-      }));
+    function setRO(id, val){
+      const node = $(id);
+      node.textContent = money2(val, "readout IV");
+      node.className = "v " + (val >= 0 ? "green" : "red");
     }
     function drawLines(){
-      while (svgL.firstChild) svgL.removeChild(svgL.firstChild);
-      const data = lineData();
+      clearNode(svgL);
+      const sh = dayShift();
+      const data = PTH.map(q => ({ p: q, v: DAYS.map(d => pnlAt(priceOn(q, d), dayMs(d), sh)) }));
       let lo = Infinity, hi = -Infinity;
-      data.forEach(se => se.v.forEach(val => { if (val < lo) lo = val; if (val > hi) hi = val; }));
-      if (!isFinite(lo) || !isFinite(hi)){ lo = -100; hi = 100; }
-      const pad = Math.max(20, (hi - lo)*0.12);
-      const stepY = niceStep(hi - lo + 2*pad, 5);
-      const y0 = Math.floor((lo - pad)/stepY)*stepY;
-      const y1 = Math.ceil((hi + pad)/stepY)*stepY;
-      const ly = val => LP.t + (y1 - val)/(y1 - y0)*lih;
+      data.forEach((se, i) => { if (!hid[i]) se.v.forEach(v => { lo = Math.min(lo, v); hi = Math.max(hi, v); }); });
+      if (!Number.isFinite(lo) || !Number.isFinite(hi)){ lo = -1; hi = 1; }
+      let span = hi - lo;
+      if (!(span > 1e-9*SCALE)) span = Math.max(Math.abs(hi), 1);
+      const st = niceStep(span*1.24/5);
+      const y0 = Math.floor((lo - 0.12*span)/st)*st, y1 = Math.ceil((hi + 0.12*span)/st)*st;
+      const ly = v => LP.t + (y1 - v)/(y1 - y0)*lih;
       const lx = i => LP.l + (lastI ? i/lastI : 0)*liw;
       const g = el("g", {}, svgL);
-      for (let val = y0; val <= y1 + 1e-9; val += stepY){
-        el("line", {x1: LP.l, y1: ly(val), x2: LP.l + liw, y2: ly(val), class: "gridline"}, g);
-        const t = el("text", {x: LP.l - 10, y: ly(val) + 4, "text-anchor": "end", class: "axis"}, g);
-        t.textContent = (val > 0 ? "+$" : val < 0 ? "−$" : "$") + Math.abs(Math.round(val)).toLocaleString("en-US");
+      for (let k = Math.round(y0/st); k*st <= y1 + 1e-9*st; k++){
+        const v = k*st;
+        el("line", { x1: LP.l, y1: ly(v), x2: LP.l + liw, y2: ly(v), class: "gridline" }, g);
+        el("text", { x: LP.l - 10, y: ly(v) + 4, "text-anchor": "end", class: "axis" }, g).textContent = st < 1 ? money2(v, "asse") : money(v, "asse");
       }
       tickIdx(DAYS.length, 6).forEach(i => {
-        el("line", {x1: lx(i), y1: LP.t, x2: lx(i), y2: LP.t + lih, class: "gridline"}, g);
-        const t = el("text", {x: lx(i), y: LP.t + lih + 18, "text-anchor": "middle", class: "axis"}, g);
-        t.textContent = dateOf(DAYS[i]).slice(5);
+        el("line", { x1: lx(i), y1: LP.t, x2: lx(i), y2: LP.t + lih, class: "gridline" }, g);
+        el("text", { x: lx(i), y: LP.t + lih + 18, "text-anchor": "middle", class: "axis" }, g).textContent = dateOf(DAYS[i]).slice(5);
       });
-      if (y0 <= 0 && y1 >= 0){
-        el("line", {x1: LP.l, y1: ly(0), x2: LP.l + liw, y2: ly(0), stroke: "#4a5563", "stroke-width": 1.2}, g);
-      }
+      if (y0 <= 0 && y1 >= 0) el("line", { x1: LP.l, y1: ly(0), x2: LP.l + liw, y2: ly(0), stroke: "#4a5563", "stroke-width": 1.2 }, g);
       data.forEach((se, i) => {
         if (hid[i]) return;
-        let dpath = "";
-        se.v.forEach((val, j) => { dpath += (j ? "L" : "M") + lx(j).toFixed(1) + "," + ly(val).toFixed(1); });
-        el("path", {d: dpath, fill: "none", stroke: se.p.color, "stroke-width": i === 0 ? 2.6 : 1.9,
-          "stroke-linejoin": "round", "stroke-linecap": "round"}, g);
-        el("circle", {cx: lx(lastI).toFixed(1), cy: ly(se.v[lastI]).toFixed(1), r: 3.2, fill: se.p.color}, g);
+        let dp = "";
+        se.v.forEach((v, j) => { dp += (j ? "L" : "M") + lx(j).toFixed(1) + "," + ly(v).toFixed(1); });
+        el("path", { d: dp, fill: "none", stroke: se.p.color, "stroke-width": i === 0 ? 2.6 : 1.9,
+          "stroke-linejoin": "round", "stroke-linecap": "round" }, g);
+        el("circle", { cx: lx(lastI).toFixed(1), cy: ly(se.v[lastI]).toFixed(1), r: 3.2, fill: se.p.color }, g);
       });
-      const ends = data.map((se, i) => ({i: i, v: se.v[lastI], color: se.p.color, short: se.p.short}))
-                       .filter(e => !hid[e.i]).sort((a, b) => b.v - a.v);
+      const ends = data.map((se, i) => ({ i, v: se.v[lastI], color: se.p.color, short: se.p.short }))
+        .filter(e => !hid[e.i]).sort((a, b) => b.v - a.v);
       let prevY = -1e9;
       ends.forEach(e => {
         let ty = ly(e.v);
         if (ty < prevY + 14) ty = prevY + 14;
         prevY = ty;
-        el("line", {x1: lx(lastI) + 4, y1: ly(e.v), x2: LP.l + liw + 9, y2: ty,
-          stroke: e.color, "stroke-width": 1, opacity: 0.55}, g);
-        const t = el("text", {x: LP.l + liw + 13, y: ty + 3.5, class: "lbl"}, g);
-        t.style.fill = e.color;
-        t.style.paintOrder = "stroke";
-        t.style.stroke = "#0d1117";
-        t.style.strokeWidth = "3px";
-        t.textContent = e.short + " " + money(Math.round(e.v));
+        el("line", { x1: lx(lastI) + 4, y1: ly(e.v), x2: LP.l + liw + 9, y2: ty, stroke: e.color, "stroke-width": 1, opacity: 0.55 }, g);
+        const t = el("text", { x: LP.l + liw + 13, y: ty + 3.5, class: "lbl" }, g);
+        haloText(t, e.color);
+        t.textContent = e.short + " " + money(e.v, "linee");
       });
-      el("line", {x1: lx(0), y1: LP.t, x2: lx(0), y2: LP.t + lih, stroke: "#8b949e",
-        "stroke-width": 1, "stroke-dasharray": "3 3", opacity: 0.55}, g);
-      if (!hid[0]){
-        el("circle", {cx: lx(0), cy: ly(data[0].v[0]), r: 4.5, fill: "#fff", stroke: "#58a6ff", "stroke-width": 2}, g);
-        const tl = el("text", {x: lx(0) + 9, y: ly(data[0].v[0]) - 10, class: "lbl"}, g);
-        tl.style.fill = "#e6edf3";
-        tl.style.paintOrder = "stroke";
-        tl.style.stroke = "#0d1117";
-        tl.style.strokeWidth = "3px";
-        tl.textContent = "oggi " + money(data[0].v[0]);
-      }
-      const yl2 = el("text", {x: 14, y: LP.t + lih/2, "text-anchor": "middle", class: "lbl",
-        transform: "rotate(-90 14 " + (LP.t + lih/2) + ")"}, g);
-      yl2.textContent = "P&L (USD)";
-      const xl2 = el("text", {x: LP.l + liw, y: LH - 4, "text-anchor": "end", class: "lbl"}, g);
-      xl2.textContent = "DATA" + (CFG.expiryISO ? " (" + CFG.expiryISO.slice(0, 4) + ")" : "");
-      const setRO = (id, val) => {
-        const node = $(id);
-        node.textContent = money2(val);
-        node.className = "v " + (val >= 0 ? "green" : "red");
-      };
-      setRO("ivNow", data[0].v[0]);
-      setRO("ivEnd", data[0].v[lastI]);
-      setRO("ivExp", pnlExp(CFG.spot));
+      el("line", { x1: lx(0), y1: LP.t, x2: lx(0), y2: LP.t + lih, stroke: "#8b949e", "stroke-width": 1, "stroke-dasharray": "3 3", opacity: 0.55 }, g);
+      el("text", { x: 14, y: LP.t + lih/2, "text-anchor": "middle", class: "lbl",
+        transform: "rotate(-90 14 " + (LP.t + lih/2) + ")" }, g).textContent = "P&L (" + CUR + ")";
+      el("text", { x: LP.l + liw, y: LH - 4, "text-anchor": "end", class: "lbl" }, g).textContent = "DATA (" + isoOf(FRONT_DAY).slice(0, 4) + ")";
+      setRO("ivNow", pnlAt(SPOT, ASOF_MS, sh));
+      setRO("ivEnd", pnlAt(SPOT, dayMs(DAYN), sh));
+      setRO("ivExp", pnlExp(SPOT));
       let mn = Infinity;
-      data.forEach(se => se.v.forEach(val => { if (val < mn) mn = val; }));
-      setRO("ivMin", mn);
+      data.forEach((se, i) => { if (!hid[i]) se.v.forEach(v => { mn = Math.min(mn, v); }); });
+      setRO("ivMin", Number.isFinite(mn) ? mn : 0);
     }
 
-    /* ---------- mappa di calore ---------- */
-    const HW = 920, HH = 520, HP = {l: 74, r: 112, t: 12, b: 36};
+    /* mappa di calore: palette arancio (perdita) e blu (profitto), sicura per i daltonici */
+    const HW = 920, HH = 520, HP = { l: 82, r: 112, t: 12, b: 36 };
     const hw = HW - HP.l - HP.r, hh = HH - HP.t - HP.b;
-    const HSTEPS = [1, 2, 2.5, 5, 10, 20, 25, 50, 100];
-    const KMIN = strikes.length ? Math.min(...strikes) : CFG.spot;
-    const KMAX = strikes.length ? Math.max(...strikes) : CFG.spot;
-    const HLO = Math.min(CFG.spot*0.75, KMIN*0.85);
-    const HHI = Math.max(CFG.spot*1.12, KMAX*1.12);
-    const rowCount = st => Math.floor(HHI/st) - Math.floor(HLO/st) + 1;
-    const scoreStep = st => {
-      const n = rowCount(st);
-      return (n >= 35 && n <= 45) ? Math.abs(n - 40) : 1000 + Math.abs(n - 40);
-    };
-    const HSTEP = HSTEPS.reduce((best, st) => (scoreStep(st) < scoreStep(best) ? st : best), HSTEPS[0]);
+    const KMIN = KINKS.length ? KINKS[0] : SPOT, KMAX = KINKS.length ? KINKS[KINKS.length - 1] : SPOT;
+    const HLO = Math.min(SPOT*0.75, KMIN*0.85), HHI = Math.max(SPOT*1.12, KMAX*1.12);
+    const HSTEP = niceStep((HHI - HLO)/40);
     const ROWS = [];
-    for (let pv = Math.floor(HLO/HSTEP)*HSTEP; pv <= HHI + 1e-9; pv += HSTEP)
-      ROWS.push(Math.round(pv*100)/100);
-    const NCOL = DAYS.length;
-    const cw = hw/NCOL, ch = hh/ROWS.length;
-    const MAT = ROWS.map(pr => DAYS.map(d =>
-      pnlAtShift(pr, Math.max(0, (DAYN - d)/365), BASE_SHIFT)));
-    let GMIN = Infinity, GMAX = -Infinity;
-    MAT.forEach(r => r.forEach(val => { if (val < GMIN) GMIN = val; if (val > GMAX) GMAX = val; }));
-    if (!isFinite(GMIN)){ GMIN = -100; GMAX = 100; }
-    const HMIN = (DD.heat && DD.heat.min != null) ? DD.heat.min : Math.floor(GMIN/10)*10;
-    const HMAX = (DD.heat && DD.heat.max != null) ? DD.heat.max : Math.ceil(GMAX/10)*10;
+    for (let k = Math.floor(HLO/HSTEP); k*HSTEP <= HHI + 1e-9*HSTEP; k++) ROWS.push(+(k*HSTEP).toPrecision(12));
+    const NCOL = DAYS.length, cw = hw/NCOL, ch = hh/ROWS.length;
     const svgH = $("heat"), heatTip = $("heatTip");
-    const fmtP = val => "$" + (Math.abs(val - Math.round(val)) < 1e-9
-      ? Math.round(val).toLocaleString("en-US") : val.toFixed(2));
-    function heatColor(val){
-      const sc = val >= 0 ? Math.max(1, HMAX) : Math.max(1, Math.abs(Math.min(HMIN, 0)));
-      const a = Math.pow(Math.min(1, Math.abs(val)/sc), 0.72);
-      const b = [22, 27, 34], t = val >= 0 ? [46, 160, 67] : [248, 81, 73];
-      return "rgb(" + Math.round(b[0] + (t[0] - b[0])*a) + "," +
-                      Math.round(b[1] + (t[1] - b[1])*a) + "," +
-                      Math.round(b[2] + (t[2] - b[2])*a) + ")";
+    let MAT = [], HMIN = 0, HMAX = 0, focusRect = null;
+    let hR = ROWS.reduce((bi, pr, i) => (Math.abs(pr - SPOT) < Math.abs(ROWS[bi] - SPOT) ? i : bi), 0), hC = 0;
+    function computeHeat(){
+      const sh = dayShift();
+      MAT = ROWS.map(pr => DAYS.map(d => pnlAt(pr, dayMs(d), sh)));
+      let gmin = Infinity, gmax = -Infinity;
+      MAT.forEach(r => r.forEach(v => { gmin = Math.min(gmin, v); gmax = Math.max(gmax, v); }));
+      const u = niceStep(Math.max(gmax - gmin, 1e-9)/50);
+      HMIN = (DD.heat && isNum(DD.heat.min)) ? DD.heat.min : Math.floor(gmin/u)*u;
+      HMAX = (DD.heat && isNum(DD.heat.max)) ? DD.heat.max : Math.ceil(gmax/u)*u;
+    }
+    function heatColor(v){
+      const sc = v >= 0 ? Math.max(1e-9, HMAX) : Math.max(1e-9, Math.abs(Math.min(HMIN, 0)));
+      const a = Math.pow(Math.min(1, Math.abs(v)/sc), 0.72);
+      const b = [22, 27, 34], t = v >= 0 ? [67, 147, 195] : [230, 97, 1];
+      return "rgb(" + b.map((c, i) => Math.round(c + (t[i] - c)*a)).join(",") + ")";
     }
     const yOfPrice = pr => HP.t + (ROWS.length - 1 - (pr - ROWS[0])/HSTEP + 0.5)*ch;
-
+    let heatCells = 0, heatBad = false;
     function drawHeat(){
-      while (svgH.firstChild) svgH.removeChild(svgH.firstChild);
+      clearNode(svgH);
+      heatCells = 0; heatBad = false;
       const g = el("g", {}, svgH);
       ROWS.forEach((pr, i) => {
         const yy = HP.t + (ROWS.length - 1 - i)*ch;
         for (let j = 0; j < NCOL; j++){
-          el("rect", {class: "hm", x: (HP.l + j*cw).toFixed(2), y: yy.toFixed(2),
-            width: Math.max(0.5, cw - 0.7).toFixed(2), height: Math.max(0.5, ch - 0.7).toFixed(2),
-            fill: heatColor(MAT[i][j])}, g);
+          if (!Number.isFinite(MAT[i][j])) heatBad = true;
+          el("rect", { class: "hm", x: (HP.l + j*cw).toFixed(2), y: yy.toFixed(2),
+            width: Math.max(0.5, cw - 0.7).toFixed(2), height: Math.max(0.5, ch - 0.7).toFixed(2), fill: heatColor(MAT[i][j]) }, g);
+          heatCells++;
         }
       });
       const every = Math.max(1, Math.ceil(ROWS.length/7));
       ROWS.forEach((pr, i) => {
         if (i % every && i !== ROWS.length - 1) return;
         const yy = HP.t + (ROWS.length - 1 - i)*ch;
-        const t = el("text", {x: HP.l - 8, y: yy + ch/2 + 3, "text-anchor": "end", class: "axis"}, g);
-        t.textContent = fmtP(pr);
+        el("text", { x: HP.l - 8, y: yy + ch/2 + 3, "text-anchor": "end", class: "axis" }, g).textContent = px(pr, "mappa");
       });
       tickIdx(NCOL, 6).forEach(j => {
-        const t = el("text", {x: HP.l + (j + 0.5)*cw, y: HP.t + hh + 16,
-          "text-anchor": "middle", class: "axis"}, g);
-        t.textContent = dateOf(DAYS[j]).slice(5);
+        el("text", { x: HP.l + (j + 0.5)*cw, y: HP.t + hh + 16, "text-anchor": "middle", class: "axis" }, g).textContent = dateOf(DAYS[j]).slice(5);
       });
-      const markRow = (pr, color, label) => {
+      const markRow = (pr, color, label, dash) => {
         const yy = yOfPrice(pr);
-        if (!isFinite(yy) || yy < HP.t || yy > HP.t + hh) return;
-        el("line", {x1: HP.l, y1: yy.toFixed(2), x2: HP.l + hw, y2: yy.toFixed(2),
-          stroke: color, "stroke-width": 1.6}, g);
-        const t = el("text", {x: HP.l + hw + 8, y: yy + 3.5, class: "lbl"}, g);
-        t.style.fill = color;
-        t.style.paintOrder = "stroke";
-        t.style.stroke = "#0d1117";
-        t.style.strokeWidth = "3px";
+        if (!Number.isFinite(yy) || yy < HP.t || yy > HP.t + hh) return;
+        el("line", { x1: HP.l, y1: yy.toFixed(2), x2: HP.l + hw, y2: yy.toFixed(2), stroke: color, "stroke-width": 1.6, "stroke-dasharray": dash }, g);
+        const t = el("text", { x: HP.l + hw + 8, y: yy + 3.5, class: "lbl" }, g);
+        haloText(t, color);
         t.textContent = label;
       };
-      markRow(CFG.spot, "#d29922", "spot " + CFG.spot.toFixed(2));
-      [...new Set(strikes)].forEach(k => markRow(k, "#f85149", "K " + k.toFixed(2)));
-      const xl3 = el("text", {x: HP.l + hw, y: HH - 6, "text-anchor": "end", class: "lbl"}, g);
-      xl3.textContent = "DATA";
-      const yl3 = el("text", {x: 14, y: HP.t + hh/2, "text-anchor": "middle", class: "lbl",
-        transform: "rotate(-90 14 " + (HP.t + hh/2) + ")"}, g);
-      yl3.textContent = CFG.ticker + " (USD)";
-      $("heatMin").textContent = money2(HMIN);
-      $("heatMax").textContent = money2(HMAX);
+      markRow(SPOT, "#e6edf3", "spot " + px(SPOT), "6 3");
+      KINKS.forEach(k => markRow(k, "#bc8cff", "K " + px(k), "none"));
+      EXP.bes.forEach(b => markRow(b, "#9aa4b1", "BE " + px(b), "2 3"));
+      focusRect = el("rect", { class: "hmfocus", x: -10, y: -10, width: 1, height: 1 }, g);
+      focusRect.style.display = "none";
+      el("text", { x: HP.l + hw, y: HH - 6, "text-anchor": "end", class: "lbl" }, g).textContent = "DATA";
+      el("text", { x: 14, y: HP.t + hh/2, "text-anchor": "middle", class: "lbl",
+        transform: "rotate(-90 14 " + (HP.t + hh/2) + ")" }, g).textContent = String(CFG.ticker ?? "") + " (" + CUR + ")";
+      $("heatMin").textContent = money2(HMIN, "scala mappa");
+      $("heatMax").textContent = money2(HMAX, "scala mappa");
     }
-
-    svgH.addEventListener("pointermove", ev => {
-      const b = svgH.getBoundingClientRect();
-      const sx = (ev.clientX - b.left)*(HW/b.width);
-      const sy = (ev.clientY - b.top)*(HH/b.height);
-      const j = Math.floor((sx - HP.l)/cw);
-      const ri = Math.floor((sy - HP.t)/ch);
-      if (j < 0 || j >= NCOL || ri < 0 || ri >= ROWS.length){
-        heatTip.classList.remove("show"); return;
+    function heatShow(ri, cj, cx, cy){
+      const pr = ROWS[ri], d = DAYS[cj], v = MAT[ri][cj], mk = valueAt(pr, dayMs(d), dayShift());
+      const row = (k, val, cls) => '<div class="row"><span class="muted">' + esc(k) + '</span><b class="' + (cls || "") + '">' + esc(val) + "</b></div>";
+      heatTip.innerHTML = '<div class="t1">' + esc(dateOf(d)) + " · giorno " + d + "</div>" +
+        row(String(CFG.ticker ?? ""), px(pr, "mappa")) + row("valore posizione", amount2(mk, "mappa")) + row("P&L", money2(v, "mappa"), tone(v));
+      if (cx == null){
+        const b = svgH.getBoundingClientRect(), sx = (b.width || HW)/HW, sy = (b.height || HH)/HH;
+        cx = b.left + (HP.l + (cj + 0.5)*cw)*sx;
+        cy = b.top + (HP.t + (ROWS.length - 1 - ri + 0.5)*ch)*sy;
       }
-      const idx = ROWS.length - 1 - ri;
-      const pr = ROWS[idx], d = DAYS[j];
-      const T = Math.max(0, (DAYN - d)/365);
-      const pv = MAT[idx][j];
-      const mk = posMark(pr, T, BASE_SHIFT);
-      heatTip.innerHTML =
-        '<div class="t1">' + dateOf(d) + " · giorno " + d + "</div>" +
-        '<div class="row"><span class="muted">' + CFG.ticker + '</span><b>' + fmtP(pr) + "</b></div>" +
-        '<div class="row"><span class="muted">mark posizione</span><b>' + moneyAbs2(mk) + "</b></div>" +
-        '<div class="row"><span class="muted">P&L</span><b class="' + tone(pv) + '">' + money2(pv) + "</b></div>";
-      let left = ev.clientX + 18, top = ev.clientY - 12;
-      if (left + 220 > window.innerWidth) left = ev.clientX - 210;
+      let left = cx + 18, top = cy - 12;
+      if (left + 220 > window.innerWidth) left = cx - 230;
       if (top + 116 > window.innerHeight) top = window.innerHeight - 122;
       heatTip.style.left = Math.max(4, left) + "px";
       heatTip.style.top = Math.max(4, top) + "px";
       heatTip.classList.add("show");
+      $("heatLive").textContent = dateOf(d) + ", " + String(CFG.ticker ?? "") + " " + px(pr) + ": P&L " + money2(v);
+      if (focusRect){
+        focusRect.setAttribute("x", (HP.l + cj*cw).toFixed(2));
+        focusRect.setAttribute("y", (HP.t + (ROWS.length - 1 - ri)*ch).toFixed(2));
+        focusRect.setAttribute("width", Math.max(0.5, cw - 0.7).toFixed(2));
+        focusRect.setAttribute("height", Math.max(0.5, ch - 0.7).toFixed(2));
+        focusRect.style.display = "";
+      }
+    }
+    const hideHeat = () => { heatTip.classList.remove("show"); if (focusRect) focusRect.style.display = "none"; };
+    const clampI = (v, a, b) => Math.max(a, Math.min(b, v));
+    svgH.setAttribute("tabindex", "0");
+    svgH.setAttribute("aria-label", "Mappa di calore del P&L. Usa le frecce per leggere ogni cella.");
+    svgH.addEventListener("focus", () => heatShow(hR, hC));
+    svgH.addEventListener("blur", hideHeat);
+    svgH.addEventListener("keydown", ev => {
+      const moves = { ArrowUp: [1, 0], ArrowDown: [-1, 0], ArrowRight: [0, 1], ArrowLeft: [0, -1] };
+      const k = ev.key;
+      if (moves[k]){ hR = clampI(hR + moves[k][0], 0, ROWS.length - 1); hC = clampI(hC + moves[k][1], 0, NCOL - 1); }
+      else if (k === "Home") hC = 0;
+      else if (k === "End") hC = NCOL - 1;
+      else if (k === "Escape"){ hideHeat(); return; }
+      else return;
+      if (ev.preventDefault) ev.preventDefault();
+      heatShow(hR, hC);
     });
-    svgH.addEventListener("pointerleave", () => heatTip.classList.remove("show"));
+    svgH.addEventListener("pointermove", ev => {
+      const b = svgH.getBoundingClientRect();
+      const sx = (ev.clientX - b.left)*(HW/(b.width || HW)), sy = (ev.clientY - b.top)*(HH/(b.height || HH));
+      const j = Math.floor((sx - HP.l)/cw), ri = Math.floor((sy - HP.t)/ch);
+      if (j < 0 || j >= NCOL || ri < 0 || ri >= ROWS.length){ hideHeat(); return; }
+      hR = ROWS.length - 1 - ri; hC = j;
+      heatShow(hR, hC, ev.clientX, ev.clientY);
+    });
+    svgH.addEventListener("pointerleave", hideHeat);
 
-    /* ---------- tabella giornaliera ---------- */
+    /* tabella giornaliera: theta 1 g = P&L(giorno + 1) − P&L(giorno) */
     function buildTable(){
       const tb = $("dayRows");
-      for (let i = 0; i < DAYS.length; i++){
-        const d = DAYS[i];
-        const T = Math.max(0, (DAYN - d)/365);
-        const pv = pnlAtShift(CFG.spot, T, BASE_SHIFT);
-        const mk = posMark(CFG.spot, T, BASE_SHIFT);
-        const th = (d < DAYN) ? pv - pnlAtShift(CFG.spot, Math.max(0, (DAYN - d - 1)/365), BASE_SHIFT) : 0;
+      clearNode(tb);
+      const sh = dayShift();
+      let n = 0;
+      DAYS.forEach(d => {
+        const pv = pnlAt(SPOT, dayMs(d), sh), mk = valueAt(SPOT, dayMs(d), sh);
+        const th = d < DAYN ? theta1(SPOT, d, sh) : null;
         const tr = document.createElement("tr");
         if (d === 0 || d === DAYN) tr.className = "hi";
-        tr.innerHTML = "<td>" + d + "</td><td>" + dateOf(d) + '</td><td class="n">' + (DAYN - d) +
-          '</td><td class="n">' + price2(CFG.spot) + '</td><td class="n">' + moneyAbs2(mk) +
-          '</td><td class="n ' + tone(pv) + '">' + money2(pv) + '</td><td class="n">' +
-          (d === DAYN ? "$0.00" : money2(th)) + "</td>";
+        tr.innerHTML = "<td>" + d + "</td><td>" + esc(dateOf(d)) + '</td><td class="n">' + (DAYN - d) + '</td><td class="n">' + esc(px(SPOT)) +
+          '</td><td class="n">' + esc(amount2(mk, "tabella")) + '</td><td class="n ' + tone(pv) + '">' + esc(money2(pv, "tabella")) +
+          '</td><td class="n ' + (th == null ? "" : tone(th)) + '">' + (th == null ? "—" : esc(money2(th, "theta tabella"))) + "</td>";
         tb.appendChild(tr);
-      }
-      $("tblTitle").textContent = "Tabella giornaliera · spot costante " + price2(CFG.spot);
-      $("dayNote").innerHTML = DD.dayNote ||
-        ("La tabella usa gli stessi giorni del grafico e della mappa di calore. " +
-         "Theta = variazione di P&L in un giorno. " +
-         (STEP > 1 ? "Passo di " + STEP + " giorni." : "Passo di 1 giorno."));
-    }
-
-    /* ---------- ricostruzione storica ---------- */
-    function buildHist(){
-      const H = Array.isArray(DD.hist) ? DD.hist : [];
-      if (!H.length || !CFG.expiryISO){ $("histCard").classList.add("hide"); return; }
-      const EXP = isoUTC(CFG.expiryISO);
-      let html = '<table><thead><tr><th>Data</th><th class="n">Chiusura</th><th class="n">DTE</th>' +
-                 '<th class="n">Mark</th><th class="n">P&amp;L</th><th>Nota</th></tr></thead><tbody>';
-      H.forEach(h => {
-        const dt0 = isoUTC(h.date);
-        const dteH = Math.round((EXP.getTime() - dt0.getTime())/86400000);
-        const T = Math.max(0, dteH/365);
-        const mk = posMark(h.close, T, HIST_SHIFT);
-        const pv = pnlAtShift(h.close, T, HIST_SHIFT);
-        html += '<tr' + (h.est ? ' class="hi"' : '') + '><td>' + h.date + '</td><td class="n">$' +
-          Number(h.close).toFixed(2) + '</td><td class="n">' + dteH + '</td><td class="n">' +
-          moneyAbs2(mk) + '</td><td class="n ' + tone(pv) + '">' + money2(pv) +
-          '</td><td class="muted">' + (h.note || "") + "</td></tr>";
+        n++;
       });
-      html += "</tbody></table>";
-      $("histWrap").innerHTML = html;
-      $("histNote").textContent = DD.histNote ||
-        ("Il mark è una ricostruzione con IV " + (DAILY_IV*100).toFixed(2) + "%. La tabella non è una quotazione.");
+      const ivTxt = ivShiftPts === 0 ? "IV invariata" : "IV " + (ivShiftPts > 0 ? "+" : "−") + Math.abs(ivShiftPts) + " punti";
+      $("tblTitle").textContent = "Tabella giornaliera · spot costante " + px(SPOT) + " · " + ivTxt;
+      $("dayNote").textContent = DD.dayNote != null ? String(DD.dayNote)
+        : "La tabella usa gli stessi giorni del grafico e della mappa di calore. Theta 1 g = P&L del giorno dopo − P&L del giorno. " +
+          "Un valore negativo è un costo del tempo. " + (STEP > 1 ? "Passo di " + STEP + " giorni." : "Passo di 1 giorno.");
+      return n;
     }
 
-    /* ---------- controlli e note ---------- */
+    /* ricostruzione storica: gambe per data; una riga senza gambe valide è rifiutata */
+    function buildHist(){
+      const Hs = Array.isArray(DD.hist) ? DD.hist : [];
+      if (!Hs.length){ $("histCard").classList.add("hide"); return 0; }
+      let h = '<table><thead><tr><th>Data</th><th class="n">Chiusura</th><th class="n">DTE front</th><th class="n">Valore posizione</th>' +
+        '<th class="n">P&amp;L</th><th>Gambe</th><th>Nota</th></tr></thead><tbody>';
+      let refused = 0;
+      Hs.forEach((r, i) => {
+        const w = "daily.hist[" + i + "]";
+        const day = r ? parseISO(r.date) : null;
+        const close = r ? r.close : null;
+        let why = "", cells = null;
+        if (day == null){ ERR(w + ": date non valida (" + (r && r.date) + "): usa aaaa-mm-gg"); why = "data non valida"; }
+        else if (!isNum(close) || close <= 0){ ERR(w + ": close mancante o non positivo"); why = "close non valido"; }
+        else if (day > ASOF_DAY){ ERR(w + ": la data è dopo asOf"); why = "data dopo asOf"; }
+        else {
+          let legs = LEGS, carry = CARRY, src = "attuali";
+          if (Array.isArray(r.legs) && r.legs.length){
+            legs = [];
+            r.legs.forEach((l, j) => {
+              const before = fatal.length;
+              const n = normLeg(l, j, day);
+              const errs = fatal.splice(before);
+              errs.forEach(m => ERR(w + " · " + m));
+              if (n && !errs.length) legs.push(n); else why = "gambe non valide";
+            });
+            carry = r.realized ?? 0;
+            if (!isNum(carry)){ ERR(w + ": realized non valido"); why = "realized non valido"; }
+            src = "della riga";
+          } else if (LEGS.some(l => l.opened != null && l.opened > day)){
+            why = "le gambe attuali non esistono a questa data: aggiungi legs e realized alla riga";
+          }
+          if (!why){
+            const at = nyInstant(day, CLOSE_MIN);
+            const val = legs.reduce((a, l) => a + l.sgn*l.qty*l.mult*legValue(l, close, at, HIST_SHIFT), 0);
+            const pnl = carry + legs.reduce((a, l) => a + legPnl(l, close, at, HIST_SHIFT), 0);
+            const exps = legs.filter(l => l.opt).map(l => l.expDay);
+            const dte = exps.length ? String(Math.round((Math.min(...exps) - day)/DAY_MS)) : "—";
+            cells = { val, pnl, dte, src };
+          }
+        }
+        if (why) refused++;
+        h += "<tr" + (r && r.est ? ' class="hi"' : "") + "><td>" + esc(r && r.date) + '</td><td class="n">' + (isNum(close) ? esc(px(close)) : "—") + "</td>" +
+          (cells
+            ? '<td class="n">' + esc(cells.dte) + '</td><td class="n">' + esc(amount2(cells.val, "storia")) + '</td><td class="n ' + tone(cells.pnl) + '">' +
+              esc(money2(cells.pnl, "storia")) + "</td><td>" + esc(cells.src) + "</td>"
+            : '<td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="amber">' + esc("rifiutata: " + why) + "</td>") +
+          '<td class="muted">' + esc(r && r.note) + "</td></tr>";
+      });
+      h += "</tbody></table>";
+      $("histWrap").innerHTML = h;
+      if (refused) WARN("Ricostruzione storica: " + refused + " righe rifiutate. Controlla daily.hist.");
+      $("histNote").textContent = DD.histNote != null ? String(DD.histNote)
+        : "Valore ricostruito con il modello BSM alla chiusura delle 16:00 di New York, con la IV delle gambe" +
+          (HIST_SHIFT !== 0 ? " spostata di " + (HIST_SHIFT*100).toFixed(2) + " punti" : "") +
+          ". Una riga senza legs usa le gambe attuali. Il valore non è una quotazione.";
+      return Hs.length;
+    }
+
+    /* legenda, pulsanti IV e note */
     const lg = $("lineLegend");
     PTH.forEach((q, i) => {
       const sp = document.createElement("span");
       sp.style.cursor = "pointer";
       sp.style.userSelect = "none";
-      sp.innerHTML = '<i style="background:' + q.color + '"></i>' + q.label;
-      sp.addEventListener("click", () => {
+      sp.setAttribute("role", "button");
+      sp.setAttribute("tabindex", "0");
+      const ic = document.createElement("i");
+      ic.style.background = q.color;
+      sp.appendChild(ic);
+      sp.appendChild(document.createTextNode(q.label));
+      const toggle = () => {
         hid[i] = !hid[i];
         sp.style.opacity = hid[i] ? ".35" : "1";
         sp.style.textDecoration = hid[i] ? "line-through" : "none";
         drawLines();
-      });
+      };
+      sp.addEventListener("click", toggle);
+      sp.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " "){ if (ev.preventDefault) ev.preventDefault(); toggle(); } });
       lg.appendChild(sp);
     });
-    document.querySelectorAll(".btn[data-iv]").forEach(b => {
-      b.addEventListener("click", () => {
-        document.querySelectorAll(".btn[data-iv]").forEach(o => o.classList.remove("on"));
-        b.classList.add("on");
-        ivShiftPts = parseFloat(b.dataset.iv) || 0;
-        drawLines();
-        dayCurve();
-        render(cur);
-      });
-    });
-
+    const SUMD = (SUM.daily = { on: true, days: DAYS.length, step: STEP, tableRows: 0, heatRows: ROWS.length, heatCols: NCOL,
+      heatCells: 0, heatNonFinite: false, histRows: 0 });
+    function heatNote(){
+      $("heatNote").textContent = "Righe: prezzo da " + px(ROWS[0]) + " a " + px(ROWS[ROWS.length - 1]) + ", passo " + px(HSTEP) +
+        ". Colonne: " + NCOL + " giorni, da " + dateOf(0) + " a " + dateOf(DAYN) + (STEP > 1 ? " (passo di " + STEP + " giorni)" : " (passo di 1 giorno)") +
+        ". Colore: arancio = perdita, blu = profitto, scuro = P&L zero. Scala da " + money2(HMIN) + " a " + money2(HMAX) +
+        ". Linea bianca = spot, linea viola = strike, linea grigia = break-even. Con il tasto Tab e le frecce leggi il valore di ogni cella.";
+    }
+    function redrawDaily(){
+      drawLines();
+      computeHeat();
+      drawHeat();
+      heatNote();
+      SUMD.tableRows = buildTable();
+      SUMD.heatCells = heatCells;
+      SUMD.heatNonFinite = heatBad;
+    }
+    const IVB = [["ivDn", -IV_STRESS], ["ivBase", 0], ["ivUp", IV_STRESS]].map(p => ({ b: $(p[0]), v: p[1] }));
+    IVB.forEach(o => o.b.addEventListener("click", () => {
+      IVB.forEach(p => p.b.classList.remove("on"));
+      o.b.classList.add("on");
+      ivShiftPts = o.v;
+      redrawDaily();
+      dayCurve();
+      render(cur);
+      hideHeat();
+    }));
     $("lineTitle").textContent = "P&L giorno per giorno · " + PTH.length + " percorsi di prezzo";
-    $("heatTitle").textContent = "Mappa di calore · P&L per prezzo " + CFG.ticker + " e giorno";
+    $("heatTitle").textContent = "Mappa di calore · P&L per prezzo " + String(CFG.ticker ?? "") + " e giorno";
     $("ivEndK").textContent = "P&L al giorno " + DAYN + " · spot costante";
-    $("lineNote").innerHTML = DD.lineNote ||
-      ("Ogni linea è un percorso di prezzo da oggi alla scadenza. " +
-       "Il P&L usa il modello Black-Scholes su tutte le gambe. " +
-       "IV base " + (DAILY_IV*100).toFixed(2) + "%. " +
-       (STEP > 1 ? "Passo di " + STEP + " giorni: il grafico salta i giorni intermedi. " : "") +
-       "I pulsanti IV spostano la volatilità di ±10 punti.");
-    $("heatNote").innerHTML =
-      "Righe: prezzo da USD " + ROWS[0].toFixed(2) + " a USD " + ROWS[ROWS.length - 1].toFixed(2) +
-      ", passo USD " + HSTEP.toFixed(2) + ". Colonne: " + NCOL + " giorni, da " + dateOf(0) +
-      " a " + dateOf(DAYN) + (STEP > 1 ? " (passo di " + STEP + " giorni)" : " (passo di 1 giorno)") + ". " +
-      "Colore: rosso = perdita, verde = profitto, grigio = P&L zero. " +
-      "Scala da " + money2(HMIN) + " a " + money2(HMAX) + ". " +
-      "La linea ambra è lo spot. La linea rossa è lo strike.";
-
-    drawLines();
-    drawHeat();
-    buildTable();
-    buildHist();
+    $("lineNote").textContent = DD.lineNote != null ? String(DD.lineNote)
+      : "Ogni linea è un percorso di prezzo da oggi alla scadenza front. Il P&L usa il modello BSM su ogni gamba, con il suo tempo residuo. " +
+        (BASE_SHIFT !== 0 ? "IV base spostata di " + (BASE_SHIFT*100).toFixed(2) + " punti. " : "") +
+        (STEP > 1 ? "Passo di " + STEP + " giorni: il grafico salta i giorni intermedi. " : "") +
+        "I pulsanti IV spostano la volatilità di ±" + IV_STRESS + " punti su linee, mappa e tabella.";
+    redrawDaily();
+    SUMD.histRows = buildHist();
+  } else {
+    SUM.daily = { on: false, days: 0, step: 0, tableRows: 0, heatRows: 0, heatCols: 0, heatCells: 0, heatNonFinite: false, histRows: 0 };
   }
 
-  /* ---------- verifica ---------- */
-  const v = CFG.verifica || {};
-  $("verifica").innerHTML =
-    "<b>Verifica.</b> Confidenza " + (v.confidence != null ? v.confidence : "—") + "/100 · " +
-    "Evidenza: " + (v.evidence || "—") + " · " +
-    "Non verificato: " + (v.unverified || "—") + " · " +
-    "Escalation: " + (v.escalation || "—") + ". Dati al " + CFG.asOf + ".";
+  /* ---------- 16. verifica ---------- */
+  const VF = CFG.verifica;
+  if (!VF) WARN("verifica mancante: scrivi confidence, evidence, unverified ed escalation.");
+  const foot = $("verifica");
+  const vb = document.createElement("b");
+  vb.textContent = "Verifica. ";
+  foot.appendChild(vb);
+  foot.appendChild(document.createTextNode(
+    "Confidenza " + String(VF && VF.confidence != null ? VF.confidence : "—") + "/100 · Evidenza: " + String((VF && VF.evidence) || "—") +
+    " · Non verificato: " + String((VF && VF.unverified) || "—") + " · Escalation: " + String((VF && VF.escalation) || "—") +
+    ". Dati al " + String(CFG.asOf) + (CFG.asOfTime != null ? " " + String(CFG.asOfTime) + " (New York)" : "") +
+    ". Motore: BSM per gamba, scadenza front " + itOf(FRONT_DAY) + ", valuta " + CUR + "."));
 
-  dayCurve(); dayText(); applySeries(); render(CFG.spot);
+  /* ---------- 17. stato iniziale e invarianti ---------- */
+  dayCurve(); dayText(); applySeries(); render(SPOT);
+  (function check(){
+    const tolV = 1e-7*SCALE + 1e-6;
+    EXP.bes.forEach(b => {
+      const v = pnlExp(b);
+      if (!(Math.abs(v) <= tolV)) ERR("Invariante: il P&L al break-even " + b.toFixed(6) + " vale " + v + ", non zero.");
+    });
+    EXP.zones.forEach((z, i) => {
+      if (i > 0 && z.sign === EXP.zones[i - 1].sign) ERR("Invariante: due zone vicine hanno lo stesso segno.");
+      if (z.sign === 0) return;
+      const a = z.from, b = z.to === Infinity ? Math.max(z.from*4, SPOT*4, 1) : z.to;
+      for (let k = 1; k < 64; k++){
+        const s = a + (b - a)*k/64, v = pnlExp(s);
+        if ((z.sign > 0 && v < -1000*tolV) || (z.sign < 0 && v > 1000*tolV)){
+          ERR("Invariante: a " + px(s) + " il segno del P&L non coincide con la zona " + rangeTxt(z) + ". Manca un break-even?");
+          break;
+        }
+      }
+    });
+    const probe = PLOT_X.concat(EXP.pts.filter(p => Number.isFinite(p)));
+    if (!unb(EXP.max) && probe.some(p => pnlExp(p) > EXP.max.v + 1000*tolV)) ERR("Invariante: un punto del payoff supera il max profit.");
+    if (!unb(EXP.min) && probe.some(p => pnlExp(p) < EXP.min.v - 1000*tolV)) ERR("Invariante: un punto del payoff è sotto il max loss.");
+    const nums = [SUM.pnlExpSpot, SUM.pnlNowSpot, SUM.deltaNow, SUM.pnlMark, SUM.pnlClose, SUM.thetaDay, SUM.vegaPt, ...SUM.bes, ...SUM.besToday];
+    if (nums.some(v => !Number.isFinite(v))) ERR("Invariante: il riepilogo contiene un valore non finito.");
+    SUM.scenarios.forEach(r => { if (![r.exp, r.now, r.ivDn, r.ivUp].every(Number.isFinite)) ERR("Invariante: scenario " + r.price + " non finito."); });
+    if (DAY_ON){
+      const dl = SUM.daily;
+      if (dl.tableRows !== DAYS.length || dl.heatCols !== DAYS.length) ERR("Invariante: la tabella e la mappa non hanno gli stessi giorni.");
+      if (dl.heatCells !== dl.heatRows*dl.heatCols) ERR("Invariante: le celle della mappa non sono righe × colonne.");
+      if (dl.heatNonFinite) ERR("Invariante: la mappa di calore contiene valori non finiti.");
+    }
+    if (BADS.size) ERR("Valori non finiti in: " + [...BADS].join(", "));
+  })();
+  TD.api = {
+    pnlExp, pnlNow,
+    pnlDay: (S, d, sh) => pnlAt(S, dayMs(d), sh || 0),
+    deltaNow: S => deltaAt(S, ASOF_MS, 0),
+    badValues: () => [...BADS]
+  };
+  TD.ready = true;
+  TDI.paint();
 })();
 </script>
 </body>

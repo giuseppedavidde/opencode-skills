@@ -13,7 +13,7 @@ for c in "/tmp/opencode/.venv/bin/python" "python3" "python"; do
 done
 
 SCRIPT=""
-for d in "$HOME/.config/opencode/scripts" "$HOME/Progetti/Github/opencode-skills/scripts" "$HOME/opencode-skills/scripts"; do
+for d in "$HOME/.config/opencode/scripts" "$HOME/.config/opencode/opencode-skills/scripts"; do
     if [ -n "$d" ] && [ -f "$d/context_store_reader.py" ]; then SCRIPT="$d/context_store_reader.py"; break; fi
 done
 

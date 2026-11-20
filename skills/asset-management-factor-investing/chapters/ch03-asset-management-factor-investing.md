@@ -1,5 +1,7 @@
 # Chapter 3: Mean-Variance Investing
 
+> **Source note**: this chapter file is based on the table of contents and the structure of the book, not on the full text. Check the book before you quote a number or a claim.
+
 ## Core Idea
 Mean-variance investing is all about diversification: by exploiting the interaction of assets with each other, so one asset's gains offset another's losses, diversification raises expected returns while reducing risk. The Markowitz (1952) machinery is the industry workhorse, but unconstrained mean-variance optimization is notoriously unstable — small input errors produce wild portfolios. Practical success comes from *constraining* the inputs: equal-weighted, minimum-variance, and risk-parity portfolios are constrained special cases that empirically dominate unconstrained optimization.
 

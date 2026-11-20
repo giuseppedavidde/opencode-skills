@@ -434,7 +434,7 @@ SKILL_NAMES: set[str] = {
     "machine-learning-for-asset-managers",
     "advances-in-financial-machine-learning",
     "asset-management-factor-investing",
-    "liotta-smartfood", "lgbm-trader-skill",
+    "liotta-smartfood",
     "market-accumulation-scanner", "market-data-fetch",
     "options-analysis", "options-strategy-suggestions",
     "stock-crypto-analysis", "smart-dispatcher",

@@ -7,12 +7,12 @@ Trading is a probability game, structurally identical to casino gambling. Casino
 - **Micro vs. macro levels of probability**: uncertainty per-trade; predictability over a sample.
 - **The casino/gambler model**: known variables = the rules (= trader's analytical edge); unknown variables = other players' behavior (= shuffle, dice throw).
 - **Statistical independence**: each trade is independent of every other → random distribution of wins and losses within any string.
-- **Five fundamental truths** (the probabilistic mind-set):
-  1. Anything can happen.
-  2. You don't need to know what is going to happen next to make money.
-  3. There is a random distribution between wins and losses for any given set of variables that define an edge.
-  4. An edge is nothing more than an indication of a higher probability of one thing happening over another.
-  5. Every moment in the market is unique.
+- **Five fundamental truths** (the probabilistic mind-set; paraphrase; the exact wording is in the book):
+  1. Any outcome is possible: one other participant can cancel your edge.
+  2. You can make money without knowing what the market does next.
+  3. For any set of conditions that defines an edge, wins and losses come in random order.
+  4. An edge only moves the odds toward one outcome; it does not promise it.
+  5. No market moment repeats exactly.
 - **Rigid rules + flexible expectations**: the paradox of disciplined trading — opposite of what typical traders do (flexible rules, rigid expectations).
 - **Bob the CTA case study**: understanding probabilities intellectually ≠ functioning from a probabilistic perspective.
 

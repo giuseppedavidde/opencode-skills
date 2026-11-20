@@ -40,8 +40,6 @@ MINIMAL_PAYLOADS: dict[type, dict[str, Any]] = {
     responses.BaliResult: {"ticker": "AAPL"},
     responses.TSMomResult: {"ticker": "AAPL"},
     responses.BakshiResult: {"ticker": "AAPL"},
-    responses.LGBMResult: {"ticker": "AAPL"},
-    responses.PostProcessResult: {"ticker": "AAPL"},
 }
 
 
@@ -118,7 +116,7 @@ def test_server_advertises_typed_output_schemas(tmp_path) -> None:
             return await client.list_tools()
 
     tools = asyncio.run(_list())
-    assert len(tools) == 17
+    assert len(tools) == 15
 
     by_name = {tool.name: tool for tool in tools}
     expected = {
@@ -137,8 +135,6 @@ def test_server_advertises_typed_output_schemas(tmp_path) -> None:
         "bali_signals",
         "tsmom_signals",
         "bakshi_signals",
-        "lgbm_predict",
-        "lgbm_postprocess",
     }
     assert set(by_name) == expected
 
@@ -228,3 +224,46 @@ def test_payloads_are_self_describing() -> None:
     for model, payload in MINIMAL_PAYLOADS.items():
         dumped = model.model_validate(payload).model_dump()
         assert dumped["schema_version"] == responses.CONTRACT_VERSION
+
+
+# ── Envelope conventions (contract 4.x) ───────────────────────────────
+
+from tests.test_tool_fault_injection import invented_numbers  # noqa: E402
+
+
+def test_every_model_carries_the_envelope() -> None:
+    """as_of, computed_at, sources, degraded, warnings, error and cache metadata on every model."""
+    for model, payload in MINIMAL_PAYLOADS.items():
+        fields = model.model_fields
+        for name in ("as_of", "computed_at", "sources", "degraded", "warnings", "error",
+                     "error_kind", "cached", "cache_age_s"):
+            assert name in fields, (model.__name__, name)
+        dumped = model.model_validate(payload).model_dump()
+        assert dumped["computed_at"].endswith("+00:00")
+
+
+@pytest.mark.parametrize(
+    "model,payload",
+    list(MINIMAL_PAYLOADS.items()),
+    ids=lambda value: getattr(value, "__name__", ""),
+)
+def test_error_payloads_carry_no_invented_numbers(model: type, payload: dict[str, Any]) -> None:
+    """A failed answer has null metrics: only counters and parameter echoes may be numbers."""
+    failed = model.model_validate(responses.error_payload("upstream down", retryable=True, **payload))
+    dumped = failed.model_dump()
+    assert dumped["degraded"] is True and dumped["error_kind"] == "blocking"
+    assert invented_numbers(dumped) == [], invented_numbers(dumped)
+
+
+def test_degraded_error_kind_sets_degraded() -> None:
+    payload = responses.AnalyzeStockResponse.model_validate(
+        {"ticker": "A", "error": "short history", "error_kind": "degraded"}
+    )
+    assert payload.degraded is True
+
+
+def test_as_of_accepts_aware_datetimes_only_as_iso() -> None:
+    from datetime import datetime, timezone
+
+    payload = responses.StockDataResponse(ticker="A", as_of=datetime(2026, 11, 20, 21, tzinfo=timezone.utc))
+    assert payload.as_of == "2026-11-20T21:00:00+00:00"

@@ -2,15 +2,16 @@
 Description=Watch opencode-skills sources and refresh the VS Code layer
 
 [Path]
-PathModified=%h/Progetti/Github/opencode-skills/agents
-PathModified=%h/Progetti/Github/opencode-skills/command
-PathModified=%h/Progetti/Github/opencode-skills/config
-PathModified=%h/Progetti/Github/opencode-skills/vscode
-PathModified=%h/Progetti/Github/opencode-skills/vscode/hooks
-PathModified=%h/Progetti/Github/opencode-skills/vscode/instructions
-PathModified=%h/Progetti/Github/opencode-skills/skills
-PathModified=%h/Progetti/Github/opencode-skills/install-vscode.py
-PathModified=%h/Progetti/Github/opencode-skills/scripts/sync-vscode.sh
+# install.sh creates ~/.config/opencode/opencode-skills -> <repository> on every machine.
+PathModified=%h/.config/opencode/opencode-skills/agents
+PathModified=%h/.config/opencode/opencode-skills/command
+PathModified=%h/.config/opencode/opencode-skills/config
+PathModified=%h/.config/opencode/opencode-skills/vscode
+PathModified=%h/.config/opencode/opencode-skills/vscode/hooks
+PathModified=%h/.config/opencode/opencode-skills/vscode/instructions
+PathModified=%h/.config/opencode/opencode-skills/skills
+PathModified=%h/.config/opencode/opencode-skills/install-vscode.py
+PathModified=%h/.config/opencode/opencode-skills/scripts/sync-vscode.sh
 
 [Install]
 WantedBy=default.target

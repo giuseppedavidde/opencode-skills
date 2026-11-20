@@ -80,12 +80,15 @@ WEB, WED, WET, WIG, WIT, WON, WOO, YAM, YAP, YAW, YEA, YES,
 
 ## Sizing Guidelines per FOMO Phase
 
-| Fase | % Portafoglio | Stop Loss | Take Profit |
-|:----:|:-------------:|:---------:|:-----------:|
-| Early FOMO | 3-5% | -15% | +30-50% |
-| Mid FOMO | 1-3% | -10% | +20-30% |
-| Late FOMO | 0% | N/A | N/A |
-| Exit FOMO | 0% (o short) | N/A | N/A |
+| Fase | Valore azioni (max) | Max loss opzioni (max) | Stop Loss | Take Profit |
+|:----:|:-------------------:|:----------------------:|:---------:|:-----------:|
+| Early FOMO | 1% dell'equity | 0.5% dell'equity | -15% | +30-50% |
+| Mid FOMO | 0.5% dell'equity | 0.25% dell'equity | -10% | +20-30% |
+| Late FOMO | 0% | 0% | N/A | N/A |
+| Exit FOMO | 0% (nessuno short) | 0% | N/A | N/A |
+
+Regola del gap: un ticker WSB può aprire −50% (o fermarsi per halt). Valore della posizione × 0.5 ≤ max loss.
+Solo strutture a rischio definito. Rischio totale sui ticker WSB ≤ 2% dell'equity.
 
 ## Linguaggio Bullish vs Bearish (Sentiment Analysis)
 

@@ -1,4 +1,19 @@
-"""Wyckoff phase analysis and 6-Clue accumulation/distribution test."""
+"""Wyckoff phase evidence on swing structure, and a deduplicated clue test (SIG-16).
+
+Both scores are on one 0-100 scale (50 = neutral) with mirrored rules, so a
+driftless random walk has no bullish drift. None of the rules has an
+out-of-sample test: the labels ("Spring", "Upthrust") are descriptions of a
+price pattern, not evidence of an edge.
+
+Definitions:
+
+- Swing points: confirmed pivots with 5 bars on each side
+  (:func:`trading_mcp.analysis.ta_core.swing_pivots`), so they never repaint.
+- Trading range: support = lowest confirmed swing low and resistance =
+  highest confirmed swing high of the last 90 bars, excluding the last 10.
+- Background trend: the total return of the 120 bars before that range
+  (below -10% = decline, above +10% = advance).
+"""
 
 from __future__ import annotations
 
@@ -7,206 +22,182 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from trading_mcp.analysis.ta_core import atr_last, swing_pivots
 
-def compute_wyckoff(hist: pd.DataFrame, info: dict[str, Any]) -> tuple[int, str]:
-    """Compute Wyckoff phase score (0-100).
+_PIVOT_ORDER = 5
+_RANGE_BARS = 90
+_EVENT_BARS = 10
+_BACKGROUND_BARS = 120
+_BACKGROUND_MOVE = 0.10
 
-    Evaluates position within 1-year range, HH/HL or LH/LL structure,
-    MA crossovers, Spring detection, volume absorption, and volume-price divergence.
+
+def _background(close: np.ndarray) -> tuple[str, float | None]:
+    """``decline``, ``advance`` or ``flat`` for the bars before the range window."""
+    end = len(close) - _RANGE_BARS
+    start = end - _BACKGROUND_BARS
+    if start < 0 or close[start] <= 0:
+        return "unknown", None
+    move = float(close[end] / close[start] - 1.0)
+    if move < -_BACKGROUND_MOVE:
+        return "decline", move
+    if move > _BACKGROUND_MOVE:
+        return "advance", move
+    return "flat", move
+
+
+def compute_wyckoff(hist: pd.DataFrame, info: dict[str, Any] | None = None) -> tuple[int, str]:
+    """Wyckoff structure score (0-100, 50 = neutral).
+
+    Rules (mirror pairs, documented, unvalidated):
+
+    - Spring: in the last 10 bars a low below range support by at most
+      1.5 ATR, and the last close back above support: +20 (+10 more after a
+      background decline). Upthrust mirrors it at resistance: -20 (-10 more
+      after an advance).
+    - Swing structure: last two confirmed swing highs AND lows higher (HH/HL,
+      markup) +15; both lower (LH/LL, markdown) -15.
+    - Range position: bottom quarter of the range after a decline +10
+      (accumulation zone); top quarter after an advance -10 (distribution zone).
 
     Args:
-        hist: OHLCV DataFrame with at least 50 bars.
-        info: yfinance info dict (unused currently).
+        hist: Complete daily bars (at least 60).
+        info: Unused (kept for the call signature).
     """
-    if hist.empty or len(hist) < 50:
-        return 20, "Insufficient data"
+    del info
+    if hist.empty or len(hist) < 60:
+        return 50, "Insufficient data"
+    close = hist["Close"].to_numpy(dtype=float)
+    high = hist["High"].to_numpy(dtype=float)
+    low = hist["Low"].to_numpy(dtype=float)
+    atr = atr_last(hist) or 0.0
+    score = 50.0
+    details: list[str] = []
+    background, move = _background(close)
+    details.append(f"Background {background}" + (f" ({move:+.0%})" if move is not None else ""))
 
-    score = 20
-    details = []
-    price = float(hist["Close"].iloc[-1])
-    high_1y = float(hist["High"].max())
-    low_1y = float(hist["Low"].min())
-    price_range = high_1y - low_1y
-    pos = ((price - low_1y) / price_range) * 100 if price_range > 0 else 50
-
-    if pos < 30:
-        score += 15
-        details.append("Bottom 30% of 1Y range (+15)")
-    elif pos < 60:
-        score += 30
-        details.append("Accumulation zone 30-60% of range (+30)")
-    else:
-        details.append("Upper 40% of range (+0)")
-
-    recent = hist.tail(60)
-    if len(recent) >= 20:
-        highs = recent["High"].values
-        lows = recent["Low"].values
-        half = len(highs) // 2
-        if highs[-1] > highs[half] and lows[-1] > lows[half]:
-            score += 40
-            details.append("HH/HL pattern (Markup) (+40)")
-        elif highs[-1] < highs[half] and lows[-1] < lows[half]:
-            score -= 20
-            details.append("LH/LL pattern (Markdown) (-20)")
-
-    if len(hist) >= 200:
-        ma50 = float(hist["Close"].rolling(50).mean().iloc[-1])
-        ma200 = float(hist["Close"].rolling(200).mean().iloc[-1])
-        if ma50 > ma200:
+    n = len(close)
+    window_start = max(0, n - _RANGE_BARS)
+    piv_highs, piv_lows = swing_pivots(high, low, _PIVOT_ORDER)
+    range_highs = [p for i, p in piv_highs if window_start <= i < n - _EVENT_BARS]
+    range_lows = [p for i, p in piv_lows if window_start <= i < n - _EVENT_BARS]
+    phase = "range"
+    if range_highs and range_lows and atr > 0:
+        support, resistance = min(range_lows), max(range_highs)
+        recent_low = float(low[-_EVENT_BARS:].min())
+        recent_high = float(high[-_EVENT_BARS:].max())
+        last = float(close[-1])
+        if support - 1.5 * atr <= recent_low < support and last > support:
+            points = 30 if background == "decline" else 20
+            score += points
+            phase = "accumulation"
+            details.append(f"Spring detected: low {recent_low:.2f} under support {support:.2f}, close back above (+{points})")
+        elif resistance < recent_high <= resistance + 1.5 * atr and last < resistance:
+            points = 30 if background == "advance" else 20
+            score -= points
+            phase = "distribution"
+            details.append(f"Upthrust: high {recent_high:.2f} over resistance {resistance:.2f}, close back below (-{points})")
+        if resistance > support:
+            pos = (last - support) / (resistance - support)
+            if pos < 0.25 and background == "decline":
+                score += 10
+                details.append(f"Bottom quarter of the range after a decline ({pos:.0%}, +10)")
+            elif pos > 0.75 and background == "advance":
+                score -= 10
+                details.append(f"Top quarter of the range after an advance ({pos:.0%}, -10)")
+    if len(piv_highs) >= 2 and len(piv_lows) >= 2:
+        hh = piv_highs[-1][1] > piv_highs[-2][1]
+        hl = piv_lows[-1][1] > piv_lows[-2][1]
+        if hh and hl:
             score += 15
-            details.append("MA50 > MA200 (+15)")
-    elif len(hist) >= 50:
-        ma50 = float(hist["Close"].rolling(50).mean().iloc[-1])
-        details.append(f"MA50: {ma50:.2f}")
-
-    if len(hist) >= 30:
-        recent_30 = hist.tail(30)
-        high_30 = float(recent_30["High"].max())
-        low_30 = float(recent_30["Low"].min())
-        low_pos = int(recent_30["Low"].values.argmin())
-        range_30 = high_30 - low_30
-        pos_30 = ((price - low_30) / range_30 * 100) if range_30 > 0 else 50.0
-        # A genuine Spring is a shakeout near the lows, NOT a pullback inside
-        # an extended markup. Without the position constraint the detector is
-        # trivially true in any uptrend (the 30-bar low is always early and
-        # price is >5% above it), which mislabels ATH names as accumulation.
-        if low_pos < 25 and price > low_30 * 1.05 and pos_30 < 60:
-            score += 30
-            details.append("Spring detected (+30)")
-
-    if len(hist) >= 90:
-        vol_older = float(hist.tail(90).head(60)["Volume"].mean())
-        vol_recent = float(hist.tail(30)["Volume"].mean())
-        if vol_recent < vol_older * 0.8:
-            score += 15
-            details.append("Volume decreasing (absorption) (+15)")
-
-    if len(hist) >= 30:
-        vol_first = float(hist.iloc[-30:-15]["Volume"].mean())
-        vol_second = float(hist.iloc[-15:]["Volume"].mean())
-        price_first = float(hist.iloc[-30:-15]["Close"].mean())
-        price_second = float(hist.iloc[-15:]["Close"].mean())
-        vol_trend = vol_second / vol_first if vol_first > 0 else 1.0
-        price_trend = price_second / price_first if price_first > 0 else 1.0
-
-        if vol_trend > 1.15 and price_trend < 1.0:
-            score += 25
-            details.append("Rising vol + falling price (Accumulation) (+25)")
-        elif vol_trend < 0.85 and price_trend > 1.0:
-            score -= 20
-            details.append("Falling vol + rising price (Distribution) (-20)")
-        elif vol_trend > 1.15 and price_trend > 1.0:
-            score += 15
-            details.append("Rising vol + rising price (Markup) (+15)")
-        elif vol_trend < 0.85 and price_trend < 1.0:
+            phase = "markup" if phase == "range" else phase
+            details.append("HH/HL swing structure (markup +15)")
+        elif not hh and not hl:
             score -= 15
-            details.append("Falling vol + falling price (Markdown) (-15)")
+            phase = "markdown" if phase == "range" else phase
+            details.append("LH/LL swing structure (markdown -15)")
+    details.append(f"Phase: {phase}")
+    return int(round(min(100.0, max(0.0, score)))), " | ".join(details)
 
-    return min(score, 100), " | ".join(details)
 
+def compute_6clue_test(hist: pd.DataFrame, info: dict[str, Any] | None = None) -> tuple[int, str]:
+    """Wyckoff clue test (0-100, 50 = neutral), without the clues that other dimensions score.
 
-def compute_6clue_test(hist: pd.DataFrame, info: dict[str, Any]) -> tuple[int, str]:
-    """Wyckoff 6-Clue Accumulation/Distribution Test.
+    Clues kept (each bullish or bearish): 1. testing support (close 5-15%
+    above the 60-bar low) vs testing resistance (5-15% below the 60-bar
+    high); 2. up-bar volume vs down-bar volume over 60 bars (ratio > 1.2);
+    3. effort vs result over 30 bars (rising volume on falling price =
+    absorption, bullish; falling volume on rising price = no demand,
+    bearish); 6. range narrowing (60 vs 120 bars) after a decline (bullish)
+    or after an advance (bearish). Clue 4 (analyst target) is scored in
+    Fundamentals and clue 5 (HH/HL) in Market Structure, so they are not
+    counted here. Net clues +-4 give +-30, +-2..3 give +-15.
 
-    Scores 6 clues for accumulation (bullish) vs distribution (bearish).
+    Args:
+        hist: Complete daily bars (at least 90).
+        info: Unused (kept for the call signature).
     """
+    del info
     if hist.empty or len(hist) < 90:
-        return 50, "Insufficient data for 6-Clue Test"
+        return 50, "Insufficient data for the clue test"
+    close = hist["Close"].to_numpy(dtype=float)
+    high = hist["High"].to_numpy(dtype=float)
+    low = hist["Low"].to_numpy(dtype=float)
+    volume = hist["Volume"].to_numpy(dtype=float)
+    bull = bear = 0
+    details: list[str] = []
 
-    score = 50
-    details = []
-    clues_bullish = 0
-    clues_bearish = 0
+    current = float(close[-1])
+    low_60, high_60 = float(np.min(low[-60:])), float(np.max(high[-60:]))
+    if low_60 * 1.05 < current < low_60 * 1.15:
+        bull += 1
+        details.append("Clue 1: testing support")
+    if high_60 * 0.85 < current < high_60 * 0.95:
+        bear += 1
+        details.append("Clue 1: testing resistance")
 
-    close = hist["Close"].values
-    high = hist["High"].values
-    low = hist["Low"].values
-    volume = hist["Volume"].values
+    changes = np.diff(close[-61:])
+    up_vol = float(volume[-60:][changes > 0].sum())
+    down_vol = float(volume[-60:][changes < 0].sum())
+    if up_vol > down_vol * 1.2:
+        bull += 1
+        details.append(f"Clue 2: up volume {up_vol / max(down_vol, 1.0):.2f}x down volume")
+    elif down_vol > up_vol * 1.2:
+        bear += 1
+        details.append(f"Clue 2: down volume {down_vol / max(up_vol, 1.0):.2f}x up volume")
 
-    if len(close) >= 60:
-        support_zone = float(np.min(low[-60:]))
-        current = float(close[-1])
-        if current > support_zone * 1.05 and current < support_zone * 1.15:
-            clues_bullish += 1
-            details.append("Clue 1: Price testing support (spring zone)")
-        elif current < support_zone:
-            clues_bearish += 1
-            details.append("Clue 1: Price breaking support")
-
-    if len(close) >= 60:
-        down_vol = sum(float(volume[i]) for i in range(-60, 0) if close[i] < close[i - 1])
-        up_vol = sum(float(volume[i]) for i in range(-60, 0) if close[i] > close[i - 1])
-        if up_vol > down_vol * 1.2:
-            clues_bullish += 1
-            ratio = up_vol / down_vol if down_vol > 0 else float("inf")
-            details.append(f"Clue 2: Up vol > Down vol ({ratio:.2f}x)")
-        elif down_vol > up_vol * 1.2:
-            clues_bearish += 1
-            ratio = down_vol / up_vol if up_vol > 0 else float("inf")
-            details.append(f"Clue 2: Down vol > Up vol ({ratio:.2f}x)")
-
-    if len(close) >= 30:
-        vol_first = float(np.mean(volume[-30:-15]))
-        vol_second = float(np.mean(volume[-15:]))
-        price_first = float(np.mean(close[-30:-15]))
-        price_second = float(np.mean(close[-15:]))
-        vol_trend = vol_second / vol_first if vol_first > 0 else 1.0
-        price_trend = price_second / price_first if price_first > 0 else 1.0
-
-        if vol_trend > 1.15 and price_trend < 1.0:
-            clues_bullish += 1
-            details.append("Clue 3: Rising vol + falling price (accumulation)")
-        elif vol_trend < 0.85 and price_trend > 1.0:
-            clues_bearish += 1
-            details.append("Clue 3: Falling vol + rising price (distribution)")
-
-    target_mean = info.get("targetMeanPrice")
-    current_price = info.get("currentPrice") or (float(close[-1]) if len(close) > 0 else None)
-    if target_mean and current_price and float(target_mean) > float(current_price) * 1.1:
-        clues_bullish += 1
-        details.append(f"Clue 4: Analyst target ${float(target_mean):.0f} > price ${float(current_price):.0f}")
-    elif target_mean and current_price and float(target_mean) < float(current_price) * 0.9:
-        clues_bearish += 1
-        details.append(f"Clue 4: Analyst target ${float(target_mean):.0f} < price ${float(current_price):.0f}")
-
-    if len(close) >= 60:
-        half = len(close[-60:]) // 2
-        first_half_high = float(np.max(high[-60:-60 + half]))
-        first_half_low = float(np.min(low[-60:-60 + half]))
-        second_half_high = float(np.max(high[-60 + half:]))
-        second_half_low = float(np.min(low[-60 + half:]))
-        if second_half_high > first_half_high and second_half_low > first_half_low:
-            clues_bullish += 1
-            details.append("Clue 5: HH/HL structure (markup)")
-        elif second_half_high < first_half_high and second_half_low < first_half_low:
-            clues_bearish += 1
-            details.append("Clue 5: LH/LL structure (markdown)")
+    vol_first, vol_second = float(np.mean(volume[-30:-15])), float(np.mean(volume[-15:]))
+    price_first, price_second = float(np.mean(close[-30:-15])), float(np.mean(close[-15:]))
+    vol_trend = vol_second / vol_first if vol_first > 0 else 1.0
+    price_trend = price_second / price_first if price_first > 0 else 1.0
+    if vol_trend > 1.15 and price_trend < 1.0:
+        bull += 1
+        details.append("Clue 3: rising volume on falling price (absorption)")
+    elif vol_trend < 0.85 and price_trend > 1.0:
+        bear += 1
+        details.append("Clue 3: falling volume on rising price (no demand)")
 
     if len(close) >= 120:
         range_120 = float(np.max(high[-120:]) - np.min(low[-120:]))
         range_60 = float(np.max(high[-60:]) - np.min(low[-60:]))
-        if range_60 < range_120 * 0.6:
-            clues_bullish += 1
-            details.append("Clue 6: Narrowing range (accumulation time)")
-        elif range_60 > range_120 * 0.8:
-            clues_bearish += 1
-            details.append("Clue 6: Wide range (distribution volatility)")
+        prior_move = float(close[-60] / close[-120] - 1.0) if close[-120] > 0 else 0.0
+        if range_120 > 0 and range_60 < range_120 * 0.6:
+            if prior_move < -_BACKGROUND_MOVE:
+                bull += 1
+                details.append("Clue 6: range narrowing after a decline (accumulation)")
+            elif prior_move > _BACKGROUND_MOVE:
+                bear += 1
+                details.append("Clue 6: range narrowing after an advance (distribution)")
 
-    net_clues = clues_bullish - clues_bearish
-    if net_clues >= 4:
-        score += 30
-        details.append(f"6-Clue Test: {clues_bullish}B/{clues_bearish}S = STRONG ACCUMULATION (+30)")
-    elif net_clues >= 2:
-        score += 15
-        details.append(f"6-Clue Test: {clues_bullish}B/{clues_bearish}S = Mild accumulation (+15)")
-    elif net_clues <= -4:
-        score -= 30
-        details.append(f"6-Clue Test: {clues_bullish}B/{clues_bearish}S = STRONG DISTRIBUTION (-30)")
-    elif net_clues <= -2:
-        score -= 15
-        details.append(f"6-Clue Test: {clues_bullish}B/{clues_bearish}S = Mild distribution (-15)")
+    net = bull - bear
+    if net >= 4:
+        score, label = 80, "STRONG ACCUMULATION (+30)"
+    elif net >= 2:
+        score, label = 65, "Mild accumulation (+15)"
+    elif net <= -4:
+        score, label = 20, "STRONG DISTRIBUTION (-30)"
+    elif net <= -2:
+        score, label = 35, "Mild distribution (-15)"
     else:
-        details.append(f"6-Clue Test: {clues_bullish}B/{clues_bearish}S = Neutral (+0)")
-
-    return min(100, max(0, score)), " | ".join(details)
+        score, label = 50, "Neutral (+0)"
+    details.append(f"Clue test: {bull}B/{bear}S = {label}")
+    return score, " | ".join(details)

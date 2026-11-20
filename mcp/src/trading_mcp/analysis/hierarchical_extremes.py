@@ -1,13 +1,13 @@
 """Hierarchical extremes detection: multi-level swing points via rolling windows.
 
-Detects swing highs and lows at exponentially increasing granularity levels
-using rolling-window peak/valley detection, then determines trend direction
-from the most recent swing points at each level.
+Detects swing highs and lows at four granularity levels (windows of 3, 6, 9
+and 12 bars on each side: the sizes grow LINEARLY), then determines the trend
+direction from the most recent swing points at each level. A swing point is
+confirmed only after ``window`` later bars, so it never repaints. ATR is
+Wilder's (RMA with alpha = 1/lookback).
 """
 
 from __future__ import annotations
-
-import numpy as np
 
 
 class HierarchicalExtremes:
@@ -23,7 +23,7 @@ class HierarchicalExtremes:
     Attributes:
         level_highs: dict mapping level (int) -> list of swing-high prices.
         level_lows: dict mapping level (int) -> list of swing-low prices.
-        atr: current Average True Range (float).
+        atr: current Wilder Average True Range (float).
     """
 
     def __init__(self, levels: int = 4, atr_lookback: int = 14) -> None:
@@ -46,15 +46,14 @@ class HierarchicalExtremes:
         self.level_highs: dict[int, list[float]] = {i: [] for i in range(levels)}
         self.level_lows: dict[int, list[float]] = {i: [] for i in range(levels)}
 
-        # Exponential window sizes per level.
-        # Level 0: 3 bars → 7 needed for full context; Level 3: 12 bars.
+        # Linear window sizes per level: 3, 6, 9, 12 bars on each side.
         self._windows: dict[int, int] = {
             i: int(3 + i * 3) for i in range(levels)
         }
 
     @property
     def atr(self) -> float:
-        """Current Average True Range."""
+        """Current Wilder Average True Range."""
         return self._atr
 
     def process_bar(self, high: float, low: float, close: float) -> None:
@@ -77,11 +76,12 @@ class HierarchicalExtremes:
             tr = high - low
         self._tr_values.append(tr)
 
-        n = len(self._tr_values)
-        if n >= self._atr_lookback:
-            self._atr = float(np.mean(self._tr_values[-self._atr_lookback:]))
-        elif n > 0:
-            self._atr = float(np.mean(self._tr_values))
+        # Wilder RMA, the same recursion as ``ewm(alpha=1/lookback, adjust=False)``
+        # in ``ta_core.wilder_atr`` (seeded with the first true range).
+        if len(self._tr_values) == 1:
+            self._atr = float(tr)
+        else:
+            self._atr += (tr - self._atr) / self._atr_lookback
 
         # ---- Swing-point detection per level ----
         total = len(self._highs)

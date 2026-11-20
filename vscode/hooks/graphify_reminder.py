@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
-"""VS Code PreToolUse hook: remind the model to query an existing graphify graph.
+"""SessionStart hook: remind the model to query an existing graphify graph.
 
-Faithful port of the opencode `graphify` plugin: before a shell command runs in
-a directory that contains `graphify-out/graph.json`, inject a short reminder
-into the model context. The reminder is emitted once per session.
+opencode-skills: managed file. install-vscode.py copies it; edit vscode/hooks/.
 
-Fail-open: any error returns `{}` and never blocks the tool call.
+Port of the opencode `graphify` plugin. When the session folder (or one of its
+parents) contains `graphify-out/graph.json`, the hook adds a short reminder to
+the model context. `sessionStart` output supports `additionalContext` in the
+Copilot harness, and `hookSpecificOutput.additionalContext` in the Local one.
+
+A legacy `PreToolUse` configuration still works: the reminder then appears
+once per session, before the first shell command.
+
+Fail-open: any error returns `{}` and never blocks the session or a tool.
 """
 
 from __future__ import annotations
@@ -104,13 +110,21 @@ def resolve_workspace_root(payload: dict) -> Path:
     return find_graph_root(cwd) or cwd
 
 
-def main() -> int:
-    payload = read_payload()
-    if tool_name(payload) not in SHELL_TOOL_NAMES:
-        print("{}")
-        return 0
+def emit_reminder(event: str) -> None:
+    """Print the reminder in the Copilot shape and in the Local shape."""
+    print(
+        json.dumps(
+            {
+                "additionalContext": REMINDER,
+                "hookSpecificOutput": {"hookEventName": event, "additionalContext": REMINDER},
+            }
+        )
+    )
 
-    if not command_of(payload):
+
+def legacy_pre_tool_use(payload: dict) -> int:
+    """Old PreToolUse configuration: remind once per session, before a shell command."""
+    if tool_name(payload) not in SHELL_TOOL_NAMES or not command_of(payload):
         print("{}")
         return 0
 
@@ -131,19 +145,21 @@ def main() -> int:
             # If the marker cannot be written, still emit the reminder once per call.
             pass
 
-    # Emit both shapes: the VS Code extension reads hookSpecificOutput, while
-    # the shared Copilot runtime accepts a top-level additionalContext.
-    print(
-        json.dumps(
-            {
-                "additionalContext": REMINDER,
-                "hookSpecificOutput": {
-                    "hookEventName": "PreToolUse",
-                    "additionalContext": REMINDER,
-                },
-            }
-        )
-    )
+    emit_reminder("PreToolUse")
+    return 0
+
+
+def main() -> int:
+    payload = read_payload()
+    if tool_name(payload):
+        return legacy_pre_tool_use(payload)
+
+    root = resolve_workspace_root(payload)
+    if not (root / "graphify-out" / "graph.json").is_file():
+        print("{}")
+        return 0
+
+    emit_reminder(payload_value(payload, "hook_event_name", "hookEventName") or "SessionStart")
     return 0
 
 

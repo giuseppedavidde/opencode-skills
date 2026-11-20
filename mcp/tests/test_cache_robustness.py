@@ -81,47 +81,76 @@ def test_options_roundtrip_after_atomic_save(tmp_path: Path, monkeypatch: pytest
     assert loaded["n"] == 3
 
 
-# ── provider: atomic pickle write + corrupt read ───────────────────────
+# ── provider: atomic JSON write + corrupt read (no pickle) ─────────────
+
+def _entry() -> prov.CacheEntry:
+    return prov.CacheEntry(data=None, fetched_at=1_700_000_000.0, ttl=60.0, source="test")
+
 
 def test_provider_save_is_atomic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """_disk_save scrive payload + meta in modo atomico, nessun tmp residuo."""
+    """_disk_save writes one private JSON file atomically, with no temp file left."""
     monkeypatch.setattr(prov, "_DATA_CACHE_DIR", tmp_path)
 
-    prov._disk_save("hist", "AAPL:1d", {"close": [1.0, 2.0]})
+    prov._disk_save("hist", "AAPL", "hist:AAPL:1y:1d", _entry(), {"close": [1.0, 2.0]})
 
-    pkl_files = list(tmp_path.glob("hist_*.pkl"))
-    meta_files = list(tmp_path.glob("*.meta.json"))
-    assert len(pkl_files) == 1
-    assert len(meta_files) == 1
+    files = list(tmp_path.glob("hist_AAPL_*.json"))
+    assert len(files) == 1
     assert list(tmp_path.glob(".*tmp")) == []
+    assert files[0].stat().st_mode & 0o777 == 0o600
 
-    loaded = prov._disk_load("hist", "AAPL:1d", ttl=3600)
-    assert loaded == {"close": [1.0, 2.0]}
+    loaded = prov._disk_load("hist", "AAPL", "hist:AAPL:1y:1d")
+    assert loaded is not None
+    assert loaded["payload"] == {"close": [1.0, 2.0]}
+    assert loaded["fetched_at"] == 1_700_000_000.0
 
 
-def test_provider_corrupt_pickle_returns_none(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Un pickle corrotto → None (miss), non UnpicklingError propagato."""
+def test_provider_corrupt_json_returns_none(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A corrupt cache file is a miss, not an exception."""
     monkeypatch.setattr(prov, "_DATA_CACHE_DIR", tmp_path)
+    path = prov._disk_path("hist", "BAD", "hist:BAD:1y:1d")
+    path.write_text("{ not json")
+    path.chmod(0o600)
 
-    data_path = prov._disk_path("hist", "BAD:1d")
-    meta_path = prov._disk_meta_path("hist", "BAD:1d")
-    data_path.write_bytes(b"not a pickle at all")
-    meta_path.write_text(json.dumps({"ts": 0.0}))
-
-    assert prov._disk_load("hist", "BAD:1d", ttl=10_000_000) is None
+    assert prov._disk_load("hist", "BAD", "hist:BAD:1y:1d") is None
 
 
-def test_provider_truncated_pickle_returns_none(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Pickle troncato a metà (EOFError) → None."""
+def test_provider_truncated_json_returns_none(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A file cut in the middle (concurrent writer) is a miss."""
     monkeypatch.setattr(prov, "_DATA_CACHE_DIR", tmp_path)
+    prov._disk_save("info", "TRUNC", "info:TRUNC", _entry(), {"a": list(range(100))})
+    path = prov._disk_path("info", "TRUNC", "info:TRUNC")
+    blob = path.read_text()
+    path.write_text(blob[: len(blob) // 2])
 
-    data_path = prov._disk_path("info", "TRUNC")
-    meta_path = prov._disk_meta_path("info", "TRUNC")
-    blob = pickle.dumps({"a": list(range(100))}, protocol=pickle.HIGHEST_PROTOCOL)
-    data_path.write_bytes(blob[: len(blob) // 2])
-    meta_path.write_text(json.dumps({"ts": 0.0}))
+    assert prov._disk_load("info", "TRUNC", "info:TRUNC") is None
 
-    assert prov._disk_load("info", "TRUNC", ttl=10_000_000) is None
+
+def test_provider_never_reads_pickles(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Legacy pickle files are ignored: they could carry code from another user."""
+    monkeypatch.setattr(prov, "_DATA_CACHE_DIR", tmp_path)
+    (tmp_path / "hist_deadbeef.pkl").write_bytes(pickle.dumps({"x": 1}))
+
+    assert prov._disk_load("hist", "X", "hist:X:1y:1d") is None
+
+
+def test_provider_ignores_files_of_another_user(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A cache file that another uid owns is never read."""
+    from trading_mcp.data import cache_paths
+
+    monkeypatch.setattr(prov, "_DATA_CACHE_DIR", tmp_path)
+    prov._disk_save("info", "OWN", "info:OWN", _entry(), {"a": 1})
+    monkeypatch.setattr(cache_paths, "_current_uid", lambda: os.getuid() + 1)
+
+    assert prov._disk_load("info", "OWN", "info:OWN") is None
+
+
+def test_provider_ignores_group_writable_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A cache file that other users can write is never read."""
+    monkeypatch.setattr(prov, "_DATA_CACHE_DIR", tmp_path)
+    prov._disk_save("info", "GW", "info:GW", _entry(), {"a": 1})
+    prov._disk_path("info", "GW", "info:GW").chmod(0o666)
+
+    assert prov._disk_load("info", "GW", "info:GW") is None
 
 
 # ── result_cache: corrupt persistent file ──────────────────────────────
@@ -147,4 +176,5 @@ def test_result_cache_mkdir_oserror_is_safe(monkeypatch: pytest.MonkeyPatch) -> 
 
     cache = ResultCache()  # non deve sollevare
     cache.set("analyze_stock", "AAPL", {"q": 1}, {"ok": True})
-    assert cache.get("analyze_stock", "AAPL", {"q": 1}) == {"ok": True}
+    hit = cache.get("analyze_stock", "AAPL", {"q": 1})
+    assert hit is not None and hit["ok"] is True and hit["cached"] is True

@@ -3,26 +3,33 @@
 Feedback loop analyzer for the stock-crypto-analysis engine.
 
 Reads trade_log.jsonl and produces performance analytics:
-- Hit rate by verdict type and macro window
-- Average PnL by score bucket
-- Performance vs benchmark
-- Pattern identification (e.g., "DEFENSIVE → AVOID had 87% accuracy")
+- hit rate and average P&L of the positions, by verdict, macro window, direction and score bucket;
+- Avoid verdicts count as flat (no position, P&L 0). The report shows the move of the
+  underlying after each Avoid, so the verdict is checked against the market;
+- a time-based equity curve on calendar days, the daily Sharpe ratio and the max drawdown
+  of that curve;
+- bootstrap confidence intervals of the per-trade statistics.
+
+The equity curve books the realized P&L (in % of equity) on the exit date. Open trades
+have no mark-to-market, so the daily volatility is a lower bound.
 
 Usage:
-    python3 feedback_loop.py                  # Full report to stdout
-    python3 feedback_loop.py --json           # JSON output
+    python3 feedback_loop.py                     # Full report to stdout
+    python3 feedback_loop.py --json              # JSON output
     python3 feedback_loop.py --report report.md  # Markdown report to file
-    python3 feedback_loop.py --since 2026-01-01  # Filter by date
+    python3 feedback_loop.py --since 2026-01-01  # Filter by entry date
+    python3 feedback_loop.py --rf 0.04           # Annual risk-free rate for the Sharpe ratio
 """
 from __future__ import annotations
 
 import argparse
 import json
 import math
+import os
 import random
 import sys
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -30,11 +37,29 @@ from typing import Any, Optional
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _SKILL_DIR = _SCRIPT_DIR.parent
 sys.path.insert(0, str(_SKILL_DIR))
+sys.path.insert(0, str(_SCRIPT_DIR))
+
+# pylint: disable=import-error,wrong-import-position
+from log_trade import position_side  # noqa: E402
+
+MIN_CURVE_DAYS = 30
+MIN_RETURN_DAYS = 5
+SMALL_SAMPLE = 30
 
 
+def _default_data_file(name: str) -> Path:
+    """Return the data file: $OPENCODE_SKILLS_DATA_DIR, the legacy data repo, then the XDG data folder."""
+    override = os.environ.get("OPENCODE_SKILLS_DATA_DIR")
+    if override:
+        return Path(override).expanduser() / name
+    legacy = Path.home() / "Progetti" / "Github" / "Data_for_Analysis"
+    if legacy.is_dir():
+        return legacy / name
+    base = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
+    return base / "opencode-skills" / name
 
 
-DEFAULT_LOG_PATH = Path.home() / "Progetti" / "Github" / "Data_for_Analysis" / "trade_log.jsonl"
+DEFAULT_LOG_PATH = _default_data_file("trade_log.jsonl")
 
 
 # ---------------------------------------------------------------------------
@@ -42,11 +67,21 @@ DEFAULT_LOG_PATH = Path.home() / "Progetti" / "Github" / "Data_for_Analysis" / "
 # ---------------------------------------------------------------------------
 
 
+def _dt(value: Any) -> Optional[datetime]:
+    """Parse an ISO datetime; naive values are UTC. Returns None when the value is empty or invalid."""
+    if not value:
+        return None
+    try:
+        when = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return when if when.tzinfo else when.replace(tzinfo=timezone.utc)
+
+
 def load_trades(log_path: Path, since: Optional[datetime] = None) -> list[dict]:
-    """Load all trades, optionally filtered by date."""
+    """Load all trades, optionally filtered by entry date."""
     if not log_path.exists():
         return []
-
     trades = []
     with open(log_path, encoding="utf-8") as f:
         for line in f:
@@ -57,15 +92,65 @@ def load_trades(log_path: Path, since: Optional[datetime] = None) -> list[dict]:
                 entry = json.loads(line)
             except json.JSONDecodeError:
                 continue
-
             if since:
-                ts = entry.get("entry_date") or entry.get("timestamp", "")
-                if ts and datetime.fromisoformat(ts.replace("Z", "+00:00")) < since:
+                when = _dt(entry.get("entry_date") or entry.get("timestamp"))
+                if when and when < since:
                     continue
-
             trades.append(entry)
-
     return trades
+
+
+# ---------------------------------------------------------------------------
+# Trade views
+# ---------------------------------------------------------------------------
+
+
+def underlying_move(t: dict) -> Optional[float]:
+    """Move of the underlying in %, from the record or from the prices."""
+    if t.get("underlying_move_pct") is not None:
+        return float(t["underlying_move_pct"])
+    entry, exit_ = t.get("entry_price"), t.get("exit_price")
+    if entry and exit_ and entry > 0:
+        return (exit_ / entry - 1.0) * 100.0
+    return None
+
+
+def position_pnl(t: dict) -> Optional[float]:
+    """Position P&L in % of the position. A flat entry has 0; an old record is recomputed from its prices."""
+    side = position_side(t)
+    if side == "flat":
+        return 0.0
+    move = underlying_move(t)
+    if t.get("pnl_pct") is not None and t.get("position") is not None:
+        return float(t["pnl_pct"])
+    if move is None:
+        return float(t["pnl_pct"]) if t.get("pnl_pct") is not None else None
+    fees = float(t.get("fees_pct") or 0.0)
+    return (-move if side == "short" else move) - fees
+
+
+def equity_pnl(t: dict) -> Optional[float]:
+    """Position P&L in % of equity, or None when the size is unknown."""
+    if position_side(t) == "flat":
+        return 0.0
+    if t.get("pnl_equity_pct") is not None and t.get("position") is not None:
+        return float(t["pnl_equity_pct"])
+    pnl, size = position_pnl(t), t.get("position_size_pct")
+    if pnl is None or not size:
+        return None
+    return pnl * float(size) / 100.0
+
+
+def closed_positions(trades: list[dict]) -> list[dict]:
+    """Closed long or short trades with a P&L."""
+    return [t for t in trades if not t.get("is_open", True) and position_side(t) != "flat"
+            and position_pnl(t) is not None]
+
+
+def flat_signals(trades: list[dict]) -> list[dict]:
+    """Closed flat entries (Avoid and Neutral verdicts) with a known move of the underlying."""
+    return [t for t in trades if not t.get("is_open", True) and position_side(t) == "flat"
+            and underlying_move(t) is not None]
 
 
 # ---------------------------------------------------------------------------
@@ -84,217 +169,200 @@ def _bucket_score(score: float) -> str:
     return "0-29"
 
 
-def compute_hit_rate(trades: list[dict]) -> dict[str, Any]:
-    """Overall and per-category hit rates."""
-    closed = [t for t in trades if not t.get("is_open", True) and t.get("pnl_pct") is not None]
+def _stats(values: list[float]) -> dict:
+    wins = [v for v in values if v > 0]
+    return {
+        "count": len(values),
+        "wins": len(wins),
+        "losses": len(values) - len(wins),
+        "hit_rate": round(len(wins) / len(values) * 100, 1) if values else 0,
+        "avg_pnl": round(sum(values) / len(values), 2) if values else 0,
+        "best": round(max(values), 2) if values else 0,
+        "worst": round(min(values), 2) if values else 0,
+        "small_sample": len(values) < SMALL_SAMPLE,
+    }
 
-    if not closed:
-        return {"error": "No closed trades with PnL data"}
+
+def _avoid_stats(signals: list[dict]) -> dict:
+    """An Avoid is right when a long position would have lost money."""
+    moves = [underlying_move(t) for t in signals]
+    moves = [m for m in moves if m is not None]
+    if not moves:
+        return {"count": 0}
+    return {
+        "count": len(moves),
+        "avg_underlying_move": round(sum(moves) / len(moves), 2),
+        "long_would_lose_pct": round(len([m for m in moves if m < 0]) / len(moves) * 100, 1),
+        "small_sample": len(moves) < SMALL_SAMPLE,
+    }
+
+
+def compute_hit_rate(trades: list[dict]) -> dict[str, Any]:
+    """Hit rates of the positions (flat entries excluded) and the check of the flat signals."""
+    closed = closed_positions(trades)
+    signals = flat_signals(trades)
+    if not closed and not signals:
+        return {"error": "No closed trades with price data"}
 
     by_verdict: dict[str, list[float]] = defaultdict(list)
     by_window: dict[str, list[float]] = defaultdict(list)
     by_direction: dict[str, list[float]] = defaultdict(list)
     by_score_bucket: dict[str, list[float]] = defaultdict(list)
-
     for t in closed:
-        pnl = t["pnl_pct"]
+        pnl = position_pnl(t)
         vs = t.get("verdict_snapshot", {})
-
         by_verdict[vs.get("verdict", "Unknown")].append(pnl)
         by_window[vs.get("macro", {}).get("window", "Unknown")].append(pnl)
-        by_direction[vs.get("direction", "Unknown")].append(pnl)
+        by_direction[position_side(t)].append(pnl)
         by_score_bucket[_bucket_score(vs.get("composite_score", 0))].append(pnl)
 
-    def _stats(values: list[float]) -> dict:
-        wins = [v for v in values if v > 0]
-        return {
-            "count": len(values),
-            "wins": len(wins),
-            "losses": len(values) - len(wins),
-            "hit_rate": round(len(wins) / len(values) * 100, 1) if values else 0,
-            "avg_pnl": round(sum(values) / len(values), 2) if values else 0,
-            "best": round(max(values), 2),
-            "worst": round(min(values), 2),
-        }
+    avoid_by_window: dict[str, list[dict]] = defaultdict(list)
+    for t in signals:
+        avoid_by_window[t.get("verdict_snapshot", {}).get("macro", {}).get("window", "Unknown")].append(t)
 
     return {
         "total_closed": len(closed),
-        "overall": _stats([t["pnl_pct"] for t in closed]),
+        "flat_signals": len(signals),
+        "overall": _stats([position_pnl(t) for t in closed]),
         "by_verdict": {k: _stats(v) for k, v in sorted(by_verdict.items())},
         "by_macro_window": {k: _stats(v) for k, v in sorted(by_window.items())},
         "by_direction": {k: _stats(v) for k, v in sorted(by_direction.items())},
         "by_score_bucket": {k: _stats(v) for k, v in sorted(by_score_bucket.items())},
+        "avoid_signals": _avoid_stats(signals),
+        "avoid_by_macro_window": {k: _avoid_stats(v) for k, v in sorted(avoid_by_window.items())},
     }
 
 
-def compute_sharpe_like(trades: list[dict], annualize: bool = True) -> Optional[dict]:
-    """Compute a Sharpe-like ratio from trade PnLs.
+def equity_curve(trades: list[dict]) -> dict:
+    """Daily equity curve (calendar days, start = 1.0) from the realized P&L in % of equity."""
+    booked: dict[date, float] = defaultdict(float)
+    starts: list[date] = []
+    skipped = 0
+    used = 0
+    for t in closed_positions(trades):
+        exit_dt, entry_dt, pnl = _dt(t.get("exit_date")), _dt(t.get("entry_date")), equity_pnl(t)
+        if exit_dt is None or pnl is None:
+            skipped += 1
+            continue
+        booked[exit_dt.date()] += pnl / 100.0
+        starts.append((entry_dt or exit_dt).date())
+        used += 1
+    if not booked:
+        return {"dates": [], "equity": [], "returns": [], "trades_used": 0, "trades_skipped": skipped}
+    first, last = min(starts + list(booked)), max(booked)
+    dates, equity, returns = [], [], []
+    level = 1.0
+    day = first
+    while day <= last:
+        r = booked.get(day, 0.0)
+        level *= 1.0 + r
+        dates.append(day.isoformat())
+        equity.append(level)
+        returns.append(r)
+        day += timedelta(days=1)
+    return {"dates": dates, "equity": equity, "returns": returns, "trades_used": used, "trades_skipped": skipped}
 
-    The core ratio is mean / std of trade PnLs.
-    If annualize=True (default) and trades span > 0 days, multiplies by
-    sqrt(trades_per_year) for a Sharpe-like annualized metric.
 
-    Returns dict with 'ratio' and metadata, or None if insufficient data.
-    """
-    closed = [t for t in trades if not t.get("is_open", True) and t.get("pnl_pct") is not None]
-    pnls = [t["pnl_pct"] for t in closed]
-
-    if len(pnls) < 2:
-        return None
-
-    mean_ = sum(pnls) / len(pnls)
-    variance = sum((x - mean_) ** 2 for x in pnls) / (len(pnls) - 1) if len(pnls) > 1 else 0
-
-    if variance <= 0:
-        return None
-
-    raw_sharpe = mean_ / (variance ** 0.5)
-    result = {
-        "raw_ratio": round(raw_sharpe, 3),
-        "annualized": False,
-    }
-
-    if annualize:
-        # Estimate trades per year from date range
-        dates = sorted(
-            t.get("exit_date", t.get("entry_date", ""))
-            for t in closed if t.get("exit_date") or t.get("entry_date")
-        )
-        if len(dates) >= 2:
-            try:
-                d0 = datetime.fromisoformat(dates[0].replace("Z", "+00:00"))
-                d1 = datetime.fromisoformat(dates[-1].replace("Z", "+00:00"))
-                span_days = (d1 - d0).days
-                if span_days > 0:
-                    trades_per_year = len(pnls) / span_days * 365
-                    result["ratio"] = round(raw_sharpe * math.sqrt(trades_per_year), 3)
-                    result["annualized"] = True
-                    result["trades_per_year"] = round(trades_per_year, 1)
-                else:
-                    result["ratio"] = result["raw_ratio"]
-            except (ValueError, TypeError):
-                result["ratio"] = result["raw_ratio"]
-        else:
-            result["ratio"] = result["raw_ratio"]
-
-    return result
+def compute_sharpe(trades: list[dict], rf_annual: float = 0.0) -> dict:
+    """Annualized Sharpe ratio from the daily returns of the equity curve (calendar days, √365)."""
+    curve = equity_curve(trades)
+    rets = curve["returns"]
+    nonzero = len([r for r in rets if r != 0])
+    base = {"days": len(rets), "return_days": nonzero, "rf_annual": rf_annual,
+            "trades_used": curve["trades_used"], "trades_skipped": curve["trades_skipped"]}
+    if len(rets) < MIN_CURVE_DAYS or nonzero < MIN_RETURN_DAYS:
+        return {**base, "insufficient_data": True,
+                "reason": f"need >= {MIN_CURVE_DAYS} days and >= {MIN_RETURN_DAYS} days with a realized P&L"}
+    excess = [r - rf_annual / 365.0 for r in rets]
+    mean_ = sum(excess) / len(excess)
+    var_ = sum((x - mean_) ** 2 for x in excess) / (len(excess) - 1)
+    if var_ <= 0:
+        return {**base, "insufficient_data": True, "reason": "zero variance"}
+    sd = math.sqrt(var_)
+    return {**base, "insufficient_data": False, "sharpe": round(mean_ / sd * math.sqrt(365.0), 3),
+            "mean_daily_pct": round(mean_ * 100, 5), "std_daily_pct": round(sd * 100, 5)}
 
 
 def compute_drawdown(trades: list[dict]) -> dict:
-    """Compute max drawdown from cumulative PnL."""
-    closed = sorted(
-        [t for t in trades if not t.get("is_open", True) and t.get("pnl_pct") is not None],
-        key=lambda t: t.get("exit_date", ""),
-    )
-
-    if not closed:
-        return {"max_drawdown_pct": 0, "peak_pnl": 0, "trough_pnl": 0}
-
-    cumulative = 0.0
-    peak = 0.0
-    max_dd = 0.0
-    peak_val = 0.0
-    trough_val = 0.0
-
-    for t in closed:
-        cumulative += t["pnl_pct"]
-        peak = max(peak, cumulative)
-        dd = peak - cumulative
+    """Max drawdown of the equity curve, in % of the peak equity."""
+    curve = equity_curve(trades)
+    if not curve["equity"]:
+        return {"max_drawdown_pct": 0.0, "total_return_pct": 0.0, "peak_date": None, "trough_date": None}
+    peak, peak_date = curve["equity"][0], curve["dates"][0]
+    max_dd, at_peak, at_trough = 0.0, None, None
+    for d, level in zip(curve["dates"], curve["equity"]):
+        if level > peak:
+            peak, peak_date = level, d
+        dd = (1.0 - level / peak) * 100.0
         if dd > max_dd:
-            max_dd = dd
-            peak_val = peak
-            trough_val = cumulative
-
+            max_dd, at_peak, at_trough = dd, peak_date, d
     return {
-        "max_drawdown_pct": round(max_dd, 2),
-        "peak_cumulative_pnl": round(peak_val, 2),
-        "trough_cumulative_pnl": round(trough_val, 2),
+        "max_drawdown_pct": round(max_dd, 4),
+        "total_return_pct": round((curve["equity"][-1] - 1.0) * 100.0, 4),
+        "peak_date": at_peak,
+        "trough_date": at_trough,
     }
 
 
-def _pattern_defensive_avoid(closed: list[dict]) -> Optional[str]:
-    """Check pattern: DEFENSIVE + AVOID accuracy."""
-    def_avoid = [
-        t for t in closed
-        if t.get("verdict_snapshot", {}).get("macro", {}).get("window") == "DEFENSIVE"
-        and t.get("verdict_snapshot", {}).get("verdict") == "Avoid / Wait"
-    ]
-    if len(def_avoid) < 3:
-        return None
-    wins = [t for t in def_avoid if t["pnl_pct"] >= 0]
-    acc = len(wins) / len(def_avoid) * 100
-    return (
-        f"In DEFENSIVE window, AVOID verdicts were correct {acc:.0f}% of the time "
-        f"({len(wins)}/{len(def_avoid)} trades profitable or break-even)"
-    )
+def _pattern_avoid(signals: list[dict]) -> list[str]:
+    """Check the Avoid verdicts against the move of the underlying, per macro window."""
+    out = []
+    by_window: dict[str, list[dict]] = defaultdict(list)
+    for t in signals:
+        by_window[t.get("verdict_snapshot", {}).get("macro", {}).get("window", "Unknown")].append(t)
+    for window, rows in sorted(by_window.items()):
+        if len(rows) < 5:
+            continue
+        s = _avoid_stats(rows)
+        out.append(
+            f"In {window} window, after AVOID the underlying moved {s['avg_underlying_move']:+.2f}% on average; "
+            f"a long would have lost in {s['long_would_lose_pct']:.0f}% of {s['count']} cases"
+            + (" (small sample)" if s["small_sample"] else "")
+        )
+    return out
 
 
 def _pattern_lt_vs_st(closed: list[dict]) -> Optional[str]:
     """Check pattern: Long-Term vs Short-Term hit rate."""
-    lt = [t["pnl_pct"] for t in closed
-          if t.get("verdict_snapshot", {}).get("verdict") == "Long-Term Investment"]
-    st = [t["pnl_pct"] for t in closed
-          if "Short-Term" in t.get("verdict_snapshot", {}).get("verdict", "")]
-    if not lt or not st:
+    lt = [position_pnl(t) for t in closed if t.get("verdict_snapshot", {}).get("verdict") == "Long-Term Investment"]
+    st = [position_pnl(t) for t in closed if "Short-Term" in t.get("verdict_snapshot", {}).get("verdict", "")]
+    if len(lt) < 5 or len(st) < 5:
         return None
     lt_hr = len([x for x in lt if x > 0]) / len(lt) * 100
     st_hr = len([x for x in st if x > 0]) / len(st) * 100
     better = "LONG_TERM" if lt_hr > st_hr else "SHORT_TERM"
-    return f"Long-Term hit rate {lt_hr:.0f}% vs Short-Term {st_hr:.0f}% — {better} outperforms"
+    small = " (small sample)" if min(len(lt), len(st)) < SMALL_SAMPLE else ""
+    return f"Long-Term hit rate {lt_hr:.0f}% vs Short-Term {st_hr:.0f}% — {better} has the higher hit rate{small}"
 
 
 def _pattern_score_buckets(closed: list[dict]) -> list[str]:
     """Check pattern: score bucket reliability."""
     results = []
     for bucket in ("70-100", "50-69"):
-        low_str, high_str = bucket.split("-", maxsplit=1)
-        low, high = int(low_str), int(high_str)
-        def _in_bucket(t: dict, lo: int = low, hi: int = high) -> bool:
-            score = t.get("verdict_snapshot", {}).get("composite_score", 0)
-            return lo <= score <= hi
-        bucket_trades = [t for t in closed if _in_bucket(t)]
-        if len(bucket_trades) >= 3:
-            wins = [t for t in bucket_trades if t["pnl_pct"] > 0]
-            hr = len(wins) / len(bucket_trades) * 100
-            results.append(
-                f"Score bucket {bucket}: hit rate {hr:.0f}% "
-                f"({len(wins)}/{len(bucket_trades)})"
-            )
+        rows = [t for t in closed if _bucket_score(t.get("verdict_snapshot", {}).get("composite_score", 0)) == bucket]
+        if len(rows) >= 5:
+            wins = [t for t in rows if position_pnl(t) > 0]
+            small = " (small sample)" if len(rows) < SMALL_SAMPLE else ""
+            results.append(f"Score bucket {bucket}: hit rate {len(wins) / len(rows) * 100:.0f}% ({len(wins)}/{len(rows)}){small}")
     return results
 
 
 def _pattern_direction_asymmetry(closed: list[dict]) -> Optional[str]:
-    """Check pattern: Long vs Short PnL asymmetry."""
-    longs = [t["pnl_pct"] for t in closed
-             if t.get("verdict_snapshot", {}).get("direction") == "Long"]
-    shorts = [t["pnl_pct"] for t in closed
-              if t.get("verdict_snapshot", {}).get("direction") == "Short"]
-    if not longs or not shorts:
+    """Check pattern: Long vs Short P&L asymmetry."""
+    longs = [position_pnl(t) for t in closed if position_side(t) == "long"]
+    shorts = [position_pnl(t) for t in closed if position_side(t) == "short"]
+    if len(longs) < 5 or len(shorts) < 5:
         return None
-    long_avg = sum(longs) / len(longs)
-    short_avg = sum(shorts) / len(shorts)
-    return f"Long avg PnL {long_avg:+.2f}% vs Short avg PnL {short_avg:+.2f}%"
+    return f"Long avg P&L {sum(longs) / len(longs):+.2f}% vs Short avg P&L {sum(shorts) / len(shorts):+.2f}%"
 
 
 def find_patterns(trades: list[dict]) -> list[str]:
-    """Identify recurring patterns in trade outcomes."""
-    patterns: list[str] = []
-    closed = [t for t in trades if not t.get("is_open", True) and t.get("pnl_pct") is not None]
-
-    result = _pattern_defensive_avoid(closed)
-    if result:
-        patterns.append(result)
-
-    result = _pattern_lt_vs_st(closed)
-    if result:
-        patterns.append(result)
-
-    patterns.extend(_pattern_score_buckets(closed))
-
-    result = _pattern_direction_asymmetry(closed)
-    if result:
-        patterns.append(result)
-
+    """Identify recurring patterns in trade outcomes (minimum 5 cases each)."""
+    closed = closed_positions(trades)
+    patterns: list[str] = _pattern_avoid(flat_signals(trades))
+    for result in (_pattern_lt_vs_st(closed), *_pattern_score_buckets(closed), _pattern_direction_asymmetry(closed)):
+        if result:
+            patterns.append(result)
     return patterns
 
 
@@ -303,70 +371,45 @@ def find_patterns(trades: list[dict]) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def bootstrap_metrics(
-    trades: list[dict],
-    n_iterations: int = 10_000,
-    seed: int = 42,
-) -> dict:
-    """Bootstrap resample trade PnLs to produce confidence intervals.
+def bootstrap_metrics(trades: list[dict], n_iterations: int = 10_000, seed: int = 42) -> dict:
+    """Bootstrap the closed positions: hit rate, average P&L of the position and of the equity.
 
-    Resamples closed trades with replacement n_iterations times.
-    For each resample computes: hit rate, avg PnL, max drawdown, Sharpe-like.
-    Returns percentiles (5th, 50th, 95th) + mean for each metric.
-    Returns empty dict if fewer than 3 closed trades.
+    Time-dependent statistics (Sharpe, drawdown) are not bootstrapped: resampling trades breaks the time order.
+    Returns an empty dict with fewer than 5 closed positions.
     """
-    closed = [t["pnl_pct"] for t in trades
-              if not t.get("is_open", True) and t.get("pnl_pct") is not None]
-    if len(closed) < 3:
+    closed = closed_positions(trades)
+    if len(closed) < 5:
         return {}
-
-    n = len(closed)
+    pnls = [position_pnl(t) for t in closed]
+    eq = [equity_pnl(t) for t in closed]
+    eq_known = [v for v in eq if v is not None]
+    n = len(pnls)
     rng = random.Random(seed)
-
-    hit_rates: list[float] = []
-    avg_pnls: list[float] = []
-    sharpes: list[float] = []
-    max_dds: list[float] = []
-
+    hit, avg, avg_eq = [], [], []
     for _ in range(n_iterations):
-        sample = [closed[rng.randint(0, n - 1)] for _ in range(n)]
-        wins = sum(1 for p in sample if p > 0)
-        hit_rates.append(wins / n * 100)
-        avg_pnls.append(sum(sample) / n)
-        if n >= 2:
-            mean_ = sum(sample) / n
-            var_ = sum((x - mean_) ** 2 for x in sample) / (n - 1)
-            sharpes.append(mean_ / math.sqrt(var_) if var_ > 0 else 0.0)
-        else:
-            sharpes.append(0.0)
-
-        cumulative = 0.0
-        peak = 0.0
-        max_dd = 0.0
-        for p in sample:
-            cumulative += p
-            peak = max(peak, cumulative)
-            max_dd = max(max_dd, peak - cumulative)
-        max_dds.append(max_dd)
+        idx = [rng.randrange(n) for _ in range(n)]
+        sample = [pnls[i] for i in idx]
+        hit.append(sum(1 for p in sample if p > 0) / n * 100)
+        avg.append(sum(sample) / n)
+        if eq_known:
+            picks = [eq_known[rng.randrange(len(eq_known))] for _ in range(len(eq_known))]
+            avg_eq.append(sum(picks) / len(picks))
 
     def _ci(values: list[float]) -> dict:
-        sorted_v = sorted(values)
+        s = sorted(values)
+        m = sum(values) / len(values)
         return {
-            "mean": round(sum(values) / len(values), 3),
-            "ci_low": round(sorted_v[int(n_iterations * 0.05)], 3),
-            "ci_high": round(sorted_v[int(n_iterations * 0.95)], 3),
-            "median": round(sorted_v[n_iterations // 2], 3),
-            "std": round(math.sqrt(sum((x - sum(values) / len(values)) ** 2 for x in values) / len(values)), 3),
+            "mean": round(m, 4),
+            "ci_low": round(s[int(len(s) * 0.05)], 4),
+            "ci_high": round(s[min(len(s) - 1, int(len(s) * 0.95))], 4),
+            "median": round(s[len(s) // 2], 4),
         }
 
-    return {
-        "n_iterations": n_iterations,
-        "resample_size": n,
-        "hit_rate": _ci(hit_rates),
-        "avg_pnl": _ci(avg_pnls),
-        "sharpe_like": _ci(sharpes),
-        "max_drawdown": _ci(max_dds),
-    }
+    out = {"n_iterations": n_iterations, "resample_size": n, "small_sample": n < SMALL_SAMPLE,
+           "hit_rate": _ci(hit), "avg_pnl": _ci(avg)}
+    if avg_eq:
+        out["avg_pnl_equity"] = _ci(avg_eq)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -374,34 +417,32 @@ def bootstrap_metrics(
 # ---------------------------------------------------------------------------
 
 
-def generate_report(trades: list[dict], bootstrap: bool = True,
-                    bootstrap_iterations: int = 10_000,
-                    bootstrap_seed: int = 42) -> dict:
+def generate_report(trades: list[dict], bootstrap: bool = True, bootstrap_iterations: int = 10_000,
+                    bootstrap_seed: int = 42, rf_annual: float = 0.0) -> dict:
     """Generate the full feedback report as a dict."""
     hit_rate = compute_hit_rate(trades)
-    sharpe = compute_sharpe_like(trades)
-    dd = compute_drawdown(trades)
-    patterns = find_patterns(trades)
-
-    open_count = len([t for t in trades if t.get("is_open", True)])
-
     report: dict[str, Any] = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "total_trades": len(trades),
-        "open_trades": open_count,
+        "open_trades": len([t for t in trades if t.get("is_open", True)]),
         "closed_trades": hit_rate.get("total_closed", 0),
+        "flat_signals": hit_rate.get("flat_signals", 0),
         "hit_rate": hit_rate,
-        "sharpe_like_ratio": sharpe,
-        "drawdown": dd,
-        "patterns": patterns,
+        "sharpe": compute_sharpe(trades, rf_annual),
+        "drawdown": compute_drawdown(trades),
+        "patterns": find_patterns(trades),
     }
-
     if bootstrap:
-        report["bootstrap"] = bootstrap_metrics(
-            trades, bootstrap_iterations, bootstrap_seed,
-        )
-
+        report["bootstrap"] = bootstrap_metrics(trades, bootstrap_iterations, bootstrap_seed)
     return report
+
+
+def _fmt_group(title: str, groups: dict) -> list[str]:
+    lines = [f"\n## {title}"] if groups else []
+    for k, s in groups.items():
+        small = " · small sample" if s.get("small_sample") else ""
+        lines.append(f"- **{k}**: {s['count']} trades, hit rate {s['hit_rate']}%, avg P&L {s['avg_pnl']:+.2f}%{small}")
+    return lines
 
 
 def format_report(report: dict) -> str:
@@ -409,85 +450,49 @@ def format_report(report: dict) -> str:
     lines = [
         "# Feedback Loop Report",
         f"Generated: {report['generated_at']}\n",
-        f"**Total trades**: {report['total_trades']} "
-        f"({report['open_trades']} open, {report['closed_trades']} closed)",
+        f"**Total entries**: {report['total_trades']} ({report['open_trades']} open, "
+        f"{report['closed_trades']} closed positions, {report['flat_signals']} flat signals)",
     ]
-
     hr = report.get("hit_rate", {})
     if "error" not in hr:
         overall = hr["overall"]
-        lines.append("\n## Overall Performance")
-        lines.append(f"- Hit rate: {overall['hit_rate']}% "
-                     f"({overall['wins']}W / {overall['losses']}L)")
-        lines.append(f"- Avg PnL: {overall['avg_pnl']:+.2f}%")
+        lines.append("\n## Positions (Avoid and Neutral verdicts are flat and excluded)")
+        lines.append(f"- Hit rate: {overall['hit_rate']}% ({overall['wins']}W / {overall['losses']}L)")
+        lines.append(f"- Avg P&L: {overall['avg_pnl']:+.2f}% of the position")
         lines.append(f"- Best: {overall['best']:+.2f}% | Worst: {overall['worst']:+.2f}%")
-
-        sharpe = report.get("sharpe_like_ratio")
-        if sharpe is not None:
-            ratio = sharpe.get("ratio", sharpe.get("raw_ratio"))
-            if sharpe.get("annualized"):
-                lines.append(f"- Sharpe-like ratio: {ratio:.3f} (annualized, {sharpe.get('trades_per_year', 0):.0f} trades/yr)")
-            else:
-                lines.append(f"- Sharpe-like ratio: {ratio:.3f} (raw)")
-
+        sharpe = report.get("sharpe", {})
+        if sharpe.get("insufficient_data"):
+            lines.append(f"- Sharpe (daily equity curve): insufficient data ({sharpe.get('reason')})")
+        else:
+            lines.append(f"- Sharpe (daily equity curve, rf {sharpe['rf_annual'] * 100:.2f}%, √365): "
+                         f"{sharpe['sharpe']:.3f} over {sharpe['days']} days")
         dd = report.get("drawdown", {})
-        if dd.get("max_drawdown_pct", 0) > 0:
-            lines.append(f"- Max drawdown: {dd['max_drawdown_pct']:.2f}% "
-                         f"(peak {dd['peak_cumulative_pnl']:+.2f}% → "
-                         f"trough {dd['trough_cumulative_pnl']:+.2f}%)")
-
-        # By verdict
-        by_verdict = hr.get("by_verdict", {})
-        if by_verdict:
-            lines.append("\n## By Verdict")
-            for v, stats in by_verdict.items():
-                lines.append(
-                    f"- **{v}**: {stats['count']} trades, "
-                    f"hit rate {stats['hit_rate']}%, avg PnL {stats['avg_pnl']:+.2f}%"
-                )
-
-        # By macro window
-        by_window = hr.get("by_macro_window", {})
-        if by_window:
-            lines.append("\n## By Macro Window")
-            for w, stats in by_window.items():
-                lines.append(
-                    f"- **{w}**: {stats['count']} trades, "
-                    f"hit rate {stats['hit_rate']}%, avg PnL {stats['avg_pnl']:+.2f}%"
-                )
-
-        # By score bucket
-        by_bucket = hr.get("by_score_bucket", {})
-        if by_bucket:
-            lines.append("\n## By Score Bucket")
-            for b, stats in by_bucket.items():
-                lines.append(
-                    f"- **{b}**: {stats['count']} trades, "
-                    f"hit rate {stats['hit_rate']}%, avg PnL {stats['avg_pnl']:+.2f}%"
-                )
-
-    # Bootstrap confidence intervals
+        lines.append(f"- Equity curve: total return {dd.get('total_return_pct', 0):+.3f}%, "
+                     f"max drawdown {dd.get('max_drawdown_pct', 0):.3f}%"
+                     + (f" ({dd['peak_date']} → {dd['trough_date']})" if dd.get("peak_date") else ""))
+        lines.append("- The curve books the realized P&L on the exit date; open trades have no mark-to-market.")
+        lines += _fmt_group("By Verdict", hr.get("by_verdict", {}))
+        lines += _fmt_group("By Macro Window", hr.get("by_macro_window", {}))
+        lines += _fmt_group("By Score Bucket", hr.get("by_score_bucket", {}))
+        av = hr.get("avoid_signals", {})
+        if av.get("count"):
+            lines.append("\n## Avoid Signals (no position)")
+            lines.append(f"- {av['count']} signals: underlying move {av['avg_underlying_move']:+.2f}% on average; "
+                         f"a long would have lost in {av['long_would_lose_pct']:.0f}% of the cases"
+                         + (" · small sample" if av.get("small_sample") else ""))
     bs = report.get("bootstrap")
     if bs:
-        lines.append("\n## Bootstrap Confidence Intervals (90% CI)")
-        lines.append(f"- Resamples: {bs['n_iterations']:,} | Sample size: {bs['resample_size']}")
-        for label, key in [("Hit rate", "hit_rate"), ("Avg PnL", "avg_pnl"),
-                           ("Sharpe-like", "sharpe_like"), ("Max drawdown", "max_drawdown")]:
-            stats = bs.get(key)
-            if stats:
-                lines.append(
-                    f"- **{label}**: mean {stats['mean']:.2f}  "
-                    f"[{stats['ci_low']:.2f} – {stats['ci_high']:.2f}]  "
-                    f"(median {stats['median']:.2f})"
-                )
-
-    # Patterns
-    patterns = report.get("patterns", [])
-    if patterns:
+        lines.append("\n## Bootstrap Confidence Intervals (90% CI, per trade)")
+        lines.append(f"- Resamples: {bs['n_iterations']:,} | Sample size: {bs['resample_size']}"
+                     + (" · small sample" if bs.get("small_sample") else ""))
+        for label, key in [("Hit rate", "hit_rate"), ("Avg P&L (% of position)", "avg_pnl"),
+                           ("Avg P&L (% of equity)", "avg_pnl_equity")]:
+            s = bs.get(key)
+            if s:
+                lines.append(f"- **{label}**: mean {s['mean']:.3f} [{s['ci_low']:.3f} – {s['ci_high']:.3f}] (median {s['median']:.3f})")
+    if report.get("patterns"):
         lines.append("\n## Detected Patterns")
-        for pat in patterns:
-            lines.append(f"- {pat}")
-
+        lines += [f"- {p}" for p in report["patterns"]]
     return "\n".join(lines)
 
 
@@ -496,43 +501,30 @@ def format_report(report: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
-def main() -> None:
+def main(argv: Optional[list[str]] = None) -> None:
     """Entry point."""
     parser = argparse.ArgumentParser(description="Feedback loop analyzer")
     parser.add_argument("--log-path", default=str(DEFAULT_LOG_PATH))
     parser.add_argument("--json", action="store_true", help="Output JSON")
     parser.add_argument("--report", type=str, help="Write markdown report to file")
     parser.add_argument("--since", type=str, help="Filter trades since date (YYYY-MM-DD)")
+    parser.add_argument("--rf", type=float, default=0.0, help="Annual risk-free rate for the Sharpe ratio (0.04 = 4%%)")
     parser.add_argument("--no-bootstrap", action="store_true", help="Skip bootstrap resampling")
-    parser.add_argument("--bootstrap-iterations", type=int, default=10_000,
-                        help="Bootstrap resample count (default 10,000)")
-    parser.add_argument("--bootstrap-seed", type=int, default=42,
-                        help="Random seed for bootstrap reproducibility")
-    args = parser.parse_args()
+    parser.add_argument("--bootstrap-iterations", type=int, default=10_000, help="Bootstrap resample count")
+    parser.add_argument("--bootstrap-seed", type=int, default=42, help="Random seed for bootstrap reproducibility")
+    args = parser.parse_args(argv)
 
-    log_path = Path(args.log_path)
-    since = None
-    if args.since:
-        since = datetime.fromisoformat(args.since).replace(tzinfo=timezone.utc)
-
-    trades = load_trades(log_path, since)
-
+    since = datetime.fromisoformat(args.since).replace(tzinfo=timezone.utc) if args.since else None
+    trades = load_trades(Path(args.log_path), since)
     if not trades:
         print("No trades found in log.")
         return
-
-    report = generate_report(
-        trades,
-        bootstrap=not args.no_bootstrap,
-        bootstrap_iterations=args.bootstrap_iterations,
-        bootstrap_seed=args.bootstrap_seed,
-    )
-
+    report = generate_report(trades, bootstrap=not args.no_bootstrap, bootstrap_iterations=args.bootstrap_iterations,
+                             bootstrap_seed=args.bootstrap_seed, rf_annual=args.rf)
     if args.json:
         print(json.dumps(report, indent=2, ensure_ascii=False, default=str))
     elif args.report:
-        md = format_report(report)
-        Path(args.report).write_text(md, encoding="utf-8")
+        Path(args.report).write_text(format_report(report), encoding="utf-8")
         print(f"Report written to {args.report}")
     else:
         print(format_report(report))

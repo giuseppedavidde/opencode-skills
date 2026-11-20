@@ -14,7 +14,7 @@ These are multi-dimensional pattern signatures that strongly bias toward a speci
 
 **Expected Unified**: 50-85 → **Short-Term Spec or Long-Term Invest**
 
-**Management**: Entry ASAP. Synthetic Long 2:1 (sell 2 puts at 15-20% below current, buy 1 call at 10-20% OTM). Stop loss at swing low pre-pump. Target: previous resistance level or 1.5x the initial pump move. Watch borrow fee daily — if it drops 30%+, take profits.
+**Management**: Entry only inside the risk rules of SKILL.md. Bull call spread (buy 1 call ATM to 10% OTM, sell 1 call 30-50% higher, 45-90 DTE); max loss = debit ≤ 0.5% of equity. A stop at the pre-pump swing low does not protect against a gap. Target: previous resistance level or 1.5x the initial pump move. Watch borrow fee daily — if it drops 30%+, take profits.
 
 **Historic examples**: GME Jan '21, AMC May '21, KOSS, BBBY Aug '22
 
@@ -30,13 +30,13 @@ These are multi-dimensional pattern signatures that strongly bias toward a speci
 
 **Expected Unified**: 60-85 → **Long-Term Invest or Short-Term Spec (Bullish)**
 
-**Management**: Entry on pullback after the initial pump wave. Do NOT chase. Use limit order at 10ema or 20ema. Sizing 2-3% of portfolio. Options: Bull Put Spread (45 DTE) if IV high, or Synthetic Long 2:1 if score ≥ 70.
+**Management**: Entry on pullback after the initial pump wave. Do NOT chase. Use limit order at 10ema or 20ema. Stock position value ≤ 1% of equity (gap rule: a 50% gap costs ≤ 0.5% of equity). Options: Bull Put Spread (45 DTE) if IV is high, Bull Call Spread if IV is normal; max loss ≤ 0.5% of equity.
 
 **Historic examples**: RKLB Mar '26 (Neutron update), PLTR earnings, NVDA pre-earnings
 
 ---
 
-## 💀 Fake Pump / Bagholder Trap (Strong Avoid or Short)
+## 💀 Fake Pump / Bagholder Trap (Strong Avoid)
 
 **Components**: Late FOMO + Declining engagement + Price extended + Short interest falling
 
@@ -44,9 +44,9 @@ These are multi-dimensional pattern signatures that strongly bias toward a speci
 
 **Scores**: Hype 70-100 (but declining), Squeeze Setup 0-10 (exhausted)
 
-**Expected Unified**: 30-50 → **Avoid** (or Short if system allows)
+**Expected Unified**: 30-50 → **Avoid** (no short stock)
 
-**Management**: DO NOT BUY. If you have a position: sell immediately. If you want to short: Bear Call Spread (sell call at 0.30 delta, buy call at 0.15 delta, 30-45 DTE).
+**Management**: DO NOT BUY. If you have a position: sell immediately. Never short the stock. A bearish view uses only a defined-risk Bear Call Spread (sell call at 0.30 delta, buy call at 0.15 delta, 30-45 DTE); a squeeze can still take the full width, so max loss (width − credit) ≤ 0.5% of equity.
 
 **Historic examples**: BBBY Aug '22 (post-peak), GME Jun '21 (post-January peak), AMC Jun '21
 
@@ -64,8 +64,8 @@ These are multi-dimensional pattern signatures that strongly bias toward a speci
 
 **Management**: Enter 5-10 days before earnings. Options strategy depends on thesis:
 - **Bullish thesis**: Bull Call Spread (buy ATM call, sell OTM call, 45 DTE covering earnings)
-- **Neutral-to-bullish**: Synthetic Long 2:1 if score ≥ 70
-- **Volatile (direction unknown)**: Long Call Butterfly (if IV already high — don't buy straddle pre-earnings)
+- **Neutral-to-bullish**: Bull Put Spread (defined risk) if score ≥ 70
+- **Volatile (direction unknown)**: no trade if IV is already high: the move is priced in. A butterfly is a neutral bet (short gamma near the body), not a volatility bet
 
 Exit: 50% at earnings gap up, 50% trailing stop. Never hold through earnings unless defined risk.
 
@@ -104,7 +104,7 @@ If conditions met: buy spot (not leveraged), size 1-2% max. No options on crypto
 
 **Expected Unified**: 50-70 → **Short-Term Spec** (pre-squeeze, high R/R)
 
-**Management**: Enter slowly. Accumulate 2-3% position over several days. Do NOT post about it on WSB (calling attention triggers retail and reduces your edge). Options: Cash-Secured Put (put at 20% below current, 45 DTE) to collect premium while waiting. If price stays flat, collect theta. If price drops, you enter the shorted stock cheaper. Watch for the catalyst that ignites the squeeze.
+**Management**: Enter slowly. Accumulate over several days, with a position value ≤ 1% of equity (gap rule). Do NOT post about it on WSB (calling attention triggers retail and reduces your edge). Options: a Bull Put Spread (short put 20% below current, long put 10% lower, 45 DTE) instead of a cash-secured put: the max loss of a cash-secured put is the full strike, and a meme stock can gap through it. Watch for the catalyst that ignites the squeeze.
 
 **Historic examples**: GME pre-Jan '21 (SI 100%+ but price flat for months), many small-caps
 
@@ -114,9 +114,9 @@ If conditions met: buy spot (not leveraged), size 1-2% max. No options on crypto
 
 | Pattern | FOMO Phase | Entry? | Strategy | Risk Level |
 |---------|:----------:|:------:|----------|:----------:|
-| Classic Meme Squeeze | Early-Mid | ✅ Urgent | Syn Long 2:1 / Bull Put Spread | Alto |
-| DD-Pump Continuation | Mid | ✅ Cautious | Bull Put Spread / Syn Long 2:1 | Medio |
-| Fake Pump / Bag Trap | Late-Exit | ❌ NO | Bear Call Spread (short) | Basso |
-| Earnings Hype Pump | Pre-earnings | ✅ Setup | Bull Call Spread / Butterfly | Medio |
+| Classic Meme Squeeze | Early-Mid | ✅ Risk rules | Bull Call Spread / Bull Put Spread | Alto |
+| DD-Pump Continuation | Mid | ✅ Cautious | Bull Put Spread / Bull Call Spread | Medio |
+| Fake Pump / Bag Trap | Late-Exit | ❌ NO | Bear Call Spread only (no short stock) | Alto (squeeze) |
+| Earnings Hype Pump | Pre-earnings | ✅ Setup | Bull Call Spread | Medio |
 | Crypto Pump | Early-Late | ⚠️ Conditional + crypto analysis | Spot only, 1-2% max | Molto Alto |
-| Squeeze Setup Revival | Pre-pump | ✅ Accumulate | Cash-Secured Put, poi Syn Long | Medio-Alto |
+| Squeeze Setup Revival | Pre-pump | ✅ Accumulate | Bull Put Spread / Bull Call Spread | Medio-Alto |

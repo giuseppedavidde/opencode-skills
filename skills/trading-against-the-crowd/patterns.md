@@ -18,7 +18,7 @@
 ## Pattern 4: VIX/VXO Implied Volatility Reversal
 **When to use**: VIX implied volatility EMA21-50 oscillator 10-day high > +5% (fear extreme) AND close > 5-day high.
 **How**: Enter long S&P 500 futures/ETF. Exit at T+30 using time stop.
-**Trade-offs**: More fear = stronger signal. Works on equity indices but weaker than put/call ratio Squeeze Play. VIX > VXO. EMA1-10 5% threshold is a viable fast variant.
+**Trade-offs**: More fear = stronger signal. Works on equity indices but weaker than put/call ratio Squeeze Play. VIX > VXO (VXO is discontinued). EMA1-10 5% threshold is a viable fast variant in the book's in-sample tests.
 
 ## Pattern 5: Public Short Sales Capitulation
 **When to use**: Normalized Public Short Sales Ratio (NPSR) EMA4-8 oscillator at extreme high (excessive public shorting).
@@ -38,7 +38,7 @@
 ## Pattern 8: OEX Smart Money Confirmation
 **When to use**: Use alongside any of the above patterns. When OEX put/call ratio EMA10-250 oscillator moves in the same direction as equity-only (confirmation), the signal is stronger.
 **How**: Do NOT trade against OEX extremes. If OEX is bullish at a market top, the top is less certain. If OEX is bearish at a market bottom, the bottom may not hold.
-**Trade-offs**: The OEX/equity-only divergence is itself information. Use OEX as a filter, not a primary signal.
+**Trade-offs**: The OEX/equity-only divergence is itself information in the book's period. OEX volume is now small and the rule has no current test: do not use it as a filter without a new test.
 
 ## Pattern 9: LEAPS Long-Only Composite
 **When to use**: Combine Squeeze Play II and TSW signals, taking only long trades across multiple stocks with diversified time frames.

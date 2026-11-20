@@ -45,5 +45,12 @@ class TestRegimeDetection:
     def test_high_vix_wins_over_equity_trend(self) -> None:
         assert detect_regime(vix=30.0, equity_trend="up") is Regime.HIGH_VOLATILITY
 
-    def test_rising_dollar_blocks_bull(self) -> None:
-        assert detect_regime(vix=14.0, dxy_trend="rising", equity_trend="up") is Regime.TRENDING_BEAR
+    def test_rising_dollar_does_not_flip_a_bull_trend(self) -> None:
+        """SIG-07: DXY up with SPX up is a headwind note, not a bear regime."""
+        assert detect_regime(vix=14.0, dxy_trend="rising", equity_trend="up") is Regime.TRENDING_BULL
+
+    def test_crypto_fear_greed_is_ignored(self) -> None:
+        assert detect_regime(vix=14.0, equity_trend="up", fear_greed=95) is Regime.TRENDING_BULL
+
+    def test_missing_trend_is_unknown(self) -> None:
+        assert detect_regime(vix=14.0, dxy_trend="falling") is Regime.UNKNOWN

@@ -2,6 +2,21 @@
 
 Adapted from TechnicalAnalysisAutomation pattern detection for daily OHLCV data.
 Each detector follows the pattern: detect_*(hist) -> dict, compute_*(hist) -> tuple[int, str].
+
+Scoring rules (SIG-13, SIG-14; 0-100, 50 = neutral, mirrored, unvalidated):
+
+- Only RECENT patterns count: an H&S/IHS whose neckline break is within the
+  last 5 bars, a flag/pennant whose breakout is within the last 10 bars, a
+  harmonic whose D point is within the last 10 bars. A pattern from months
+  ago does not move today's score.
+- Harmonic ratios must match within a log-space RMS error of 0.10 (the old
+  0.5 matched about 35 patterns a year on random walks).
+- Flags and pennants use two trend lines (through the chunk highs and the
+  chunk lows of the consolidation): converging lines are a pennant, parallel
+  counter-trend lines are a flag.
+- The KDE support/resistance block is reported but NOT scored here: the
+  swing-cluster S/R indicator already scores support/resistance.
+- ATR is Wilder's (:mod:`trading_mcp.analysis.ta_core`).
 """
 
 from __future__ import annotations
@@ -14,7 +29,14 @@ import pandas as pd
 from scipy.signal import find_peaks
 from scipy.stats import gaussian_kde
 
+from trading_mcp.analysis.ta_core import wilder_atr
+
 logger = logging.getLogger(__name__)
+
+HS_RECENT_BARS = 5
+FLAG_RECENT_BARS = 10
+HARMONIC_RECENT_BARS = 10
+HARMONIC_ERR_THRESH = 0.10
 
 # ---------------------------------------------------------------------------
 # Helper functions (inline, no external deps beyond numpy/pandas/scipy)
@@ -101,6 +123,29 @@ def _fit_trendline(
     return coefs, upper_pivot, lower_pivot
 
 
+def _flag_lines(data: np.ndarray) -> tuple[tuple[float, float], tuple[float, float]] | None:
+    """Upper and lower trend lines of a consolidation: fits through chunk highs and chunk lows."""
+    n = len(data)
+    chunk = max(2, n // 4)
+    hi_x: list[int] = []
+    hi_y: list[float] = []
+    lo_x: list[int] = []
+    lo_y: list[float] = []
+    for start in range(0, n, chunk):
+        seg = data[start:start + chunk]
+        if len(seg) == 0:
+            continue
+        hi_x.append(start + int(np.argmax(seg)))
+        hi_y.append(float(np.max(seg)))
+        lo_x.append(start + int(np.argmin(seg)))
+        lo_y.append(float(np.min(seg)))
+    if len(set(hi_x)) < 2 or len(set(lo_x)) < 2:
+        return None
+    upper = np.polyfit(hi_x, hi_y, 1)
+    lower = np.polyfit(lo_x, lo_y, 1)
+    return (float(upper[0]), float(upper[1])), (float(lower[0]), float(lower[1]))
+
+
 def _r_squared(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """Compute R² (coefficient of determination)."""
     ss_res = np.sum((y_true - y_pred) ** 2)
@@ -134,6 +179,8 @@ def detect_head_shoulders(hist: pd.DataFrame, order: int = 5) -> dict[str, Any]:
         "ihs_patterns": [],
         "count": 0,
         "recent": False,
+        "recent_hs": 0,
+        "recent_ihs": 0,
     }
 
     if len(hist) < order * 4 + 10:
@@ -181,23 +228,17 @@ def detect_head_shoulders(hist: pd.DataFrame, order: int = 5) -> dict[str, Any]:
         p["stop"] = round(float(np.exp(p["stop"])), 2) if p.get("stop") else None
 
     n_bars = len(hist)
-    recent_breakout = False
-    for p in hs_list:
+
+    def _recent(p: dict) -> bool:
         bi = p.get("breakout_index", 0)
-        if bi > 0 and n_bars - bi <= 5:
-            recent_breakout = True
-            break
-    if not recent_breakout:
-        for p in ihs_list:
-            bi = p.get("breakout_index", 0)
-            if bi > 0 and n_bars - bi <= 5:
-                recent_breakout = True
-                break
+        return bi > 0 and n_bars - 1 - bi < HS_RECENT_BARS
 
     result["hs_patterns"] = hs_list
     result["ihs_patterns"] = ihs_list
     result["count"] = len(hs_list) + len(ihs_list)
-    result["recent"] = recent_breakout
+    result["recent_hs"] = sum(1 for p in hs_list if _recent(p))
+    result["recent_ihs"] = sum(1 for p in ihs_list if _recent(p))
+    result["recent"] = bool(result["recent_hs"] or result["recent_ihs"])
 
     return result
 
@@ -411,13 +452,11 @@ def compute_head_shoulders(hist: pd.DataFrame) -> tuple[int, str]:
         logger.warning("Head & Shoulders detection failed: %s", e)
         return 50, f"H&S error: {e}"
 
-    n_hs = len(result["hs_patterns"])
-    n_ihs = len(result["ihs_patterns"])
+    n_hs = result["recent_hs"]
+    n_ihs = result["recent_ihs"]
     score = 50
-
-    if result["recent"]:
-        score += min(n_ihs * 15, 30)
-        score -= min(n_hs * 10, 30)
+    score += min(n_ihs * 15, 30)
+    score -= min(n_hs * 15, 30)
 
     parts = []
     if n_ihs > 0:
@@ -452,6 +491,8 @@ def detect_flags_pennants(hist: pd.DataFrame, order: int = 8) -> dict[str, Any]:
         "bull_pennants": [],
         "bear_pennants": [],
         "count": 0,
+        "recent_bull": 0,
+        "recent_bear": 0,
     }
 
     if len(hist) < order * 6:
@@ -501,6 +542,12 @@ def detect_flags_pennants(hist: pd.DataFrame, order: int = 8) -> dict[str, Any]:
         + len(result["bull_pennants"])
         + len(result["bear_pennants"])
     )
+
+    def _recent(entries: list[dict]) -> int:
+        return sum(1 for e in entries if n - 1 - e.get("breakout_index", -10**9) < FLAG_RECENT_BARS)
+
+    result["recent_bull"] = _recent(result["bull_flags"]) + _recent(result["bull_pennants"])
+    result["recent_bear"] = _recent(result["bear_flags"]) + _recent(result["bear_pennants"])
     return result
 
 
@@ -529,35 +576,38 @@ def _check_flag_pattern(
     if len(flag_data) < order:
         return
 
-    # Fit trendlines on the flag data
-    coefs, upper_pivot, lower_pivot = _fit_trendline(flag_data)
+    lines = _flag_lines(flag_data)
+    if lines is None:
+        return
+    (upper_slope, upper_icpt), (lower_slope, lower_icpt) = lines
     x_flag = np.arange(len(flag_data), dtype=float)
-
-    # Upper (resistance) trendline
-    upper_slope = coefs[0]
-    upper_line = upper_slope * x_flag + coefs[1]
-    upper_offset = flag_data[upper_pivot] - upper_line[upper_pivot]
-    resist_slope = upper_slope
-
-    # Lower (support) trendline
-    lower_offset = flag_data[lower_pivot] - upper_line[lower_pivot]
-    support_slope = upper_slope  # parallel by default
-
-    flag_height = abs(upper_offset - lower_offset)
-    if flag_height > pole_height * 0.75:
+    upper_line = upper_slope * x_flag + upper_icpt
+    lower_line = lower_slope * x_flag + lower_icpt
+    flag_height = float(np.max(upper_line - lower_line))
+    if flag_height <= 0 or flag_height > pole_height * 0.75:
         return
 
     if flag_end_idx - flag_start_idx > pole_width * 0.5:
         return
 
-    # Breakout check
+    is_pennant = bool(upper_slope < 0 < lower_slope)
+    tolerance = max(abs(upper_slope), abs(lower_slope)) * 0.6 + 1e-5
+    parallel = abs(upper_slope - lower_slope) <= tolerance
+    if direction == "bullish":
+        is_flag = parallel and upper_slope <= 0 and lower_slope <= 0
+    else:
+        is_flag = parallel and upper_slope >= 0 and lower_slope >= 0
+    if not (is_pennant or is_flag):
+        return
+    resist_slope, support_slope = upper_slope, lower_slope
+
+    # Breakout check against the projected trend lines
     breakout_idx = -1
     breakout_price = 0.0
     for idx in range(flag_end_idx + 1, min(n_bars, flag_end_idx + 15)):
-        resist_val = (upper_slope * (idx - flag_start_idx) + coefs[1]
-                      + upper_offset)
-        support_val = (support_slope * (idx - flag_start_idx) + coefs[1]
-                       + lower_offset)
+        rel = idx - flag_start_idx
+        resist_val = upper_slope * rel + upper_icpt
+        support_val = lower_slope * rel + lower_icpt
         if direction == "bullish":
             if log_close[idx] > resist_val:
                 breakout_idx = idx
@@ -571,13 +621,6 @@ def _check_flag_pattern(
 
     if breakout_idx < 0:
         return
-
-    # Determine if pennant (slopes converge) or flag (parallel)
-    is_pennant = False
-    if direction == "bullish":
-        is_pennant = bool(resist_slope < support_slope)
-    else:
-        is_pennant = bool(support_slope > resist_slope)
 
     entry = {
         "pole_start": round(float(np.exp(pole_start["price"])), 2),
@@ -618,11 +661,11 @@ def compute_flags_pennants(hist: pd.DataFrame) -> tuple[int, str]:
         logger.warning("Flags/Pennants detection failed: %s", e)
         return 50, f"Flags error: {e}"
 
-    n_bull = len(result["bull_flags"]) + len(result["bull_pennants"])
-    n_bear = len(result["bear_flags"]) + len(result["bear_pennants"])
+    n_bull = result["recent_bull"]
+    n_bear = result["recent_bear"]
     score = 50
     score += min(n_bull * 10, 30)
-    score -= min(n_bear * 8, 24)
+    score -= min(n_bear * 10, 30)
 
     parts = []
     if n_bull > 0:
@@ -688,7 +731,7 @@ HARMONIC_PATTERNS: dict[str, dict[str, Any]] = {
 
 
 def detect_harmonic_patterns(
-    hist: pd.DataFrame, sigma: float = 0.03, err_thresh: float = 0.5
+    hist: pd.DataFrame, sigma: float = 0.03, err_thresh: float = HARMONIC_ERR_THRESH
 ) -> dict[str, Any]:
     """Detect Harmonic Patterns (Gartley, Bat, Butterfly, Crab, etc.).
 
@@ -700,7 +743,7 @@ def detect_harmonic_patterns(
     Args:
         hist: Daily OHLCV DataFrame.
         sigma: Retracement threshold for directional change (default 0.03).
-        err_thresh: Maximum pattern match error (default 0.5).
+        err_thresh: Maximum log-space RMS match error (default 0.10).
 
     Returns:
         Dict with ``patterns``, ``count``, ``best_pattern``, ``best_error``.
@@ -710,6 +753,8 @@ def detect_harmonic_patterns(
         "count": 0,
         "best_pattern": None,
         "best_error": None,
+        "recent_bull": 0,
+        "recent_bear": 0,
     }
 
     if len(hist) < 20:
@@ -746,8 +791,12 @@ def detect_harmonic_patterns(
 
     unique.sort(key=lambda x: x.get("error", 999))
 
+    n_bars = len(hist)
+    recent = [p for p in unique if n_bars - 1 - int(p.get("d_index", -10**9)) < HARMONIC_RECENT_BARS]
     result["patterns"] = unique
     result["count"] = len(unique)
+    result["recent_bull"] = sum(1 for p in recent if p.get("name", "").startswith("Bull"))
+    result["recent_bear"] = sum(1 for p in recent if p.get("name", "").startswith("Bear"))
     if unique:
         result["best_pattern"] = unique[0].get("name")
         result["best_error"] = unique[0].get("error")
@@ -829,6 +878,7 @@ def _detect_harmonic_single(
                 "D": round(float(np.exp(d_price)), 2),
                 "error": round(float(error), 4),
                 "ratios": ratios,
+                "d_index": int(d_point[0]),
                 "_x_idx": x_point[0],
             })
 
@@ -892,13 +942,11 @@ def compute_harmonic_patterns(hist: pd.DataFrame) -> tuple[int, str]:
         logger.warning("Harmonic detection failed: %s", e)
         return 50, f"Harmonic error: {e}"
 
-    n_bull = sum(1 for p in result["patterns"]
-                 if p.get("name", "").startswith("Bull"))
-    n_bear = sum(1 for p in result["patterns"]
-                 if p.get("name", "").startswith("Bear"))
+    n_bull = result["recent_bull"]
+    n_bear = result["recent_bear"]
     score = 50
     score += min(n_bull * 8, 24)
-    score -= min(n_bear * 5, 20)
+    score -= min(n_bear * 8, 24)
 
     parts = []
     if n_bull > 0:
@@ -921,22 +969,25 @@ def detect_support_resistance(
 ) -> dict[str, Any]:
     """Detect support/resistance levels via Gaussian KDE on log-prices.
 
-    Adapted from mp_support_resist.py: uses scipy.stats.gaussian_kde
-    with adaptive ATR-based bandwidth and exponential recency weights.
+    Adapted from mp_support_resist.py: uses scipy.stats.gaussian_kde with an
+    ATR-based bandwidth (2 x Wilder ATR as a fraction of price) and
+    exponential recency weights.
+
+    Signal (mirror rules): a close that crossed above a level during the last
+    5 bars is a ``bullish`` breakout, a cross below is a ``bearish``
+    breakdown. Without a cross, a 5-bar low within 0.5% of the support is a
+    bullish bounce and a 5-bar high within 0.5% of the resistance a bearish
+    rejection (both at once: neutral). Missing levels are ``None``.
 
     Args:
         hist: Daily OHLCV DataFrame.
         lookback: Number of bars to use for KDE (default 90).
-
-    Returns:
-        Dict with levels, nearest_support, nearest_resistance, closest_levels,
-        signal, n_levels.
     """
     result: dict[str, Any] = {
         "levels": [],
-        "nearest_support": 0.0,
-        "nearest_resistance": 0.0,
-        "closest_levels": {"below": 0.0, "above": 0.0},
+        "nearest_support": None,
+        "nearest_resistance": None,
+        "closest_levels": {"below": None, "above": None},
         "signal": "neutral",
         "n_levels": 0,
     }
@@ -948,110 +999,68 @@ def detect_support_resistance(
     log_close = np.log(close)
     window = log_close[-lookback:]
 
-    # Compute ATR for adaptive bandwidth
     atr = _compute_tr_atr(hist, lookback)
     if atr <= 0:
         atr = 0.01
-
     bw = atr * 2.0
 
-    # Exponential recency weights
     weights = np.exp(np.linspace(-1.0, 0.0, len(window)))
     weights /= weights.sum()
-
-    # Fit KDE with weighted samples
+    std = float(np.std(window))
     try:
-        # gaussian_kde supports weights via 'weights' parameter (scipy >= 1.9)
-        # For older scipy, resample
-        try:
-            kde = gaussian_kde(window, bw_method=bw / np.std(window)
-                               if np.std(window) > 0 else None,
-                               weights=weights)
-        except TypeError:
-            kde = gaussian_kde(window, bw_method=bw / np.std(window)
-                               if np.std(window) > 0 else None)
-    except Exception:
+        kde = gaussian_kde(window, bw_method=bw / std if std > 0 else None, weights=weights)
+    except Exception:  # pylint: disable=broad-exception-caught
         return result
 
-    # Evaluate KDE on a grid
     grid = np.linspace(window.min(), window.max(), 200)
     density = kde(grid)
-
-    # Find peaks
-    min_height = density.max() * 0.3
-    peaks, _ = find_peaks(density, height=min_height, distance=10)
-
-    levels = [float(np.exp(grid[p])) for p in peaks]
-    levels.sort()
+    peaks, _ = find_peaks(density, height=density.max() * 0.3, distance=10)
+    levels = sorted(float(np.exp(grid[p])) for p in peaks)
 
     current_price = float(close[-1])
+    below = [lvl for lvl in levels if lvl < current_price]
+    above = [lvl for lvl in levels if lvl > current_price]
+    support = max(below) if below else None
+    resistance = min(above) if above else None
 
-    nearest_support = 0.0
-    nearest_resistance = 0.0
-    nearest_below = 0.0
-    nearest_above = 0.0
-
-    for lvl in levels:
-        if lvl < current_price:
-            nearest_support = lvl
-            nearest_below = lvl
-        else:
-            nearest_resistance = lvl
-            nearest_above = lvl
-            break
-
-    # Determine signal from recent penetration
     signal = "neutral"
-    if nearest_resistance > 0 and current_price > nearest_resistance * 1.005:
-        signal = "bullish"
-    elif nearest_support > 0 and current_price < nearest_support * 0.995:
-        signal = "bearish"
-
-    # Check if price is bouncing off support/resistance
-    if len(close) >= 5:
-        recent_low = float(close[-5:].min())
-        recent_high = float(close[-5:].max())
-        if nearest_support > 0 and recent_low <= nearest_support * 1.005:
+    if len(close) >= 6:
+        start = float(close[-6])
+        crossed_up = any(start < lvl < current_price for lvl in levels)
+        crossed_down = any(current_price < lvl < start for lvl in levels)
+        if crossed_up and not crossed_down:
             signal = "bullish"
-        elif nearest_resistance > 0 and recent_high >= nearest_resistance * 0.995:
+        elif crossed_down and not crossed_up:
             signal = "bearish"
+        else:
+            bounce = support is not None and float(close[-5:].min()) <= support * 1.005
+            reject = resistance is not None and float(close[-5:].max()) >= resistance * 0.995
+            if bounce and not reject:
+                signal = "bullish"
+            elif reject and not bounce:
+                signal = "bearish"
 
-    result["levels"] = [round(l, 2) for l in levels]
-    result["nearest_support"] = round(nearest_support, 2)
-    result["nearest_resistance"] = round(nearest_resistance, 2)
-    result["closest_levels"] = {
-        "below": round(nearest_below, 2),
-        "above": round(nearest_above, 2),
-    }
+    result["levels"] = [round(lvl, 2) for lvl in levels]
+    result["nearest_support"] = round(support, 2) if support is not None else None
+    result["nearest_resistance"] = round(resistance, 2) if resistance is not None else None
+    result["closest_levels"] = {"below": result["nearest_support"], "above": result["nearest_resistance"]}
     result["signal"] = signal
     result["n_levels"] = len(levels)
-
     return result
 
 
 def _compute_tr_atr(hist: pd.DataFrame, lookback: int) -> float:
-    """Compute Average True Range manually."""
-    if len(hist) < 2:
+    """Wilder ATR(14) as a fraction of the mean price of the window (for log-space use)."""
+    if len(hist) < 15:
         return 0.0
-    high = hist["High"].values.astype(float)[-lookback:]
-    low = hist["Low"].values.astype(float)[-lookback:]
-    prev_close = hist["Close"].shift(1).values.astype(float)[-lookback:]
-
-    tr_list: list[float] = []
-    for i in range(1, len(high)):  # pylint: disable=consider-using-enumerate
-        h_l = high[i] - low[i]
-        h_pc = abs(high[i] - prev_close[i])
-        l_pc = abs(low[i] - prev_close[i])
-        tr_list.append(max(h_l, h_pc, l_pc))
-
-    if not tr_list:
+    atr = wilder_atr(hist, 14).iloc[-1]
+    if pd.isna(atr):
         return 0.0
-    atr_val = np.mean(tr_list)
-    # Express as fraction of price for log-space use
     close_window = hist["Close"].values.astype(float)[-lookback:]
-    log_prices = np.log(close_window[close_window > 0])
-    avg_log_price = float(np.mean(log_prices)) if len(log_prices) > 0 else 0.0
-    return atr_val / np.exp(avg_log_price) if np.exp(avg_log_price) > 0 else atr_val
+    close_window = close_window[close_window > 0]
+    if len(close_window) == 0:
+        return 0.0
+    return float(atr) / float(np.exp(np.mean(np.log(close_window))))
 
 
 def compute_support_resistance_score(hist: pd.DataFrame) -> tuple[int, str]:
@@ -1069,12 +1078,11 @@ def compute_support_resistance_score(hist: pd.DataFrame) -> tuple[int, str]:
 
     if result["signal"] == "bullish":
         score += 15
-        detail += f" | Breakout above {result['nearest_resistance']:.2f}"
+        detail += " | bullish (breakout or bounce)"
     elif result["signal"] == "bearish":
         score -= 15
-        detail += f" | Breakdown below {result['nearest_support']:.2f}"
-    else:
-        detail += f" | Nearest: S={result['nearest_support']:.2f} R={result['nearest_resistance']:.2f}"
+        detail += " | bearish (breakdown or rejection)"
+    detail += f" | Nearest: S={result['nearest_support']} R={result['nearest_resistance']}"
 
     return min(100, max(0, int(score))), detail
 
@@ -1085,71 +1093,46 @@ def compute_support_resistance_score(hist: pd.DataFrame) -> tuple[int, str]:
 
 
 def compute_taa_patterns(hist: pd.DataFrame) -> tuple[int, str]:
-    """Compute composite TAA pattern score (0-100) from all 4 detectors.
+    """Composite TAA pattern score (0-100, 50 = neutral) from RECENT patterns only.
 
-    Aggregates Head & Shoulders, Flags/Pennants, Harmonic Patterns,
-    and Support/Resistance into a single quality score and detail string.
-
-    Args:
-        hist: Daily OHLCV DataFrame.
-
-    Returns:
-        (score 0-100, detail string).
+    Recent IHS +15 each / H&S -15 each (max +-30), recent bull / bear
+    flags-pennants +-10 each (max +-30), recent bull / bear harmonics +-8 each
+    (max +-24). The KDE support/resistance is reported by
+    :func:`get_taa_patterns` but not scored here (no double counting with the
+    swing-cluster S/R indicator).
     """
     if len(hist) < 60:
         return 50, "Insufficient data for TAA patterns"
 
     details: list[str] = []
     score = 50.0
-
     hs = detect_head_shoulders(hist)
     fp = detect_flags_pennants(hist)
     harm = detect_harmonic_patterns(hist)
-    sr = detect_support_resistance(hist)
 
-    # --- H&S ---
-    n_hs = len(hs["hs_patterns"])
-    n_ihs = len(hs["ihs_patterns"])
-    if hs.get("recent"):
-        score += min(n_ihs * 15, 30)
-        score -= min(n_hs * 10, 30)
-        if n_ihs > 0:
-            details.append(f"IHS bull signal ({n_ihs})")
-        if n_hs > 0:
-            details.append(f"H&S bear signal ({n_hs})")
+    n_ihs, n_hs = hs.get("recent_ihs", 0), hs.get("recent_hs", 0)
+    score += min(n_ihs * 15, 30) - min(n_hs * 15, 30)
+    if n_ihs:
+        details.append(f"Recent IHS ({n_ihs})")
+    if n_hs:
+        details.append(f"Recent H&S ({n_hs})")
 
-    # --- Flags ---
-    n_bf = len(fp["bull_flags"]) + len(fp["bull_pennants"])
-    n_bfr = len(fp["bear_flags"]) + len(fp["bear_pennants"])
-    if n_bf > 0:
-        score += min(n_bf * 10, 30)
-        details.append(f"Bull flags/pennants ({n_bf})")
-    if n_bfr > 0:
-        score -= min(n_bfr * 8, 24)
-        details.append(f"Bear flags/pennants ({n_bfr})")
+    n_bf, n_bfr = fp.get("recent_bull", 0), fp.get("recent_bear", 0)
+    score += min(n_bf * 10, 30) - min(n_bfr * 10, 30)
+    if n_bf:
+        details.append(f"Recent bull flags/pennants ({n_bf})")
+    if n_bfr:
+        details.append(f"Recent bear flags/pennants ({n_bfr})")
 
-    # --- Harmonic ---
-    n_bull_h = sum(1 for p in harm["patterns"]
-                   if p.get("name", "").startswith("Bull"))
-    n_bear_h = sum(1 for p in harm["patterns"]
-                   if p.get("name", "").startswith("Bear"))
-    score += min(n_bull_h * 8, 24)
-    score -= min(n_bear_h * 5, 20)
-    if n_bull_h > 0:
-        details.append(f"Bull harmonic ({n_bull_h})")
-    if n_bear_h > 0:
-        details.append(f"Bear harmonic ({n_bear_h})")
-
-    # --- S/R ---
-    if sr["signal"] == "bullish":
-        score += 10
-        details.append(f"Above resistance ({sr['nearest_resistance']:.2f})")
-    elif sr["signal"] == "bearish":
-        score -= 10
-        details.append(f"Below support ({sr['nearest_support']:.2f})")
+    n_bull_h, n_bear_h = harm.get("recent_bull", 0), harm.get("recent_bear", 0)
+    score += min(n_bull_h * 8, 24) - min(n_bear_h * 8, 24)
+    if n_bull_h:
+        details.append(f"Recent bull harmonic ({n_bull_h})")
+    if n_bear_h:
+        details.append(f"Recent bear harmonic ({n_bear_h})")
 
     score = min(100.0, max(0.0, score))
-    detail = " | ".join(details) if details else "No clear TAA patterns"
+    detail = " | ".join(details) if details else "No recent TAA patterns"
     return int(round(score)), detail
 
 
@@ -1174,14 +1157,14 @@ def get_taa_patterns(hist: pd.DataFrame) -> dict[str, Any]:
         logger.error("get_taa_patterns failed: %s", e)
         return {
             "head_shoulders": {"count": 0, "hs_patterns": [],
-                               "ihs_patterns": [], "recent": False},
+                               "ihs_patterns": [], "recent": False, "recent_hs": 0, "recent_ihs": 0},
             "flags_pennants": {"bull_flags": [], "bear_flags": [],
                                "bull_pennants": [], "bear_pennants": [],
-                               "count": 0},
+                               "count": 0, "recent_bull": 0, "recent_bear": 0},
             "harmonic": {"patterns": [], "count": 0,
-                         "best_pattern": None, "best_error": None},
-            "support_resistance": {"levels": [], "nearest_support": 0.0,
-                                   "nearest_resistance": 0.0,
-                                   "closest_levels": {"below": 0.0, "above": 0.0},
+                         "best_pattern": None, "best_error": None, "recent_bull": 0, "recent_bear": 0},
+            "support_resistance": {"levels": [], "nearest_support": None,
+                                   "nearest_resistance": None,
+                                   "closest_levels": {"below": None, "above": None},
                                    "signal": "neutral", "n_levels": 0},
         }

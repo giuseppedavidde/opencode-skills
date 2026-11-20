@@ -6,7 +6,10 @@ from the source frameworks.
 
 ## Scoring Framework (5 Dimensions)
 
-| # | Dimension | Weight |
+The weights are the defaults of the trading MCP (`mcp/src/trading_mcp/weights_config.py`).
+The MCP is the only source: if a value differs, the MCP wins.
+
+| # | Dimension | Default weight |
 |---|-----------|:------:|
 | 1 | Wyckoff Structure | 20% |
 | 2 | Volume Profile | 20% |
@@ -180,7 +183,7 @@ When presenting results, the scanner identifies which pattern (if any) each
 ticker matches. Sentiment sub-dimensions from the 9-factor engine are used:
 
 ```python
-# Sentiment sub-scores are extracted from sentiment_engine output:
+# Sentiment sub-scores come from the MCP sentiment engine (trading_mcp.analysis.sentiment_6d):
 #   traditional = sentiment_subs["short_interest"]   (proxy via SI/DTC)
 #   web_news    = sentiment_subs["web_news"]          (Finviz → Yahoo chain)
 #   social      = sentiment_subs["social_media"]      (WSB hotlist cross-ref)

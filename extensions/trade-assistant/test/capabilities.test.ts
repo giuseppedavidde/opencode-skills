@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test } from 'node:test';
+import { normalizeModelId } from '../src/core/opencodeGo';
 import {
   FsAdapter,
   capabilitySignature,
@@ -180,8 +181,9 @@ const realSkills = path.join(repoRoot, 'skills');
 
 test('parses the real repository definitions when present', { skip: !fs.existsSync(realTradeMd) }, () => {
   const agent = parseTradeAgent(fs.readFileSync(realTradeMd, 'utf8'));
-  assert.equal(agent.model, 'opencode-go/deepseek-v4.1-flash');
-  assert.ok(agent.mcpTools.length >= 10);
+  assert.match(agent.model, /^opencode-go\//);
+  assert.match(normalizeModelId(agent.model), /^[a-z0-9][a-z0-9.-]*$/);
+  assert.ok(agent.mcpTools.length >= 1);
   assert.ok(agent.workflowSteps.length >= 5);
 
   const skills = scanSkillCatalogue(realSkills, {

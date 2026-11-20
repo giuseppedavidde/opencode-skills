@@ -8,6 +8,22 @@ metadata:
 # Trading Against the Crowd: Profiting from Fear and Greed
 **Author**: John F. Summa | **Chapters**: 20 | **Generated**: 2026-05-28
 
+## Data Status and Evidence Quality (read first)
+
+The book tests its systems on data from the 1990s and early 2000s. Several data series no longer exist.
+Most results are **in-sample** on that period; chapter 9 adds a limited out-of-sample test. No result in this
+skill is a current validation. Treat every signal as a hypothesis and test it on current data before you use it.
+
+| Series in the book | Status | Current equivalent |
+|---|---|---|
+| VXO (Cboe S&P 100 volatility index) | Discontinued (2021) | VIX (S&P 500, other method); VXN for the Nasdaq-100. The book's VXO thresholds do not transfer |
+| NYSE public / specialist short sales | Discontinued (specialists became DMMs in 2008) | None. FINRA short interest and daily short-sale volume measure other things |
+| Odd-lot short sales ratio | Discontinued | None with the same meaning |
+| OEX put/call ratio ("smart money") | OEX options still trade, with small volume | No current test of the "trade with OEX" rule; do not use it as a filter without one |
+| Equity-only and total put/call ratios | Published by Cboe | Same series, but options volume and its mix changed a lot (weekly options, retail flow): re-estimate the thresholds |
+| AAII survey, Investors Intelligence | Published (II needs a subscription) | Same series |
+| News flow intensity indices (author) | Not public | None |
+
 ## Core Frameworks & Mental Models
 
 ### 1. Contrarian Sentiment Theory
@@ -20,10 +36,10 @@ Sentiment alone gives premature signals. The Squeeze Play framework pairs sentim
 Three oscillator speeds capture different cycles: fast (EMA5-21) for short-term reversals, medium (EMA21-50) for Tsunami Sentiment Wave, slow (EMA50-100) for long-duration Squeeze Play II. Exit via time stops (T+30, T+60, T+90) when using LEAPS.
 
 ### 4. Smart Money vs Dumb Money Distinction
-Not all put/call ratios are equal: equity-only = dumb money (good contrarian), OEX index = smart money (trade WITH, not against), CBOE total = polluted by hedging (middling). Public short sales remain excellent contrarian; specialist short sales are smart.
+Not all put/call ratios are equal: equity-only = dumb money (good contrarian), OEX index = smart money (trade WITH, not against), CBOE total = polluted by hedging (middling). Public short sales were excellent contrarian and specialist short sales were smart in the book's tests; both series are now discontinued, and the OEX result is in-sample.
 
 ### 5. Multi-Stream Sentiment Convergence
-Combine put/call ratios, implied volatility (VIX/VXO fear gauge), public short sales data, advisory opinion (Investors Intelligence, AAII), and news flow intensity. Each stream has blind spots; convergence improves confidence.
+Combine put/call ratios, implied volatility (VIX fear gauge; VXO is discontinued), advisory opinion (Investors Intelligence, AAII), and news flow intensity (the book's short-sales series are discontinued). Each stream has blind spots; convergence improves confidence.
 
 ## Chapter Index
 | # | Title | Topic |

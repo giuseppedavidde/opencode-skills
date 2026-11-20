@@ -28,7 +28,7 @@ All option trading decisions flow from one question: **Is implied volatility hig
 - Five inputs: S, X, t, r, σ — only σ is unobservable
 - Model variants (Black-Scholes stock, Black futures, Garman-Kohlhagen currency) differ only in forward price calculation and cost-of-carry parameter (b)
 - Binomial model: discrete-step alternative, converges to Black-Scholes as steps → ∞
-- At-the-forward approximation: EV ≈ 0.004 × F × σ × √t ("40% rule")
+- At-the-forward approximation ("40% rule", 0.4 ≈ 1/√(2π)): EV ≈ 0.4 × F × σ × √t with σ as a decimal (0.20) and t in years; the same rule is EV ≈ 0.004 × F × σ% × √t with σ in percent (20). Example: F = 100, σ = 20%, t = 0.25 → EV ≈ 4.00 (undiscounted).
 
 ### 3. Volatility — The Central Variable (Ch. 6, 20)
 - Volatility = annualized standard deviation of percent price changes (σ)

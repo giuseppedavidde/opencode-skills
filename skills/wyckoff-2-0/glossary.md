@@ -48,7 +48,7 @@
 ## L
 - **LPS (Last Point of Support)**: Phase C test event in accumulation — a pullback near the Spring/low after initial strength. Conservative entry point.
 - **LPSY (Last Point of Supply)**: Phase C test event in distribution — a rally near the Upthrust/high after initial weakness. Conservative entry point.
-- **LVN (Low Volume Node)**: Zone of low trading activity, representing imbalance/rejection. Acts as support/resistance. Excellent stop loss location.
+- **LVN (Low Volume Node)**: Zone of low trading activity, representing imbalance/rejection. Price turns fast or crosses it fast; it is a reaction level, not a strong support/resistance. Put the stop beyond it, not inside.
 
 ## N
 - **Naked VPOC**: A previous session's VPOC that has not yet been tested. High probability of being revisited. Used as target level.
@@ -83,7 +83,7 @@
 - **VAH (Value Area High)**: Upper boundary of the value area. Resistance zone.
 - **VAL (Value Area Low)**: Lower boundary of the value area. Support zone.
 - **VPOC (Volume Point of Control)**: The price level with the highest volume. Fair price. Price above = buyer control; below = seller control.
-- **VWAP (Volume Weighted Average Price)**: Average price weighted by volume. Institutional benchmark. Above = "bought low"; below = "sold high."
+- **VWAP (Volume Weighted Average Price)**: Average price weighted by volume. Institutional benchmark. Price above VWAP = the average buyer "bought low" and buyers have control; below = the average seller "sold high" and sellers have control.
 
 ## W
 - **Weis Wave**: Volume indicator that accumulates volume per price wave. Used for Effort/Result analysis.

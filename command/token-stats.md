@@ -8,7 +8,7 @@ bytes originali→iniettati, retrieve e **stima netta**, più la ripartizione pe
 
 **Esecuzione dello script:**
 1. Script installato (symlink): `node ~/.config/opencode/scripts/token-stats.js`
-2. Fallback dalla repo: `node ~/Progetti/Github/opencode-skills/scripts/token-stats.js`
+2. Fallback dalla repo: `node ~/.config/opencode/opencode-skills/scripts/token-stats.js`
 3. Modalità programmatica: aggiungi `--json`.
 
 **Fonti lette:**

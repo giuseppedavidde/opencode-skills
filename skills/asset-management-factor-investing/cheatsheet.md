@@ -66,7 +66,7 @@ Rule: highest-income-yield asset → tax-deferred first.
 | Volatility | Scale weight by 1/σ, cap weight between 0.5× and 1.5× target | Higher Sharpe, needs leverage/cash |
 | Hybrid | Calendar rebalance + ±10% equity weight modulation when Shiller-PE >97th or <3rd pct | Robust, simple |
 
-Rebalancing premium ≈ 0.5 × σ_asset² × (1−ρ) × w_assets × frequency.
+Rebalancing premium ≈ ½ × (Σ wᵢσᵢ² − σₚ²) per year (annualized σ as decimals). Two assets: ≈ ½ × w₁w₂ × (σ₁² + σ₂² − 2ρσ₁σ₂). Example: w = 50/50, σ = 20% each, ρ = 0.3 → ¼ × 0.04 × 0.7 = 0.7% per year. It does not grow with the rebalancing frequency.
 Order matters: rebalance the most volatile assets most often.
 
 ---

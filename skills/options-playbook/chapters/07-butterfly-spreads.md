@@ -16,13 +16,13 @@ Expect stock to land near B at expiration. Low volatility outlook. Low cost, hig
 - **Delta**: Near zero (neutral around B).
 - **Gamma**: Negative at center (short gamma). Positive in wings.
 - **Theta**: Mixed. Can be slightly positive or neutral.
-- **Vega**: Near zero (long and short vega offset). Low IV sensitivity.
+- **Vega**: Negative when the stock is near B (the short body has the most vega). Falling IV helps; rising IV hurts.
 
 ### Time Decay Effect
 Low impact. Theta is minimal — butterfly is a "late-expiration" strategy. Closer to expiration, gamma risk increases.
 
 ### Implied Volatility Impact
-Low impact. Vega is near zero — butterflies are relatively IV-insensitive.
+Moderate. Near B the position is short vega: a drop in IV helps, a rise in IV hurts. Far from B the vega turns positive.
 
 ### Trade-off
 Pros: Low cost, defined risk, profit from pin action at B, low IV sensitivity. Cons: Must pin exactly at B for max profit, small max profit relative to risk.

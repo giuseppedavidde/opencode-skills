@@ -1,5 +1,7 @@
 # Chapter 11: "Real" Assets
 
+> **Source note**: this chapter file is based on the table of contents and the structure of the book, not on the full text. Check the book before you quote a number or a claim.
+
 ## Core Idea
 Many "real" assets — inflation-indexed bonds (linkers), commodities, and real estate — turn out not to be that "real." While a single linker delivers a constant real return, linkers *as an asset class* have almost no correlation with inflation. Among commodities, only energy has been a decent inflation hedge; gold, surprisingly, is a poor inflation hedge. Real estate has some, but far from complete, inflation-hedging ability. **Boring T-bills** are actually the best at hedging inflation. The chapter distinguishes inflation *hedging* (the correlation of returns with inflation) from the long-run *level* of returns (an asset can have a high long-run mean and still be a lousy inflation hedge).
 

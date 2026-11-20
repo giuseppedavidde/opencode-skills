@@ -109,7 +109,7 @@ Reports the empirical findings from the 6,402-rule test. Discusses which themes 
 | `chapters/ch06-data-mining-bias.md` | Data-Mining Bias: The Fool's Gold of Objective TA |
 | `chapters/ch07-theories-of-nonrandom-price-motion.md` | Theories of Nonrandom Price Motion |
 | `chapters/ch08-case-study-sp500-data-mining.md` | Case Study of Rule Data Mining for the S&P 500 |
-| `chapters/09-case-study-results-and-future-of-ta.md` | Case Study Results and the Future of TA |
+| `chapters/ch09-case-study-results-and-future-of-ta.md` | Case Study Results and the Future of TA |
 | `patterns.md` | When/How/Trade-offs for each framework |
 | `cheatsheet.md` | Decision tables and quick reference |
 | `glossary.md` | Alphabetical glossary of key terms |

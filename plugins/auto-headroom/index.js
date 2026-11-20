@@ -1,5 +1,6 @@
 // auto-headroom — Middleware automatico di compressione token per OpenCode
 // Intercetta gli output dei tool (shell, read, grep, glob, webfetch, ecc.) con lunghezza >= 800 caratteri.
+// Non comprime i tool `trading_*` (payload numerici) né il recupero mirato con context_store_reader.py.
 // Salva l'originale in context-store (~/.config/opencode/context-store/<hash>.txt) e genera l'indice dei blocchi (<hash>_index.json).
 // Restituisce all'LLM una versione compressa con anteprima strutturata + hash per il Selective Retrieval.
 // Previene il doppio inserimento dei token (Double-Trip Token Penalty) salvando fino al 90% di prompt token.
@@ -17,6 +18,19 @@ const STORE_DIR = env.CONTEXT_STORE_DIR || join(homedir(), ".config", "opencode"
 const HEADROOM_WORKSPACE_DIR = env.HEADROOM_WORKSPACE_DIR || join(homedir(), ".headroom");
 const SHARED_STATS_FILE = join(HEADROOM_WORKSPACE_DIR, "session_stats.jsonl");
 const COMPRESSION_THRESHOLD = 800; // soglia minima caratteri per compressione automatica
+// Tool i cui risultati devono arrivare INTEGRI al modello: payload numerici MCP (prezzi, greche, rischio).
+// Una preview di 300 caratteri farebbe decidere il modello su dati mancanti.
+// Prefissi extra: OPENCODE_HEADROOM_PASSTHROUGH="prefisso1_,prefisso2_".
+const PASSTHROUGH_TOOL_PREFIXES = ["trading_", ...(env.OPENCODE_HEADROOM_PASSTHROUGH || "")
+  .split(",").map((item) => item.trim()).filter(Boolean)];
+
+// True quando il risultato non va compresso: tool numerici o recupero mirato dallo store.
+export function isPassthrough(toolName, args) {
+  if (PASSTHROUGH_TOOL_PREFIXES.some((prefix) => toolName.startsWith(prefix))) return true;
+  const command = typeof args?.command === "string" ? args.command : "";
+  // Il lettore dello store restituisce un chunk già scelto: comprimerlo di nuovo lo nasconde.
+  return (toolName === "bash" || toolName === "shell") && command.includes("context_store_reader.py");
+}
 // Versione del formato dello store: incrementala quando cambia la struttura dei file.
 // v1 = header "# [selective-retrieval]..." dentro <hash>.txt (legacy, off-by-one).
 // v2 = <hash>.txt VERBATIM, total_lines = righe reali, header solo in preview/index.
@@ -275,6 +289,9 @@ export default {
 
         // Estrai argomenti (V2: event.input *è* l'oggetto args del tool)
         const args = (event.input && typeof event.input === "object") ? event.input : {};
+        if (isPassthrough(toolName, args)) {
+          return;
+        }
         const filePathArg = typeof args.path === "string" ? args.path
           : typeof args.filePath === "string" ? args.filePath
           : typeof args.file_path === "string" ? args.file_path : "";

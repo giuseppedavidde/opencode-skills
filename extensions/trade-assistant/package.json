@@ -143,12 +143,17 @@
             "copilot"
           ],
           "default": "auto",
-          "markdownDescription": "Chat backend. `auto` uses OpenCode Go when a key exists in `~/.local/share/opencode/auth.json`, otherwise GitHub Copilot models."
+          "markdownDescription": "Chat backend. `auto` uses OpenCode Go when a key exists in `~/.local/share/opencode/auth.json`, otherwise GitHub Copilot models. A model without a chat-completions endpoint (for example `gemini-4-argon`) goes through the VS Code language model API with the vendor `#tradeAssistant.chat.lmVendor#`."
         },
         "tradeAssistant.chat.model": {
           "type": "string",
           "default": "",
-          "description": "OpenCode Go model id. Empty value reads the model from agents/trade.md frontmatter and strips the opencode-go/ prefix."
+          "description": "OpenCode Go model id. Empty value reads the model from agents/trade.md frontmatter and strips the opencode-go/ prefix and the #effort suffix."
+        },
+        "tradeAssistant.chat.lmVendor": {
+          "type": "string",
+          "default": "opencodego",
+          "markdownDescription": "Vendor id of the VS Code language model provider for OpenCode Go models that need a protocol other than chat-completions. `opencodego` is the vendor of the extension `OnesoftQwQ.opencode-go-copilot-provider`."
         },
         "tradeAssistant.fileAccess.roots": {
           "type": "array",

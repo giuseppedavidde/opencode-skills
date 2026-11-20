@@ -29,7 +29,7 @@
 | Back Spread w/ Puts | | | | ✓ | Limited |
 | Calendar Spread | ✓ | ✓ | ✓ | | Limited debit |
 | Diagonal Spread | ✓ | ✓ | | | Limited debit |
-| Long Butterfly | | | ✓ | ✓ | Limited debit |
+| Long Butterfly | | | ✓ | | Limited debit |
 | Iron Butterfly | | | ✓ | | Limited (width-credit) |
 | Skip Strike Butterfly | | | ✓ | | Limited debit |
 | Christmas Tree | ✓ | ✓ | | | Limited debit |
@@ -41,7 +41,7 @@
 
 | Greek | What It Measures | Long Option | Short Option | Key Fact |
 |---|---|---|---|---|
-| Δ Delta | $ change per $1 stock move | +0 to +1 (call)<br>-1 to 0 (put) | Opposite sign | ATM = ~0.50. Also prob of ITM. |
+| Δ Delta | $ change per $1 stock move | +0 to +1 (call)<br>-1 to 0 (put) | Opposite sign | ATM = ~0.50. Not P(ITM): P(ITM) = N(d2) call, N(−d2) put. |
 | Γ Gamma | Δ change per $1 stock move | Positive | Negative | Highest for ATM near-term. |
 | Θ Theta | Daily time decay | Negative | Positive | Accelerates last 30 days. |
 | ν Vega | $ change per 1pt IV change | Positive | Negative | Higher for longer-term. |

@@ -1,5 +1,7 @@
 # Chapter 17: Hedge Funds
 
+> **Source note**: this chapter file is based on the table of contents and the structure of the book, not on the full text. Check the book before you quote a number or a claim.
+
 ## Core Idea
 Hedge funds (HFs) are **not an asset class**. HF returns have large exposure to *dynamic factors* — especially **volatility risk**. After taking these nonlinear risks into account, the average HF is unlikely to add value. HF fees are high but, contrary to popular perception, only a *minority* of HF manager compensation comes from incentive fees — most comes from fixed management fees on AUM. The 2007 "quant meltdown" shows how crowded dynamic-factor strategies can fail spectacularly with no obvious market trigger.
 

@@ -10,12 +10,11 @@
 #   scripts/sync-vscode.sh [--target workspace|user|both] [--workspace PATH]
 #                          [--check] [--quiet] [--expose-subagents|--no-expose-subagents]
 #
-#   --target     Which scope to regenerate (default: user). The workspace
-#                .github layer is a symlink to ~/.copilot, so a second
-#                workspace copy would overwrite the user layer with paths
-#                that point back into the workspace.
-#   --workspace  Workspace root that owns .github/ and .vscode/
-#                (default: the parent of the repository, i.e. ~/Progetti).
+#   --target     Which scope to regenerate (default: user). Use one scope only:
+#                each scope is a native Copilot source, so two copies load
+#                every agent, skill and hook two times.
+#   --workspace  Workspace root that owns .github/ and .mcp.json
+#                (only for --target workspace|both).
 #   --check      Run the installer verification only; no writes.
 #   --quiet      Print nothing unless the run fails.
 
@@ -23,14 +22,13 @@ set -euo pipefail
 
 export PATH="/usr/local/bin:/usr/bin:/bin:${PATH:-}"
 
-REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-DEFAULT_WORKSPACE="$(cd -- "$REPO_ROOT/../.." && pwd)"
+REPO_ROOT="$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 STATE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/opencode-skills"
 LOG_FILE="$STATE_DIR/sync-vscode.log"
-PYTHON="${PYTHON:-/usr/bin/python3}"
+PYTHON="${PYTHON:-$(command -v python3 || echo /usr/bin/python3)}"
 
 target="user"
-workspace="${VSCODE_WORKSPACE:-$DEFAULT_WORKSPACE}"
+workspace="${VSCODE_WORKSPACE:-}"
 check=0
 quiet=0
 # Keep the specialist subagents in the agent picker. This matches the
@@ -47,10 +45,9 @@ Usage:
                          [--check] [--quiet]
                          [--expose-subagents | --no-expose-subagents]
 
-  --target     Which scope to regenerate (default: user; the workspace
-               .github layer is a symlink to ~/.copilot).
-  --workspace  Workspace root that owns .github/ and .vscode/
-               (default: the parent of the repository, i.e. ~/Progetti).
+  --target     Which scope to regenerate (default: user). Use one scope only.
+  --workspace  Workspace root that owns .github/ and .mcp.json
+               (only for --target workspace|both).
   --check      Run the installer verification only; no writes.
   --quiet      Print nothing unless the run fails.
   --expose-subagents     List the specialist subagents in the agent picker
@@ -79,8 +76,13 @@ case "$target" in
     *) echo "sync-vscode: invalid --target: $target" >&2; exit 2 ;;
 esac
 
-# With the workspace layer symlinked into ~/.copilot, a workspace write lands
-# in the same files but with paths that point back into the workspace.
+if [[ "$target" != "user" && -z "$workspace" ]]; then
+    echo "sync-vscode: --target $target needs --workspace PATH" >&2
+    exit 2
+fi
+
+# A workspace .github linked to ~/.copilot is the same folder as the user
+# layer: a workspace write would put workspace paths into the user layer.
 if [[ "$target" != "user" ]]; then
     linked=()
     if [[ -L "$workspace/.github" ]]; then
@@ -93,16 +95,21 @@ if [[ "$target" != "user" ]]; then
         done
     fi
     if (( ${#linked[@]} )); then
-        printf 'sync-vscode: workspace layer is symlinked into the user layer:\n' >&2
+        printf 'sync-vscode: the workspace layer is a link to another layer:\n' >&2
         printf '  %s\n' "${linked[@]}" >&2
-        echo "sync-vscode: use --target user, or the workspace write overwrites the user layer" >&2
+        echo "sync-vscode: remove the links and keep one scope (--target user is recommended)" >&2
         exit 2
     fi
 fi
 
-installer_args=(--target "$target" --workspace "$workspace")
+installer_args=(--target "$target")
+if [[ -n "$workspace" ]]; then
+    installer_args+=(--workspace "$workspace")
+fi
 if [[ "$expose_subagents" != "0" ]]; then
     installer_args+=(--expose-subagents)
+else
+    installer_args+=(--no-expose-subagents)
 fi
 
 if (( check )); then
@@ -130,7 +137,8 @@ if [[ -f "$stamp" ]] && [[ "$(<"$stamp")" == "$current" ]]; then
 fi
 
 set +e
-output="$("$PYTHON" "$REPO_ROOT/install-vscode.py" "${installer_args[@]}" --force 2>&1)"
+# No --force: generated files refresh by ownership; files of the user stay.
+output="$("$PYTHON" "$REPO_ROOT/install-vscode.py" "${installer_args[@]}" 2>&1)"
 status=$?
 set -e
 

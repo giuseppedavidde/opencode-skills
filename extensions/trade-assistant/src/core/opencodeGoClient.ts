@@ -10,6 +10,7 @@ import {
   mergeToolCallDeltas,
   parseAuthKey,
   parseCompletionJson,
+  parseModelProtocols,
   parseSseLine,
   splitSseLines,
   type OpenAiMessage,
@@ -160,6 +161,17 @@ export class OpencodeGoClient {
       }
     }
     return ids;
+  }
+
+  /** Protocols of every model (`chat-completions`, `generate-content`, ...) from `GET /models`. */
+  async listModelProtocols(): Promise<Map<string, string[]>> {
+    const url = `${this.baseUrl}${MODELS_PATH}`;
+    const response = await this.request(url, { method: 'GET' }, undefined, true);
+    try {
+      return parseModelProtocols(await response.json());
+    } catch {
+      throw new Error('OpenCode Go returned a models response that is not JSON.');
+    }
   }
 
   async streamChat(input: StreamChatInput): Promise<StreamChatResult> {

@@ -13,7 +13,7 @@ Money management is the art of keeping ruin risk acceptable while maximizing pro
 The Turtle innovation: size positions so that **1 ATR of price movement = 1% of account equity** across ALL markets.
 
 - **N** = ATR in dollar terms for a specific market
-- **Unit size** = (1% of account) ÷ N
+- **Unit size** = (1% of account) ÷ (N × dollars per point), with N in price points
 - Example: $1M account, 1% = $10,000. If gold ATR = $1,000 per contract → unit = 10 contracts
 - Volatile markets get SMALLER positions automatically — no need to guess
 

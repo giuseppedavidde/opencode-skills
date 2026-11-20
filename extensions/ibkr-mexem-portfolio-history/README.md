@@ -542,7 +542,7 @@ The Flex token is **never** part of the chat context. The context builder has no
 | `ibkrHistory.chat.maxContextTrades` | `400` | Maximum trades embedded as CSV. The statistics, the monthly table and the symbol table always cover every row in range |
 | `ibkrHistory.chat.maxHistoryMessages` | `20` | Maximum user and assistant messages kept. The oldest turns go first; the portfolio context is always sent |
 | `ibkrHistory.chat.marketData` | `true` | Append the live option prices of the open option positions to the context. Turn it off to send the Flex dataset only |
-| `ibkrHistory.chat.marketDataCommand` | `/home/giuseppe/.local/share/opencode/trading-mcp-venv/bin/python -m trading_mcp.trading_cli` | Command template of the local trading CLI. The extension appends `fetch options <TICKER> --expiry <DATE>` and runs the parts without a shell. A leading `~/` expands to the home directory |
+| `ibkrHistory.chat.marketDataCommand` | `~/.local/share/opencode/trading-mcp-venv/bin/python -m trading_mcp.trading_cli` | Command template of the local trading CLI. The extension appends `fetch options <TICKER> --expiry <DATE>` and runs the parts without a shell. A leading `~/` expands to the home directory |
 
 ### 8.5 What the context contains
 

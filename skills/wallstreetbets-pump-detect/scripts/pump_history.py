@@ -16,7 +16,19 @@ from pydantic import BaseModel
 import reddit_client
 
 
-HISTORY_FILE = os.path.expanduser("~/Progetti/Github/Data_for_Analysis/pump_history.jsonl")
+def _default_history_file() -> str:
+    """Return the history file: $OPENCODE_SKILLS_DATA_DIR, the legacy data repo, then the XDG data folder."""
+    override = os.environ.get("OPENCODE_SKILLS_DATA_DIR")
+    if override:
+        return os.path.join(os.path.expanduser(override), "pump_history.jsonl")
+    legacy = os.path.expanduser("~/Progetti/Github/Data_for_Analysis")
+    if os.path.isdir(legacy):
+        return os.path.join(legacy, "pump_history.jsonl")
+    base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+    return os.path.join(base, "opencode-skills", "pump_history.jsonl")
+
+
+HISTORY_FILE = _default_history_file()
 REDDIT_USER_AGENT = "wsb-pump-detect/1.0 (history collection)"
 WSB_HOT_JSON_URL = "https://www.reddit.com/r/wallstreetbets/hot.json?limit=100"
 

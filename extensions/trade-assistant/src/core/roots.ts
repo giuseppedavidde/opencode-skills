@@ -53,9 +53,15 @@ export function resolveRepoRoot(candidates: RepoRootCandidates): RepoRootResolut
     }
   }
 
-  const homeCandidate = path.join(candidates.homeDir, 'Progetti', 'Github', 'opencode-skills');
-  if (isTradingRepo(homeCandidate, candidates.exists)) {
-    return { root: homeCandidate, source: 'home' };
+  // install.sh creates this link on every machine; the Progetti path is the legacy layout.
+  const homeCandidates = [
+    path.join(candidates.homeDir, '.config', 'opencode', 'opencode-skills'),
+    path.join(candidates.homeDir, 'Progetti', 'Github', 'opencode-skills'),
+  ];
+  for (const homeCandidate of homeCandidates) {
+    if (isTradingRepo(homeCandidate, candidates.exists)) {
+      return { root: homeCandidate, source: 'home' };
+    }
   }
 
   return { root: path.resolve(candidates.extensionRoot), source: 'fallback' };

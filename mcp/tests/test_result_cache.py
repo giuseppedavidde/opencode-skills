@@ -1,22 +1,14 @@
-"""Unit tests for result_cache module."""
+"""Unit tests for the result cache (isolated in tmp_path, never the real cache)."""
 
 from __future__ import annotations
 
-import json
-import os
-import sys
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
-# Ensure the trading_mcp package is importable (editable install in venv)
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
-
-from trading_mcp.data.result_cache import (  # noqa: E402
-    CACHE_DIR,
-    CACHE_FILE,
+from trading_mcp.data import result_cache as rc
+from trading_mcp.data.result_cache import (
     MAX_ENTRIES,
     ResultCache,
     _canonicalize_params,
@@ -24,299 +16,225 @@ from trading_mcp.data.result_cache import (  # noqa: E402
     _json_safe,
     _make_key,
     _resolve_ttl,
-    result_cache,
+    is_cacheable,
 )
 
 
 @pytest.fixture(autouse=True)
-def _clean_cache():
-    """Pulisce la cache prima e dopo ogni test."""
-    result_cache.clear_all()
+def _isolated_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Point the module (and its singleton) at tmp_path for every test."""
+    monkeypatch.setattr(rc, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(rc, "CACHE_FILE", tmp_path / "result_cache.json")
+    rc.result_cache.clear_all()
     yield
-    result_cache.clear_all()
-    if CACHE_FILE.exists():
-        try:
-            CACHE_FILE.unlink()
-        except OSError:
-            pass
+    rc.result_cache.clear_all()
 
 
-# ── Unit: canonicalization ─────────────────────────────────────────
+@pytest.fixture()
+def cache() -> ResultCache:
+    return rc.result_cache
+
+
+# ── canonicalization ───────────────────────────────────────────────
 
 def test_canonicalize_excludes_verbose():
-    params = {"ticker": "AAPL", "verbose": True, "score": 75}
-    result = _canonicalize_params(params)
+    result = _canonicalize_params({"ticker": "AAPL", "verbose": True, "score": 75})
     assert "verbose" not in result
-    assert "ticker" in result
-    assert "score" in result
+    assert result == {"score": 75, "ticker": "AAPL"}
 
 
-def test_canonicalize_normalizes_fetch_news():
-    params = {"fetch_news": False, "ticker": "AAPL"}
-    result = _canonicalize_params(params)
-    assert result["fetch_news"] is True
+def test_canonicalize_keeps_fetch_news():
+    """DATA-18: fetch_news changes the answer, so it stays in the key."""
+    assert _canonicalize_params({"fetch_news": False})["fetch_news"] is False
 
 
-def test_canonicalize_removes_none():
-    params = {"a": None, "b": 42, "c": None}
-    result = _canonicalize_params(params)
-    assert "a" not in result
-    assert "c" not in result
-    assert result["b"] == 42
-
-
-def test_canonicalize_sorts_keys():
-    params = {"z": 1, "a": 2, "m": 3}
-    result = _canonicalize_params(params)
-    keys = list(result.keys())
-    assert keys == sorted(keys)
+def test_canonicalize_removes_none_and_sorts():
+    result = _canonicalize_params({"z": 1, "a": None, "m": 3})
+    assert list(result) == ["m", "z"]
 
 
 def test_json_safe_complex_types():
     assert _json_safe({"a": [1, 2]}) == {"a": [1, 2]}
-    assert _json_safe([1, "two", 3.0]) == [1, "two", 3.0]
     assert _json_safe(42) == 42
-    assert _json_safe(None) is None
-
-    class BadObj:
-        pass
-    result = _json_safe(BadObj())
-    assert isinstance(result, str)
+    assert isinstance(_json_safe(object()), str)
 
 
-# ── Unit: key generation ──────────────────────────────────────────
+# ── keys ───────────────────────────────────────────────────────────
 
-def test_make_key_is_stable():
-    key1 = _make_key("analyze_stock", "AAPL", {"fetch_news": True})
-    key2 = _make_key("analyze_stock", "AAPL", {"fetch_news": True})
-    assert key1 == key2
+def test_make_key_is_stable_and_normalizes_ticker():
+    assert _make_key("analyze_stock", "aapl", {"x": 1}) == _make_key("analyze_stock", "AAPL", {"x": 1})
 
 
-def test_make_key_differs_by_tool():
-    key1 = _make_key("analyze_stock", "AAPL", {})
-    key2 = _make_key("tsmom_signals", "AAPL", {})
-    assert key1 != key2
+def test_make_key_differs_by_tool_and_expiry():
+    assert _make_key("analyze_stock", "AAPL", {}) != _make_key("tsmom_signals", "AAPL", {})
+    assert _make_key("fetch_options_chain", "AAPL", {"expiry": "2025-09-19"}) != _make_key(
+        "fetch_options_chain", "AAPL", {"expiry": "2025-10-17"})
 
 
-def test_make_key_normalizes_ticker():
-    key1 = _make_key("analyze_stock", "aapl", {})
-    key2 = _make_key("analyze_stock", "AAPL", {})
-    assert key1 == key2
-
-
-def test_make_key_normalizes_fetch_news():
-    key1 = _make_key("analyze_stock", "AAPL", {"fetch_news": True})
-    key2 = _make_key("analyze_stock", "AAPL", {"fetch_news": False})
-    print(f"key1={key1} key2={key2}")
-    assert key1 == key2
+def test_make_key_separates_fetch_news():
+    assert _make_key("analyze_stock", "AAPL", {"fetch_news": True}) != _make_key(
+        "analyze_stock", "AAPL", {"fetch_news": False})
 
 
 def test_make_key_ignores_verbose():
-    key1 = _make_key("analyze_stock", "AAPL", {"verbose": True})
-    key2 = _make_key("analyze_stock", "AAPL", {"verbose": False})
-    assert key1 == key2
+    assert _make_key("analyze_stock", "AAPL", {"verbose": True}) == _make_key(
+        "analyze_stock", "AAPL", {"verbose": False})
 
 
-def test_make_key_includes_expiry():
-    key1 = _make_key("fetch_options_chain", "AAPL", {"expiry": "2025-09-19"})
-    key2 = _make_key("fetch_options_chain", "AAPL", {"expiry": "2025-10-17"})
-    assert key1 != key2
+def test_new_session_rotates_the_key():
+    """DATA-10: the key follows the exchange session, not the UTC date."""
+    assert _make_key("tsmom_signals", "AAPL", {}, session="2026-11-19") != _make_key(
+        "tsmom_signals", "AAPL", {}, session="2026-11-20")
 
 
-# ── Unit: TTL resolution ──────────────────────────────────────────
+# ── TTLs ───────────────────────────────────────────────────────────
 
 def test_resolve_ttl_fixed():
     assert _resolve_ttl("scan_market") == 30 * 60
-    assert _resolve_ttl("analyze_stock") == 4 * 3600
+    assert _resolve_ttl("analyze_stock") == 15 * 60
+    assert _resolve_ttl("analyze_options") == 60
 
 
-def test_resolve_ttl_eod():
-    seconds = _resolve_ttl("bali_signals")
-    assert 1 <= seconds <= 86400
+def test_session_ttl_ends_at_the_next_bar():
+    seconds = _resolve_ttl("tsmom_signals", "AAPL")
+    assert 60 <= seconds <= 86400
 
 
 def test_eod_seconds_positive():
-    seconds = _eod_seconds()
-    assert seconds > 0
-    assert seconds <= 86400
+    assert 0 < _eod_seconds() <= 86400
 
 
-# ── Integration: set/get hit ──────────────────────────────────────
+# ── set / get ──────────────────────────────────────────────────────
 
-def test_set_and_get():
-    params = {"period": "1y"}
-    result_cache.set("bali_signals", "AAPL", params, {"score": 75})
-    cached = result_cache.get("bali_signals", "AAPL", params)
-    assert cached is not None
-    assert cached["score"] == 75
-
-
-def test_get_miss_unknown_key():
-    cached = result_cache.get("analyze_stock", "MSFT", {})
-    assert cached is None
+def test_set_and_get_with_metadata(cache: ResultCache):
+    assert cache.set("bali_signals", "AAPL", {"period": "1y"}, {"score": 75})
+    hit = cache.get("bali_signals", "AAPL", {"period": "1y"})
+    assert hit["score"] == 75
+    assert hit["cached"] is True
+    assert hit["cache_age_s"] >= 0
+    assert hit["cached_at"].endswith("+00:00")
 
 
-def test_get_normalized_fetch_news():
-    params_false = {"fetch_news": False}
-    params_true = {"fetch_news": True}
-    result_cache.set("analyze_stock", "AAPL", params_false, {"verdict": "Buy"})
-    cached = result_cache.get("analyze_stock", "AAPL", params_true)
-    assert cached is not None
-    assert cached["verdict"] == "Buy"
+def test_hit_is_a_deep_copy(cache: ResultCache):
+    cache.set("scan_market", "BATCH", {}, {"results": [{"ticker": "A"}]})
+    hit = cache.get("scan_market", "BATCH", {})
+    hit["results"][0]["ticker"] = "MUTATED"
+    assert cache.get("scan_market", "BATCH", {})["results"][0]["ticker"] == "A"
 
 
-def test_get_normalized_verbose():
-    result_cache.set("analyze_stock", "AAPL", {"verbose": True}, {"verdict": "Buy"})
-    cached = result_cache.get("analyze_stock", "AAPL", {"verbose": False})
-    assert cached is not None
-    assert cached["verdict"] == "Buy"
+def test_get_miss_unknown_key(cache: ResultCache):
+    assert cache.get("analyze_stock", "MSFT", {}) is None
 
 
-# ── Integration: TTL expiration ───────────────────────────────────
-
-def test_ttl_expired(monkeypatch):
-    """Verifica che un TTL scaduto restituisca None."""
-    params = {}
-    result_cache.set("fetch_options_chain", "AAPL", params, {"chain": "data"})
-
-    # Simula il passare del tempo: sposta ts_created nel passato
-    for key, entry in list(result_cache._entries.items()):
-        entry.ts_created = time.time() - 3600  # 1h fa
-        entry.ttl_seconds = 1  # TTL di 1 secondo
-
-    cached = result_cache.get("fetch_options_chain", "AAPL", params)
-    assert cached is None
+def test_fetch_news_false_never_answers_fetch_news_true(cache: ResultCache):
+    cache.set("analyze_stock", "AAPL", {"fetch_news": False}, {"verdict": "Buy"})
+    assert cache.get("analyze_stock", "AAPL", {"fetch_news": True}) is None
+    assert cache.get("analyze_stock", "AAPL", {"fetch_news": False})["verdict"] == "Buy"
 
 
-# ── Integration: LRU eviction ─────────────────────────────────────
+def test_verbose_does_not_split_entries(cache: ResultCache):
+    cache.set("analyze_stock", "AAPL", {"verbose": True}, {"verdict": "Buy"})
+    assert cache.get("analyze_stock", "AAPL", {"verbose": False})["verdict"] == "Buy"
 
-def test_lru_eviction():
-    """Inserisci piu' di MAX_ENTRIES entry con payload piccoli."""
+
+@pytest.mark.parametrize("payload", [
+    {"degraded": True, "results": []},
+    {"error": "boom"},
+    {"error": None, "error_kind": "blocking"},
+])
+def test_degraded_and_error_answers_are_never_stored(cache: ResultCache, payload: dict):
+    assert not is_cacheable(payload)
+    assert cache.set("scan_market", "BATCH", {}, payload) is False
+    assert cache.get("scan_market", "BATCH", {}) is None
+    assert cache.get_stats()["scan_market"]["refused"] == 1
+
+
+def test_cache_metadata_is_not_stored_twice(cache: ResultCache):
+    cache.set("analyze_stock", "AAPL", {}, {"x": 1, "cached": True, "cache_age_s": 99})
+    stored = next(iter(cache._entries.values())).payload
+    assert "cached" not in stored and "cache_age_s" not in stored
+
+
+def test_ttl_expired(cache: ResultCache):
+    cache.set("fetch_options_chain", "AAPL", {}, {"chain": "data"})
+    for entry in cache._entries.values():
+        entry.ts_created = time.time() - 3600
+        entry.ttl_seconds = 1
+    assert cache.get("fetch_options_chain", "AAPL", {}) is None
+
+
+def test_ttl_override(cache: ResultCache):
+    cache.set("analyze_stock", "AAPL", {}, {"score": 95}, ttl_override=10)
+    assert cache.get("analyze_stock", "AAPL", {}) is not None
+    for entry in cache._entries.values():
+        entry.ts_created = time.time() - 20
+    assert cache.get("analyze_stock", "AAPL", {}) is None
+
+
+def test_invalidate_by_ticker(cache: ResultCache):
+    cache.set("analyze_stock", "AAPL", {}, {"a": 1})
+    cache.set("analyze_stock", "MSFT", {}, {"a": 2})
+    assert cache.invalidate(ticker="aapl") == 1
+    assert cache.get("analyze_stock", "AAPL", {}) is None
+    assert cache.get("analyze_stock", "MSFT", {}) is not None
+
+
+def test_lru_eviction(cache: ResultCache):
     start = time.time()
     for i in range(MAX_ENTRIES + 50):
-        ticker = f"TICKER{i:04d}"
-        params = {"id": i}
-        result_cache._entries[f"key_{i:04d}"] = type(
-            "FakeEntry", (),
-            {
-                "key": f"key_{i:04d}",
-                "ts_created": start - (MAX_ENTRIES + 50 - i),
-                "ttl_seconds": 3600,
-                "payload": {"data": i},
-                "last_access": start - (MAX_ENTRIES + 50 - i),
-            },
-        )()
-    result_cache._evict_lru()
-    assert len(result_cache._entries) <= MAX_ENTRIES
-    # Le entry piu' vecchie (last_access piu' basso) dovrebbero essere rimosse
-    remaining_keys = sorted(result_cache._entries.keys())
-    # key_0000 e' la piu' vecchia, dovrebbe essere stata rimossa
-    assert "key_0000" not in result_cache._entries
-    # key_0049 dovrebbe essere al limite di eviction
-    # Le ultime dovrebbero esserci
-    assert f"key_{MAX_ENTRIES + 49:04d}" in result_cache._entries
+        cache._entries[f"key_{i:04d}"] = rc.ResultCacheEntry(
+            key=f"key_{i:04d}", ts_created=start, ttl_seconds=3600,
+            payload={"data": i}, last_access=start - (MAX_ENTRIES + 50 - i),
+        )
+    cache._evict_lru()
+    assert len(cache._entries) == MAX_ENTRIES
+    assert "key_0000" not in cache._entries
+    assert f"key_{MAX_ENTRIES + 49:04d}" in cache._entries
 
 
-# ── Integration: persistenza su file ──────────────────────────────
+# ── persistence ────────────────────────────────────────────────────
 
-def test_persist_and_reload():
-    params = {"period": "1y"}
-    result_cache.set("bali_signals", "AAPL", params, {"score": 80})
-    # fix L2: writes are debounced now → flush explicitly before asserting.
-    result_cache._flush_pending()
-    assert CACHE_FILE.exists()
-
-    # Crea una nuova istanza che dovrebbe caricare da file
-    cache2 = ResultCache()
-    cached = cache2.get("bali_signals", "AAPL", params)
-    if cached is not None:
-        assert cached["score"] == 80
-    cache2.clear_all()
+def test_persist_and_reload(cache: ResultCache):
+    cache.set("bali_signals", "AAPL", {"period": "1y"}, {"score": 80})
+    cache._flush_pending()
+    assert rc.CACHE_FILE.exists()
+    assert rc.CACHE_FILE.stat().st_mode & 0o777 == 0o600
+    reloaded = ResultCache()
+    hit = reloaded.get("bali_signals", "AAPL", {"period": "1y"})
+    assert hit is not None
+    assert hit["score"] == 80
 
 
-# ── Integration: file corrotto → recovery ────────────────────────
+def test_debounce_timer_rearms_after_flush(cache: ResultCache, monkeypatch: pytest.MonkeyPatch):
+    """DATA-18: writes after the first flush still reach the disk."""
+    monkeypatch.setattr(rc, "_SAVE_DEBOUNCE_SECONDS", 0.05)
+    cache.set("bali_signals", "AAA", {}, {"n": 1})
+    time.sleep(0.4)
+    cache.set("bali_signals", "BBB", {}, {"n": 2})
+    time.sleep(0.4)
+    reloaded = ResultCache()
+    assert reloaded.get("bali_signals", "AAA", {}) is not None
+    assert reloaded.get("bali_signals", "BBB", {}) is not None
 
-def test_corrupted_file_recovery():
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    CACHE_FILE.write_text("{this is not valid json!!!", encoding="utf-8")
-    cache = ResultCache()
-    assert len(cache._entries) == 0
+
+def test_corrupted_file_recovery(cache: ResultCache):
+    rc.CACHE_FILE.write_text("{this is not valid json!!!", encoding="utf-8")
+    rc.CACHE_FILE.chmod(0o600)
+    assert len(ResultCache()._entries) == 0
     cache.clear_all()
-    assert not CACHE_FILE.exists()
+    assert not rc.CACHE_FILE.exists()
 
 
-# ── Integration: stats ────────────────────────────────────────────
-
-def test_stats_hit_miss():
-    result_cache.clear_all()
-    params = {}
-    result_cache.set("analyze_stock", "AAPL", params, {"score": 90})
-    _ = result_cache.get("analyze_stock", "AAPL", params)  # hit
-    _ = result_cache.get("analyze_stock", "MSFT", params)  # miss
-
-    stats = result_cache.get_stats()
-    assert "analyze_stock" in stats
-    assert stats["analyze_stock"]["hits"] == 1
-    assert stats["analyze_stock"]["misses"] == 1
-    assert stats["analyze_stock"]["hit_rate"] == 50.0
+def test_foreign_file_is_ignored(cache: ResultCache, monkeypatch: pytest.MonkeyPatch):
+    cache.set("bali_signals", "AAPL", {}, {"score": 1})
+    cache._flush_pending()
+    rc.CACHE_FILE.chmod(0o666)
+    assert ResultCache().get("bali_signals", "AAPL", {}) is None
 
 
-# ── Integration: day rotation ─────────────────────────────────────
-
-def test_day_rotation_new_key():
-    """Entry di un giorno diverso generano chiavi diverse."""
-    import hashlib
-    import json as json_mod
-
-    key_today = _make_key("analyze_stock", "AAPL", {})
-    # Verifica che la chiave contenga la trade_date di oggi
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    assert today in key_today or True  # sha256, non direttamente leggibile
-
-
-# ── Integration: ttl_override ─────────────────────────────────────
-
-def test_ttl_override():
-    params = {}
-    result_cache.set("analyze_stock", "AAPL", params, {"score": 95}, ttl_override=10)
-    cached = result_cache.get("analyze_stock", "AAPL", params)
-    assert cached is not None
-
-    # Simula scadenza
-    for key, entry in list(result_cache._entries.items()):
-        entry.ts_created = time.time() - 20
-        entry.ttl_seconds = 10
-
-    cached = result_cache.get("analyze_stock", "AAPL", params)
-    assert cached is None
-
-
-# ── Integration: large payload ────────────────────────────────────
-
-def test_large_payload():
-    """Payload grandi (simulano scan_market con 15 risultati)."""
-    params = {"universe": "us_large", "min_score": 50, "top_n": 15}
-    large = {
-        "universe": "us_large",
-        "timestamp": "2025-08-09T12:00:00",
-        "tickers_scanned": 500,
-        "tickers_passed": 15,
-        "results": [
-            {
-                "ticker": f"STOCK{i:03d}",
-                "final_score": 90 - i,
-                "dimensions": [{"name": "wyckoff", "score": 80}],
-                "indicators": {"rsi": 55, "macd": 0.5},
-            }
-            for i in range(15)
-        ],
-    }
-    result_cache.set("scan_market", "BATCH", params, large)
-    cached = result_cache.get("scan_market", "BATCH", params)
-    assert cached is not None
-    assert cached["tickers_scanned"] == 500
-    assert len(cached["results"]) == 15
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+def test_stats_hit_miss(cache: ResultCache):
+    cache.set("analyze_stock", "AAPL", {}, {"score": 90})
+    cache.get("analyze_stock", "AAPL", {})
+    cache.get("analyze_stock", "MSFT", {})
+    stats = cache.get_stats()["analyze_stock"]
+    assert (stats["hits"], stats["misses"], stats["hit_rate"]) == (1, 1, 50.0)

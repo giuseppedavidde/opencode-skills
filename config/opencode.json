@@ -70,19 +70,19 @@
   },
   "plugins": [
     {
-      "package": "/home/giuseppe/Progetti/Github/opencode-skills/plugins/auto-headroom"
+      "package": "{env:HOME}/.config/opencode/opencode-skills/plugins/auto-headroom"
     },
     {
-      "package": "/home/giuseppe/Progetti/Github/opencode-skills/plugins/graphify"
+      "package": "{env:HOME}/.config/opencode/opencode-skills/plugins/graphify"
     },
     {
-      "package": "/home/giuseppe/Progetti/Github/opencode-skills/plugins/routing-stats"
+      "package": "{env:HOME}/.config/opencode/opencode-skills/plugins/routing-stats"
     },
     {
-      "package": "/home/giuseppe/Progetti/Github/opencode-skills/plugins/tokens-per-second"
+      "package": "{env:HOME}/.config/opencode/opencode-skills/plugins/tokens-per-second"
     },
     {
-      "package": "/home/giuseppe/Progetti/Github/opencode-skills/plugins/verifica-gate"
+      "package": "{env:HOME}/.config/opencode/opencode-skills/plugins/verifica-gate"
     }
   ],
   "permission": {
@@ -112,17 +112,17 @@
     "trading": {
       "type": "local",
       "command": [
-        "/home/giuseppe/.local/share/opencode/trading-mcp-venv/bin/trading-mcp",
+        "{env:HOME}/.local/share/opencode/trading-mcp-venv/bin/trading-mcp",
         "--skills-dir",
-        "/home/giuseppe/.config/opencode/skills",
+        "{env:HOME}/.config/opencode/skills",
         "--tickers-dir",
-        "/home/giuseppe/.config/opencode/skills/market-accumulation-scanner/data"
+        "{env:HOME}/.config/opencode/skills/market-accumulation-scanner/data"
       ],
       "environment": {
-        "TRADING_SKILLS_DIR": "/home/giuseppe/.config/opencode/skills",
-        "TRADING_TICKERS_DIR": "/home/giuseppe/.config/opencode/skills/market-accumulation-scanner/data",
-        "TRADING_CACHE_DIR": "/tmp/opencode/options_cache",
-        "TRADING_DATA_CACHE_DIR": "/home/giuseppe/.cache/trading_mcp/data"
+        "TRADING_SKILLS_DIR": "{env:HOME}/.config/opencode/skills",
+        "TRADING_TICKERS_DIR": "{env:HOME}/.config/opencode/skills/market-accumulation-scanner/data",
+        "TRADING_CACHE_DIR": "{env:HOME}/.cache/trading_mcp/options",
+        "TRADING_DATA_CACHE_DIR": "{env:HOME}/.cache/trading_mcp/data"
       },
       "enabled": true
     },
@@ -139,7 +139,7 @@
       "browse": {
         "type": "local",
         "command": [
-          "/home/giuseppe/.local/bin/browse",
+          "{env:HOME}/.local/bin/browse",
           "mcp"
         ],
         "cwd": "~",
@@ -149,6 +149,5 @@
         }
       }
     }
-  },
-  "shell": "/bin/zsh"
+  }
 }

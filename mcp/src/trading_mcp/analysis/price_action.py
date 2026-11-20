@@ -1,122 +1,110 @@
-"""Price action analysis: RSI, EMA slope, VPA net, rally velocity, exhaustion."""
+"""Price action analysis: RSI, EMA slope, VPA net, velocity (one 0-100 scale, 50 = neutral)."""
 
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
+
+from trading_mcp.analysis.ta_core import rsi_last
 
 # Annualised pace a moving average must clear before it counts as a trend.
 _MA_SLOPE_ANNUAL_THRESHOLD = 0.10
 
 
 def compute_price_action(hist: pd.DataFrame) -> tuple[int, str]:
-    """Compute price action score (0-100).
+    """Price action score (0-100, 50 = neutral; mirrored, unvalidated rules).
 
-    Evaluates RSI, 25ema slope, VPA bar-by-bar net, rally velocity check,
-    and consecutive green candle exhaustion.
+    - Wilder RSI(14): < 30 +10, 30-40 +5, 60-70 -5, > 70 -10 (contrarian).
+    - EMA(25) over 5 bars: rising (> +0.1%) +10, falling (< -0.1%) -10.
+    - VPA net of the last 20 bars (high-volume up bars minus high-volume down
+      bars; low-volume wide bars count against their direction): > 2 +10, < -2 -10.
+    - 15-bar velocity: a rise above 20% / 30% / 50% scores -10 / -15 / -20
+      (vertical extension); a fall below -20% / -30% / -50% scores +10 / +15 / +20.
+      A gradual move (|change| < 10%) on rising volume (5-bar mean > 1.2x the
+      20-bar mean) scores +10 when up and -10 when down.
+
+    The streak rule lives in :func:`~trading_mcp.analysis.indicators.compute_psychology_score`.
     """
-    if hist.empty or len(hist) < 20:
-        return 10, "Insufficient data"
+    if hist.empty or len(hist) < 30:
+        return 50, "Insufficient data"
 
-    score = 10
-    details = []
+    score = 50.0
+    details: list[str] = []
+    close = hist["Close"].astype(float)
 
-    if len(hist) >= 15:
-        delta = hist["Close"].diff()
-        up = delta.clip(lower=0)
-        down = -delta.clip(upper=0)
-        ma_up = up.ewm(com=13).mean()
-        ma_down = down.ewm(com=13).mean()
-        rsi = 100.0 - (100.0 / (1.0 + ma_up / ma_down))
-        rsi_val = float(rsi.iloc[-1])
-        if 40 <= rsi_val <= 60:
-            score += 10
-            details.append(f"RSI {rsi_val:.0f} (neutral) (+10)")
-        elif 30 <= rsi_val < 40:
-            score += 20
-            details.append(f"RSI {rsi_val:.0f} (oversold zone) (+20)")
-        elif rsi_val < 30:
-            score += 10
-            details.append(f"RSI {rsi_val:.0f} (extreme) (+10)")
+    rsi_val = rsi_last(close)
+    if rsi_val is not None:
+        for low, high, points in ((0, 30, 10), (30, 40, 5), (60, 70, -5), (70, 101, -10)):
+            if low <= rsi_val < high:
+                score += points
+                details.append(f"RSI {rsi_val:.0f} ({points:+d})")
+                break
         else:
-            details.append(f"RSI {rsi_val:.0f} (+0)")
+            details.append(f"RSI {rsi_val:.0f} (neutral)")
 
-    hist_copy = hist.copy()
-    hist_copy["ema25"] = hist_copy["Close"].ewm(span=25).mean()
-    if len(hist) >= 30:
-        slope = (float(hist_copy["ema25"].iloc[-1]) - float(hist_copy["ema25"].iloc[-5])) / float(hist_copy["ema25"].iloc[-5])
-        if slope > 0:
-            score += 15
-            details.append("25ema rising (+15)")
-        else:
-            details.append("25ema flat/falling (+0)")
+    ema25 = close.ewm(span=25, adjust=False).mean()
+    slope = float(ema25.iloc[-1]) / float(ema25.iloc[-5]) - 1.0 if float(ema25.iloc[-5]) else 0.0
+    if slope > 0.001:
+        score += 10
+        details.append(f"25ema rising {slope:+.2%} (+10)")
+    elif slope < -0.001:
+        score -= 10
+        details.append(f"25ema falling {slope:+.2%} (-10)")
 
-    last_20 = hist.tail(20)
+    last_20 = hist.tail(21)
+    vol = last_20["Volume"].to_numpy(dtype=float)
+    closes = last_20["Close"].to_numpy(dtype=float)
+    ranges = (last_20["High"] - last_20["Low"]).to_numpy(dtype=float)
+    avg = float(vol[1:].mean()) if len(vol) > 1 else 0.0
     vpa_net = 0
     for i in range(1, len(last_20)):
-        bar = last_20.iloc[i]
-        prev = last_20.iloc[i - 1]
-        vol = float(bar["Volume"])
-        avg = float(last_20["Volume"].mean())
-        vr = vol / avg if avg > 0 else 1.0
-        up_c = float(bar["Close"]) > float(prev["Close"])
-        wide = (float(bar["High"]) - float(bar["Low"])) > (float(prev["High"]) - float(prev["Low"])) * 1.2
-        high_vol = vr > 1.5
-        if up_c and high_vol:
-            vpa_net += 1
-        elif not up_c and high_vol:
-            vpa_net -= 1
-        if up_c and vr < 0.6 and wide:
-            vpa_net -= 1
-        elif not up_c and vr < 0.6 and wide:
-            vpa_net += 1
-
+        vr = vol[i] / avg if avg > 0 else 1.0
+        up = closes[i] > closes[i - 1]
+        down = closes[i] < closes[i - 1]
+        wide = ranges[i] > ranges[i - 1] * 1.2
+        if vr > 1.5:
+            vpa_net += 1 if up else -1 if down else 0
+        elif vr < 0.6 and wide:
+            vpa_net += -1 if up else 1 if down else 0
     if vpa_net > 2:
-        score += 20
-        details.append(f"VPA bullish ({vpa_net}) (+20)")
-    elif vpa_net > 0:
-        details.append(f"VPA mildly bullish ({vpa_net}) (+0)")
+        score += 10
+        details.append(f"VPA net {vpa_net:+d} (+10)")
+    elif vpa_net < -2:
+        score -= 10
+        details.append(f"VPA net {vpa_net:+d} (-10)")
 
-    if len(hist) >= 30:
-        close_15d_ago = float(hist["Close"].iloc[-16])
-        close_now = float(hist["Close"].iloc[-1])
-        change_15d = (close_now / close_15d_ago - 1) * 100
-
-        if change_15d > 50:
-            score = max(score - 50, 0)
-            details.append(f"WARN: Rally +{change_15d:.0f}% in 15d (vertical, -50)")
-        elif change_15d > 30:
-            score = max(score - 35, 0)
-            details.append(f"WARN: Rally +{change_15d:.0f}% in 15d (exhaustion risk -35)")
-        elif change_15d > 20:
-            score = max(score - 20, 0)
-            details.append(f"WARN: Rally +{change_15d:.0f}% in 15d (extension -20)")
-        elif -3 < change_15d < 10:
+    change_15d = (float(close.iloc[-1]) / float(close.iloc[-16]) - 1.0) * 100.0
+    for limit, points in ((50, 20), (30, 15), (20, 10)):
+        if change_15d > limit:
+            score -= points
+            details.append(f"WARN: rally {change_15d:+.0f}% in 15d (extension -{points})")
+            break
+        if change_15d < -limit:
+            score += points
+            details.append(f"WARN: drop {change_15d:+.0f}% in 15d (capitulation +{points})")
+            break
+    else:
+        if abs(change_15d) < 10:
             vol_lately = float(hist.tail(5)["Volume"].mean())
             vol_20d = float(hist.tail(20)["Volume"].mean())
-            if vol_lately > vol_20d * 1.2 and change_15d > 0:
-                score += 15
-                details.append(f"Gradual +{change_15d:.0f}% on rising vol (+15)")
+            if vol_20d > 0 and vol_lately > vol_20d * 1.2:
+                if change_15d > 0:
+                    score += 10
+                    details.append(f"Gradual {change_15d:+.0f}% on rising volume (+10)")
+                elif change_15d < 0:
+                    score -= 10
+                    details.append(f"Gradual {change_15d:+.0f}% on rising volume (-10)")
 
-        if len(hist) >= 10:
-            closes = hist.tail(10)["Close"].values
-            green_streak = 0
-            for j in range(1, len(closes)):
-                if closes[j] > closes[j - 1]:
-                    green_streak += 1
-                else:
-                    green_streak = 0
-            if green_streak >= 5:
-                score = max(score - 10, 0)
-                details.append(f"{green_streak} consecutive green candles (-10)")
-
-    return min(score, 100), " | ".join(details)
+    if not details:
+        details.append("Price action neutral")
+    return int(round(min(100.0, max(0.0, score)))), " | ".join(details)
 
 
 def compute_multiframe_trend(hist: pd.DataFrame) -> tuple[int, str]:
-    """Multi-Timeframe Analysis (VPA Coulling).
+    """Multi-Timeframe Analysis (VPA Coulling), 50 = neutral.
 
     Aligns trend across 3 timeframes: fast (20d), primary (50d), slow (200d).
+    All available TFs up: +30 (+40 with all three); mostly up: +15; the
+    bearish cases mirror them.
     """
     if hist.empty or len(hist) < 50:
         return 50, "Insufficient data for MTF"
@@ -155,22 +143,20 @@ def compute_multiframe_trend(hist: pd.DataFrame) -> tuple[int, str]:
     down_count = trends.count("down")
 
     if up_count == len(trends) and len(trends) >= 2:
-        score += 30
-        details.append(f"All TFs bullish ({'/'.join(trends)}) (+30)")
+        points = 40 if len(trends) == 3 else 30
+        score += points
+        details.append(f"All TFs bullish ({'/'.join(trends)}) (+{points})")
     elif up_count >= 2 and down_count == 0:
         score += 15
         details.append(f"Mostly bullish ({'/'.join(trends)}) (+15)")
     elif down_count == len(trends) and len(trends) >= 2:
-        score -= 25
-        details.append(f"All TFs bearish ({'/'.join(trends)}) (-25)")
+        points = 40 if len(trends) == 3 else 30
+        score -= points
+        details.append(f"All TFs bearish ({'/'.join(trends)}) (-{points})")
     elif down_count >= 2 and up_count == 0:
         score -= 15
         details.append(f"Mostly bearish ({'/'.join(trends)}) (-15)")
     else:
         details.append(f"Mixed TFs ({'/'.join(trends)}) (+0)")
-
-    if slow == "up" and fast == "up" and primary == "up":
-        score += 10
-        details.append("Triple alignment (Coulling) (+10)")
 
     return min(100, max(0, score)), " | ".join(details)

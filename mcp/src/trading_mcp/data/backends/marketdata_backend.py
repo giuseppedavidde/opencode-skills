@@ -4,7 +4,7 @@ REST API (``api.marketdata.app``), Bearer token (``MARKETDATA_API_KEY``).
 Free tier is roughly 100 requests/day, so caching dominates. Chains are
 returned as column-oriented arrays which are zipped into records.
 
-Availability = key present.
+Availability = key present. The per-row ``updated`` epoch is the quote time.
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ from trading_mcp.data.backends.rest import (
     RestOptionsBackend,
     build_options_chain,
     date_str,
+    epoch_time,
     normalize_right,
     parse_expiry,
     to_float,
@@ -121,4 +122,5 @@ class MarketDataBackend(RestOptionsBackend):
             gamma=to_float(row.get("gamma")),
             theta=to_float(row.get("theta")),
             vega=to_float(row.get("vega")),
+            quote_time=epoch_time(row.get("updated")),
         )

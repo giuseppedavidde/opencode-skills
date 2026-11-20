@@ -17,8 +17,10 @@ class TestDebtToEquityScale:
     def test_percentage_is_normalised(self) -> None:
         assert _de_ratio({"debtToEquity": 150.0}) == pytest.approx(1.5)
 
-    def test_plain_ratio_is_kept(self) -> None:
-        assert _de_ratio({"debtToEquity": 1.5}) == pytest.approx(1.5)
+    def test_small_percentage_is_not_read_as_a_ratio(self) -> None:
+        """DATA-12: yfinance 8.0 means 0.08x, not 8x (the info dict is always percent)."""
+        assert _de_ratio({"debtToEquity": 8.0}) == pytest.approx(0.08)
+        assert _de_ratio({"debtToEquity": 1.5}) == pytest.approx(0.015)
 
     def test_missing_returns_none(self) -> None:
         assert _de_ratio({}) is None

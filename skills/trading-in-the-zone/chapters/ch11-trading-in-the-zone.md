@@ -9,14 +9,14 @@ Trading is a *pattern-recognition numbers game*. The path from struggling trader
   2. **Subjective stage** — use everything you've learned, while monitoring susceptibility to self-valuation errors.
   3. **Intuitive stage** — black-belt level; intuition is spontaneous, can't be forced, only enabled by setting up the right state of mind.
 - **Self-discipline (redefined)**: a mental *technique* to redirect focus toward your goal when a conflicting belief pulls against it — not a personality trait.
-- **The seven principles of consistency** ("I am a consistent winner because…"):
-  1. I objectively identify my edges.
-  2. I predefine the risk of every trade.
-  3. I completely accept the risk or I am willing to let go of the trade.
-  4. I act on my edges without reservation or hesitation.
-  5. I pay myself as the market makes money available to me.
-  6. I continually monitor my susceptibility for making errors.
-  7. I understand the absolute necessity of these principles and never violate them.
+- **The seven principles of consistency** (paraphrase; the exact wording is in the book):
+  1. Define each edge with objective criteria.
+  2. Fix the risk of each trade before the entry.
+  3. Accept that risk fully, or do not take the trade.
+  4. Execute the edge without hesitation.
+  5. Take profits when the market offers them, with an exit plan written in advance.
+  6. Watch your own tendency to make errors.
+  7. Treat these principles as rules you never break.
 - **Casino exercise**: rigid edge variables + 20-trade sample + predefined risk + scaling-out profit plan → become the casino, not the gambler.
 - **Self-observation without judgment**: catch the error at the thought stage; never end with deep regret.
 

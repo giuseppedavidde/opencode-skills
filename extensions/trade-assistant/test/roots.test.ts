@@ -44,6 +44,23 @@ test('falls back to the home repository when no workspace is open', () => {
   assert.equal(result.root, REPO);
 });
 
+test('prefers the opencode link that install.sh creates on any machine', () => {
+  const anchor = path.join(path.sep, 'home', 'u', '.config', 'opencode', 'opencode-skills');
+  const result = resolveRepoRoot({
+    workspaceFolders: [],
+    homeDir: '/home/u',
+    extensionRoot: '/home/u/.vscode/extensions/x',
+    exists: existsFrom([
+      path.join(anchor, 'agents', 'trade.md'),
+      path.join(anchor, 'skills'),
+      path.join(REPO, 'agents', 'trade.md'),
+      path.join(REPO, 'skills'),
+    ]),
+  });
+  assert.equal(result.source, 'home');
+  assert.equal(result.root, anchor);
+});
+
 test('returns the extension root when nothing matches and reports fallback', () => {
   const result = resolveRepoRoot({
     workspaceFolders: [],

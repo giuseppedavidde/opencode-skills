@@ -1,4 +1,10 @@
-"""Market structure analysis via hierarchical ATR-adaptive extremes."""
+"""Market structure analysis via hierarchical swing extremes (0-100, 50 = neutral).
+
+Score map (documented, unvalidated): all four levels in uptrend 85, three or
+more up and none down 75, leaning up 60, mixed 50, and the mirror values for
+downtrends (40, 25, 15). A close more than 2% beyond the level-2 range adds
++-10 only when the structure agrees (continuation); otherwise it adds 0.
+"""
 
 from __future__ import annotations
 
@@ -79,7 +85,9 @@ def compute_market_structure(hist: pd.DataFrame) -> tuple[int, str]:
         score = 50
         details.append("Mixed/range-bound structure")
 
-    # Check if price is within level 2 structure
+    # Breaks of the level-2 range: continuation in the direction of the
+    # structure scores +-10; a break without trend support is unconfirmed
+    # and scores 0 (mirror rules, so a random walk has no drift).
     l2_highs = he.level_highs.get(2, [])
     l2_lows = he.level_lows.get(2, [])
 
@@ -89,33 +97,20 @@ def compute_market_structure(hist: pd.DataFrame) -> tuple[int, str]:
         bullish_structure = uptrend_count >= 3 and downtrend_count == 0
         bearish_structure = downtrend_count >= 3 and uptrend_count == 0
 
-        if l2_support < last_close < l2_resistance:
-            score = min(100, score + 5)
-            details.append(f"Price within L2 structure ({l2_support:.2f}-{l2_resistance:.2f}) (+5)")
-        elif last_close > l2_resistance * 1.02:
-            # A breakout out of an uptrend is continuation, not exhaustion.
-            # Penalising it systematically contradicts the momentum guard.
+        if last_close > l2_resistance * 1.02:
             if bullish_structure:
                 score = min(100, score + 10)
-                details.append(
-                    f"Breakout above L2 resistance ({l2_resistance:.2f}) in uptrend (continuation +10)"
-                )
+                details.append(f"Breakout above L2 resistance ({l2_resistance:.2f}) in uptrend (continuation +10)")
             else:
-                score = max(0, score - 10)
-                details.append(
-                    f"Breakout above L2 resistance ({l2_resistance:.2f}) without trend support (false breakout -10)"
-                )
+                details.append(f"Breakout above L2 resistance ({l2_resistance:.2f}) without trend support (unconfirmed, 0)")
         elif last_close < l2_support * 0.98:
             if bearish_structure:
-                score = min(100, score + 10)
-                details.append(
-                    f"Breakdown below L2 support ({l2_support:.2f}) in downtrend (continuation +10)"
-                )
-            else:
                 score = max(0, score - 10)
-                details.append(
-                    f"Breakdown below L2 support ({l2_support:.2f}) without trend support (-10)"
-                )
+                details.append(f"Breakdown below L2 support ({l2_support:.2f}) in downtrend (continuation -10)")
+            else:
+                details.append(f"Breakdown below L2 support ({l2_support:.2f}) without trend support (unconfirmed, 0)")
+        else:
+            details.append(f"Price within L2 structure ({l2_support:.2f}-{l2_resistance:.2f})")
 
     details.append(f"ATR={current_atr:.4f}")
     return min(100, max(0, score)), " | ".join(details)

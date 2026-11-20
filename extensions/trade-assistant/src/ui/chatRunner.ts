@@ -4,7 +4,13 @@ import * as vscode from 'vscode';
 import { McpClient, isUnsafeToolName, toChatTools, type ChatToolSpec, type ToolCallOutcome } from '../core/mcpClient';
 import type { SkillInfo } from '../core/capabilities';
 import { FILE_TOOL_NAMES, FileToolService } from '../core/fileTools';
-import { normalizeModelId, type OpenAiMessage, type OpenAiToolCall, type UsageInfo } from '../core/opencodeGo';
+import {
+  normalizeModelId,
+  supportsChatCompletions,
+  type OpenAiMessage,
+  type OpenAiToolCall,
+  type UsageInfo,
+} from '../core/opencodeGo';
 import { DEFAULT_TIMEOUT_MS, OpencodeGoClient, defaultAuthPath, readAuthKeyFromFile } from '../core/opencodeGoClient';
 import { isServerStale } from '../core/sync';
 import type { TranscriptFs, TranscriptRecord } from '../core/transcript';
@@ -215,6 +221,7 @@ export class ChatRunner implements vscode.Disposable {
   }));
   private cancellation: vscode.CancellationTokenSource | undefined;
   private goClient: OpencodeGoClient | undefined;
+  private protocolCache: { at: number; map: Map<string, string[]> } | undefined;
   private active = false;
 
   constructor(deps: ChatRunnerDeps) {
@@ -282,12 +289,12 @@ export class ChatRunner implements vscode.Disposable {
       const userRecord = this.persist(file, createRecord('user', sessionId, { text }));
       handlers.onRecord(userRecord);
 
-      const provider = this.resolveProvider();
+      const route = await this.resolveRoute();
       const tools = await this.loadTools(handlers);
       const turn =
-        provider === 'opencode-go'
+        route.provider === 'opencode-go'
           ? await this.runOpencodeGoTurn(file, sessionId, tools, cancellation, handlers)
-          : await this.runCopilotTurn(file, sessionId, tools, cancellation, handlers);
+          : await this.runCopilotTurn(file, sessionId, tools, cancellation, handlers, route.lmModelId);
 
       if (cancellation.token.isCancellationRequested) {
         handlers.onRecord(this.persist(file, createRecord('error', sessionId, { text: 'Stopped by user.' })));
@@ -309,15 +316,52 @@ export class ChatRunner implements vscode.Disposable {
     }
   }
 
-  private resolveProvider(): ChatProvider {
+  /**
+   * Choose the backend for one turn.
+   *
+   * The direct OpenCode Go client speaks chat-completions only. A model that
+   * needs another protocol (for example `generate-content` for Gemini) goes
+   * through the VS Code language model API, where the OpenCode Go provider
+   * extension (vendor `tradeAssistant.chat.lmVendor`) speaks every protocol.
+   */
+  private async resolveRoute(): Promise<{ provider: ChatProvider; lmModelId?: string }> {
     const configured = (this.configuration().get<string>('chat.provider') ?? 'auto').trim();
     if (configured === 'copilot') {
-      return 'copilot';
+      return { provider: 'copilot' };
     }
-    if (configured === 'opencode-go') {
-      return 'opencode-go';
+    const apiKey = readAuthKeyFromFile(this.authPath());
+    if (configured !== 'opencode-go' && apiKey === null) {
+      return { provider: 'copilot' };
     }
-    return readAuthKeyFromFile(this.authPath()) !== null ? 'opencode-go' : 'copilot';
+    const model = this.resolveModelId();
+    if (apiKey === null || model.length === 0) {
+      return { provider: 'opencode-go' };
+    }
+    const protocols = await this.modelProtocols(apiKey);
+    if (supportsChatCompletions(protocols, model)) {
+      return { provider: 'opencode-go' };
+    }
+    this.deps.log(
+      `model ${model} has no chat-completions endpoint (${(protocols.get(model) ?? []).join(', ')}); using the VS Code language model API`
+    );
+    return { provider: 'copilot', lmModelId: model };
+  }
+
+  private async modelProtocols(apiKey: string): Promise<Map<string, string[]>> {
+    if (this.protocolCache && Date.now() - this.protocolCache.at < 3_600_000) {
+      return this.protocolCache.map;
+    }
+    const probe = new OpencodeGoClient({ apiKey, model: DEFAULT_OPENCODE_MODEL, sessionId: 'protocol-probe', timeoutMs: 15_000 });
+    try {
+      const map = await probe.listModelProtocols();
+      this.protocolCache = { at: Date.now(), map };
+      return map;
+    } catch (error) {
+      this.deps.log(`opencode-go protocol probe failed: ${messageOf(error)}`);
+      return new Map();
+    } finally {
+      probe.dispose();
+    }
   }
 
   private authPath(): string {
@@ -497,9 +541,10 @@ export class ChatRunner implements vscode.Disposable {
     sessionId: string,
     tools: ChatToolSpec[],
     cancellation: vscode.CancellationTokenSource,
-    handlers: ChatTurnHandlers
+    handlers: ChatTurnHandlers,
+    preferredModelId?: string
   ): Promise<TurnResult> {
-    const model = await this.selectModel();
+    const model = await this.selectModel(preferredModelId);
     if (!model) {
       this.fail(
         file,
@@ -767,7 +812,17 @@ export class ChatRunner implements vscode.Disposable {
     return messages;
   }
 
-  private async selectModel(): Promise<vscode.LanguageModelChat | undefined> {
+  private async selectModel(preferredModelId?: string): Promise<vscode.LanguageModelChat | undefined> {
+    if (preferredModelId && preferredModelId.length > 0) {
+      const vendor = (this.configuration().get<string>('chat.lmVendor') ?? 'opencodego').trim() || 'opencodego';
+      const preferred = await vscode.lm.selectChatModels({ vendor, id: preferredModelId });
+      if (preferred.length > 0) {
+        return preferred[0];
+      }
+      this.deps.log(
+        `no ${vendor}/${preferredModelId} model in VS Code; install OnesoftQwQ.opencode-go-copilot-provider to use it. Falling back to Copilot models.`
+      );
+    }
     const family = this.configuration().get<string>('chat.modelFamily')?.trim() ?? '';
     const copilot = await vscode.lm.selectChatModels({ vendor: 'copilot' });
     let models = copilot.length > 0 ? copilot : await vscode.lm.selectChatModels({});

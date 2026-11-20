@@ -310,6 +310,14 @@ class ScannerBatchResult(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class PositionSide(str, Enum):
+    """Position actually held after a verdict. FLAT = no position (for example an Avoid verdict)."""
+
+    LONG = "long"
+    SHORT = "short"
+    FLAT = "flat"
+
+
 class TradeLogEntry(BaseModel):
     """A single trade record for the feedback loop."""
 
@@ -318,15 +326,21 @@ class TradeLogEntry(BaseModel):
     verdict_snapshot: UnifiedVerdict
     # Entry
     entry_date: Optional[datetime] = None
-    entry_price: Optional[float] = None
-    position_size_pct: Optional[float] = None
+    entry_price: Optional[float] = Field(None, gt=0.0, description="Fill price of the underlying")
+    position_size_pct: Optional[float] = Field(None, ge=0.0, le=100.0,
+                                               description="Position value in % of equity; 0 for FLAT")
+    position: Optional[PositionSide] = None
+    quantity: Optional[float] = Field(None, ge=0.0, description="Shares or units, for the record")
+    fees_pct: float = Field(0.0, ge=0.0, description="Round-trip costs in % of the position value")
     # Exit
     exit_date: Optional[datetime] = None
-    exit_price: Optional[float] = None
+    exit_price: Optional[float] = Field(None, gt=0.0)
     exit_reason: Optional[str] = Field(
         None, description="'target_1', 'target_2', 'stop_loss', 'invalidation', 'time', 'manual'"
     )
-    pnl_pct: Optional[float] = None
+    underlying_move_pct: Optional[float] = Field(None, description="(exit / entry − 1) × 100")
+    pnl_pct: Optional[float] = Field(None, description="Position P&L in % of the position value, after fees")
+    pnl_equity_pct: Optional[float] = Field(None, description="Position P&L in % of equity")
     notes: Optional[str] = None
     is_open: bool = True
 

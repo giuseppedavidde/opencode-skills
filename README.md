@@ -6,10 +6,10 @@ Custom skills and configuration for [opencode](https://opencode.ai).
 
 ```
 opencode-skills/
-├── install.py                  # Python install script (recommended)
-├── install.sh                  # Shell install script (quick alternative)
-├── install-vscode.py           # VS Code / Copilot Chat compatibility installer
-├── vscode/                     # VS Code-native templates (copilot-instructions.md, hooks, docs)
+├── install.sh                  # Single installer: opencode + VS Code (run this one)
+├── install.py                  # Compatibility wrapper: runs install.sh
+├── install-vscode.py           # VS Code layer generator (install.sh calls it)
+├── vscode/                     # VS Code templates, hooks, models.json, tests, docs
 ├── config/
 │   ├── AGENTS.md               # Global rules referencing skills
 │   ├── opencode.json           # Provider/model/MCP configuration
@@ -43,57 +43,63 @@ opencode-skills/
 └── setup-bladebro.sh           # Install bladebro (stealth browser) + Chrome link
 ```
 
-## Portable Install (Full Flow)
+## Install on a new machine
 
 ### Prerequisites
 
-- git, python3, opencode CLI installed
-- Node.js 18+ (optional — for plugin runtime via `@opencode/plugin`, API V2)
-- Node.js >= 22 (`^22.23.4 || ^24.22.1 || >=26.12.1`) **only if you use the `rea` MCP**
+- git, bash, python3 (3.10+ with the `venv` module)
+- the [opencode](https://opencode.ai) CLI and/or VS Code 1.146+ with GitHub Copilot
+- Node.js >= 22 (`^22.23.4 || ^24.22.1 || >=26.12.1`) **only for the `rea` MCP**
   — rea lives in a **separate** repo ([morluto/rea](https://github.com/morluto/rea)),
-  cloned outside this one by `./setup-rea-mcp.sh` (default `$HOME/Progetti/Github/rea`,
-  override with `$REA_REPO` or by passing a path as first argument)
+  cloned by `./setup-rea-mcp.sh` into the folder `rea` next to this repository
+  (override with `$REA_REPO` or with a path as first argument)
+- Chrome/Chromium **only for the optional `./setup-bladebro.sh`** (bladebro is
+  not in `config/opencode.json`)
 
-### 1. Clone the repo
+### 1. Clone and install (one command)
 
 ```bash
-git clone https://github.com/giuseppedavidde/opencode-skills.git
+git clone --recursive https://github.com/giuseppedavidde/opencode-skills.git
 cd opencode-skills
-git submodule update --init --recursive
+./install.sh
 ```
 
-### 2. Install
+The installer is idempotent. Run `./install.sh` again after a `git pull` or
+after you move the repository. `python3 install.py` runs the same installer.
 
-**Python (recommended):**
+| Step | Result |
+|------|--------|
+| Submodules | `git submodule update --init --recursive` when a submodule is empty |
+| opencode layer | links in `~/.config/opencode/`: `skills`, `agents/*`, `command/*`, `AGENTS.md`, `opencode.json`, `bin/*`, `scripts/*`, `routing-eval`, and the anchor `opencode-skills` → this repository |
+| MCP runtimes | `./setup-headroom.sh` and `./setup-trading-mcp.sh` (skip with `--no-mcp`) |
+| VS Code layer | `install-vscode.py --target user` → `~/.copilot/` (skip with `--no-vscode`) |
+
 ```bash
-python3 install.py              # install all, skip existing
-python3 install.py --force      # overwrite existing symlinks
-python3 install.py --dry-run    # preview without changes
-python3 install.py -v           # verbose output
+./install.sh --dry-run          # print the plan, change nothing
+./install.sh --force            # replace real files that are in the way (backup first)
+./install.sh --no-mcp           # links + VS Code layer only
+./install.sh --with-rea         # also the rea MCP (Node.js, separate repo)
+./install.sh --with-systemd     # regenerate the VS Code layer after each edit
+./install.sh --yes              # no questions (CI)
 ```
 
-**Shell (quick):**
-```bash
-./install.sh                    # install all, skip existing
-./install.sh --force            # overwrite existing symlinks
-```
+No file of the repository contains a machine path. `config/opencode.json` uses
+`{env:HOME}` placeholders and reaches the plugins through the anchor link
+`~/.config/opencode/opencode-skills`. The installer never rewrites a tracked
+file. A real file that is in the way stays in place; with `--force` it goes to
+`~/.cache/opencode-skills/backup/<timestamp>/` first.
 
-What gets installed:
+### 2. Steps that need you
 
-| Category   | Source         | Destination                           |
-|------------|----------------|---------------------------------------|
-| skills     | `skills/`      | `~/.config/opencode/skills/`          |
-| agents     | `agents/`      | `~/.config/opencode/agents/`          |
-| commands   | `command/`     | `~/.config/opencode/command/`         |
-| plugins    | `plugins/`     | dichiarati in `~/.config/opencode/opencode.json` (campo `plugins`, API V2) |
-| config     | `config/`      | `~/.config/opencode/` (symlinked)     |
-| routing-eval | `routing-eval/` | `~/.config/opencode/routing-eval` (symlinked) |
-| alphavantage | `scripts/`   | `~/.local/bin/alphavantage-mcp.sh`    |
-
-All items are symlinked — changes to the repo propagate immediately. The only
-exception is `alphavantage-mcp.sh` which is also symlinked into
-`~/.local/bin/`.  Plugins are declared in `opencode.json` under the V2 `plugins`
-field (absolute paths written by the installer).
+1. Log in to the opencode provider once per machine: `opencode auth login`.
+2. API keys, only for the skills that use them (see "API keys & secrets").
+3. VS Code: install the extension **OpenCode Go Provider for Copilot**
+   (`OnesoftQwQ.opencode-go-copilot-provider`) and run
+   `OpenCodeGo: Set OpenCode Go API Key`. The agents use the OpenCode Go models
+   `opencodego/<id>`, with the fallbacks of
+   [`vscode/models.json`](vscode/models.json) (model ids of the
+   [OpenCode Go API](https://opencode.ai/console/go#api)).
+4. Restart opencode. In VS Code, start a **new** chat session.
 
 ### 3. Headroom (token compression)
 
@@ -121,10 +127,14 @@ from `mcp/` in editable mode. Pre-configured in `opencode.json`.
 ### 5. rea MCP (reverse engineering / app analysis)
 
 ```bash
-./setup-rea-mcp.sh                  # default: $HOME/Progetti/Github/rea
-./setup-rea-mcp.sh /path/to/rea     # or point at an existing checkout
-REA_REPO=/path/to/rea ./setup-rea-mcp.sh
+./setup-rea-mcp.sh                  # default: the folder `rea` next to this repository
+REA_REPO=/path/to/rea ./setup-rea-mcp.sh   # an existing checkout in a different folder
 ```
+
+`./install.sh --with-rea` runs this script. For a checkout in a different
+folder, also export `REA_REPO` in the environment of opencode and VS Code: the
+wrapper and the VS Code installer look for the `rea` folder next to this
+repository when `REA_REPO` is not set.
 
 Clones [morluto/rea](https://github.com/morluto/rea) if missing, installs deps
 (`npm ci`), builds it (`npm run build`) and validates the wrapper
@@ -135,7 +145,11 @@ is the single source of truth and survives moving either repo. It rebuilds
 automatically only when the rea `HEAD` or its tracked working tree changes
 (log: `~/.cache/rea-mcp/build.log`).
 
-### 6. Bladebro MCP (stealth browser)
+### 6. Bladebro MCP (stealth browser, optional)
+
+`config/opencode.json` does not contain a bladebro server (the skills use
+`reddit_client.py`), and `./install.sh` does not install it. To use bladebro,
+run the script and add the MCP entry yourself.
 
 ```bash
 ./setup-bladebro.sh
@@ -145,9 +159,23 @@ Installs `bladebro` via `npm` into the canonical dir
 `~/.local/share/opencode/bladebro-node/` and creates a **stable symlink**
 `~/.local/share/opencode/bladebro-node/chrome` pointing to the detected
 Chrome/Chromium binary (env `CHROME_PATH` → `PATH` → newest Playwright cache).
-`opencode.json` is pre-configured with the MCP command and
-`CHROME_PATH="$HOME/.local/share/opencode/bladebro-node/chrome"`, so it survives
-Playwright upgrades. Re-run idempotently after installing/upgrading Chrome.
+Use `CHROME_PATH="$HOME/.local/share/opencode/bladebro-node/chrome"` in the MCP
+entry, so it survives Playwright upgrades. Re-run idempotently after
+installing/upgrading Chrome.
+
+### 6b. browse MCP (your real browser, optional)
+
+`config/opencode.json` starts [browse](https://github.com/anomalyco/browse)
+from `~/.local/bin/browse`. Install it once per machine, then rerun
+`./install.sh` (the VS Code layer adds the server only when the binary exists):
+
+```bash
+curl -fsSL https://opencode.ai/browse/install | bash
+```
+
+`browse install` can edit `~/.config/opencode/opencode.json`, which is the
+tracked `config/opencode.json`. Run `git diff config/opencode.json` after the
+install, and keep the `{env:HOME}` form of the entry.
 
 ### 7. API keys & secrets
 
@@ -180,50 +208,35 @@ The command needs `pydantic` in the command venv:
 /tmp/opencode/.venv/bin/pip install -r routing-eval/requirements.txt
 ```
 
-## VS Code / Copilot Chat
+## VS Code (Copilot harness)
 
-The opencode definitions can also be used from VS Code Copilot Chat. The
-installer keeps opencode as the source of truth and generates the VS Code-native
-layer (skills symlinks, `.agent.md`, `.prompt.md`, `.github/copilot-instructions.md`, `.vscode/mcp.json`,
-and hooks for the `verifica-gate` / `graphify` plugins):
+`./install.sh` also generates the VS Code layer at user scope (`~/.copilot/`),
+so every workspace sees it. opencode stays the source of truth:
 
 ```bash
-# Workspace scope (writes .github/, .vscode/, copilot-instructions.md)
-python3 install-vscode.py --workspace /path/to/workspace
-
-# User scope (all VS Code workspaces)
-python3 install-vscode.py --target user
-
-# Preview
-python3 install-vscode.py --workspace /path/to/workspace --dry-run -v
-
-# Verify the installed layer matches the opencode sources (exit 1 = drift)
-python3 install-vscode.py --verify --workspace /path/to/workspace
-
-# Hide subagents from the agent picker (default: all agents are listed)
-python3 install-vscode.py --workspace /path/to/workspace --no-expose-subagents
-
-# Write MCP servers to the portable .mcp.json instead of .vscode/mcp.json
-python3 install-vscode.py --workspace /path/to/workspace --mcp-format portable
+python3 install-vscode.py --target user            # done by ./install.sh
+python3 install-vscode.py --verify --target user   # exit 1 = drift
+python3 install-vscode.py --target user --dry-run -v
+python3 install-vscode.py --workspace /path/to/ws  # one workspace instead
 ```
 
-| opencode | VS Code |
+| opencode | VS Code (user scope) |
 |----------|---------|
-| `skills/<name>/SKILL.md` | `.github/skills/<name>/SKILL.md` (symlink) |
-| `agents/<name>.md` | `.github/agents/<name>.agent.md` |
-| `command/<name>.md` | `.github/prompts/<name>.prompt.md` |
-| `config/AGENTS.md` | `.github/copilot-instructions.md` / `~/.copilot/copilot-instructions.md` |
-| `config/opencode.json` → `mcp` | `.vscode/mcp.json` / `~/.copilot/mcp-config.json` |
-| `plugins/verifica-gate` | `.github/hooks/verifica-gate.json` |
-| `plugins/graphify` | `.github/hooks/graphify-reminder.json` |
+| `skills/<name>/SKILL.md` | `~/.copilot/skills/<name>` (symlink) |
+| `agents/<name>.md` | `~/.copilot/agents/<name>.agent.md` |
+| `command/<name>.md` | `~/.copilot/skills/<name>/SKILL.md` (slash-only skill: `/read-chunk`) |
+| `config/AGENTS.md` | `~/.copilot/copilot-instructions.md` |
+| `config/opencode.json` → `mcp` | `~/.copilot/mcp-config.json` |
+| `plugins/verifica-gate` | `~/.copilot/hooks/verifica-gate.json` (`SubagentStop`) |
+| `plugins/graphify` | `~/.copilot/hooks/graphify-reminder.json` (`SessionStart`) |
 
-> VS Code resolves `.github/**` **relative to the opened workspace root only**
-> (no subfolder scan). One install per workspace root you open; use
-> `--target user` for a single copy in `~/.copilot/` that applies everywhere.
+> Use **one** scope. The user folder and a workspace `.github/` are both native
+> Copilot sources, so a second copy loads every agent, skill, and hook two times.
 
-See [`vscode/README.md`](vscode/README.md) for the full mapping, tool aliases,
-model names, hook behavior, and limitations. Start a **new chat** after
-installing so VS Code discovers the new skills and agents.
+See [`vscode/README.md`](vscode/README.md) for the model fallbacks, the
+delegation rules (a subagent cannot start a subagent in VS Code), the hooks, and
+the limitations. Start a **new chat** after installing so VS Code discovers the
+new skills and agents.
 
 ## Writing directive — ASD-STE100
 
@@ -302,19 +315,26 @@ Exit code is `0` when the target is conform. Exit code is `1` on any FAIL.
 
 ## Portability Notes
 
-- **`$HOME` expansion** — every MCP command in `config/opencode.json` is
-  `$HOME`-relative and runs through `bash -c` (`headroom`, `trading`, `rea`), so
-  `$HOME` is expanded at runtime by the shell and no path is tied to this machine.
-  The trading `TRADING_*` variables are exported inside the same `bash -c` instead
-  of a literal `environment` block, for the same reason. Cloning the repo,
-  running `python3 install.py` and the `setup-*.sh` scripts is all that is needed:
+- **No machine paths** — `config/opencode.json` uses `{env:HOME}` placeholders,
+  which opencode resolves at load time. The `headroom` and `rea` commands run
+  through `bash -c`, so the shell expands `$HOME`. A test
+  (`vscode/tests/test_install_vscode.py`) fails when a runtime source contains
+  `/home/...` or a `Progetti` path.
+- **Anchor link** — `./install.sh` creates `~/.config/opencode/opencode-skills` →
+  this repository. The plugin entries, the commands, the agents, the systemd
+  units and the trade-assistant extension reach the repository through it, so
+  the clone can live in any folder. Move the repository, then rerun `./install.sh`.
+- **MCP runtimes** — the setup scripts create the runtimes outside the repository:
   - `./setup-headroom.sh` → `~/.local/share/opencode/headroom-venv`
   - `./setup-trading-mcp.sh` → `~/.local/share/opencode/trading-mcp-venv`
-  - `./setup-rea-mcp.sh` → clones/builds the separate `rea` repo and validates
-    `config/bin/rea-mcp.sh` (symlinked to `~/.config/opencode/bin/rea-mcp.sh`)
+  - `./setup-rea-mcp.sh` → clones/builds the separate `rea` repo next to this one
+    and validates `config/bin/rea-mcp.sh` (linked to `~/.config/opencode/bin/rea-mcp.sh`)
   - `./setup-bladebro.sh` → `~/.local/share/opencode/bladebro-node`
-- **Plugins (API V2)** — plugins are declared in
-  `{config}/opencode.json` (campo `plugins`, path assoluti scritti dall'installer).
+- **Plugins (API V2)** — `config/opencode.json` → `plugins` lists the 5 plugin
+  folders through the anchor link. The installer does not rewrite this file.
+- **Data files** — `trade_log.jsonl` and `pump_history.jsonl` go to
+  `$OPENCODE_SKILLS_DATA_DIR`, else to `~/Progetti/Github/Data_for_Analysis`
+  when that folder exists, else to `~/.local/share/opencode-skills/`.
 - **`verifica-gate` audit trail** — `plugins/verifica-gate/index.js` appends one JSON
   line per flagged subagent result to
   `~/.config/opencode/stats/gate_events.jsonl` (write-only, no reader by
@@ -323,8 +343,6 @@ Exit code is `0` when the target is conform. Exit code is `1` on any FAIL.
   by a successful re-run of the same command does not anchor confidence, and
   inline exploration snippets (`python3 -c`, heredoc) are never anchorable.
 
-- **LGBM artifacts** — `skills/lgbm-trader-skill/models/`, `weights.json`,
-  `predictions/`, `calibrations/` are runtime artefacts regenerated by training.
 - **Secrets** — never committed. `config/secrets.env.enc` is the encrypted
   bundle; decrypt it with `scripts/decrypt_secrets.sh` using the shared
   passphrase.
@@ -333,15 +351,17 @@ Exit code is `0` when the target is conform. Exit code is `1` on any FAIL.
 
 | Symptom | Fix |
 |---------|-----|
-| Symlinks broken after moving the repo | `python3 install.py` (ripara i symlink rotti in sicurezza, senza `--force`) |
-| Plugins not loading after restart | Check `~/.config/opencode/opencode.json` lists 6 entries in `plugins` |
+| Symlinks broken after moving the repo | `./install.sh` (repairs the links; real files stay unless `--force`) |
+| Plugins not loading after restart | `ls ~/.config/opencode/opencode-skills/plugins` must list 5 folders; else rerun `./install.sh` |
 | MCP servers fail (`exec: ... not found`) | Run `./setup-headroom.sh` and/or `./setup-trading-mcp.sh` |
 | `rea` MCP fails / `dist` missing / `npm` errors | Run `./setup-rea-mcp.sh` (clone + `npm ci` + `npm run build` + `--check`); verify `node --version` >= 22 |
 | MCP `rea` serves old code | It rebuilds on `HEAD`/dirty change; check `~/.cache/rea-mcp/build.log`, or force with `REA_MCP_SKIP_BUILD=0` (set `=1` to serve the existing `dist` without rebuilding) |
 | bladebro MCP fails (`Could not launch Chrome`) | Run `./setup-bladebro.sh` (or ensure Chrome/Chromium is installed) |
-| Submodule folders empty | `git submodule update --init --recursive` |
+| Submodule folders empty | `./install.sh` (it runs `git submodule update --init --recursive`) |
 | `alphavantage-mcp.sh: command not found` | Ensure `~/.local/bin` is in `$PATH` |
-| `routing-stats` shows "not found" | Rilancia `python3 install.py` per ricreare il symlink; verifica `pip install -r routing-eval/requirements.txt` |
+| `routing-stats` shows "not found" | Rerun `./install.sh`; verify `pip install -r routing-eval/requirements.txt` |
+| VS Code shows an agent or skill two times | Keep one scope: remove the workspace `.github/` copy or the `~/.copilot` copy |
+| VS Code agents ignore new edits | Start a new chat session; with `--with-systemd` the layer regenerates on save |
 
 ## Venv & Recovery
 
@@ -350,7 +370,7 @@ Mappa dei virtual environment usati dal repo (nessun venv è committato: i
 
 | Venv | Creato da | Scopo |
 |------|-----------|-------|
-| `~/.local/share/opencode/trading-mcp-venv` | `./setup-trading-mcp.sh` | Trading MCP server (pandas, yfinance, lightgbm, scikit-learn) |
+| `~/.local/share/opencode/trading-mcp-venv` | `./setup-trading-mcp.sh` | Trading MCP server (pandas, numpy, scipy, yfinance; no machine-learning packages) |
 | `~/.local/share/opencode/headroom-venv` | `./setup-headroom.sh` | Tool headroom (compressione token) |
 | `~/.local/share/opencode/bladebro-node` | `./setup-bladebro.sh` | Bladebro MCP server (browser stealth, Node/npm) + symlink `chrome` |
 | `/tmp/opencode/.venv` | manuale | Venv condiviso temporaneo per lavoro NON-trading (routing-eval, script generici) |
@@ -390,7 +410,6 @@ rm -rf ~/.local/share/opencode/bladebro-node && ./setup-bladebro.sh
 | `graphify` | any input (code, docs, papers, images) → knowledge graph → clustered communities → HTML + JSON + audit report |
 | `journalism-writing` | Journalism and argumentation writing craft — inverted pyramid, lede, nut graph, kicker, explainer framing, PAGE frames, Toulmin argument (claim/rebuttal/qualifier), Hegelian dialectic, BBC due impartiality |
 | `karpathy-llm-wiki` | Build and maintain a personal LLM-powered knowledge base |
-| `lgbm-trader-skill` | LightGBM Trading System — stacking ensemble of 5 models + meta-model producing a 0-100 trade score |
 | `liotta-smartfood` | Knowledge base from 'Le Ricette Smartfood' by Eliana Liotta & Lucilla Titta (nutrigenomics nutrition) |
 | `machine-learning-for-asset-managers` | Knowledge base from 'Machine Learning for Asset Managers' by Marcos M. López de Prado |
 | `market-accumulation-scanner` | Scans stock/crypto markets for accumulation patterns via trading MCP |
@@ -424,20 +443,20 @@ rm -rf ~/.local/share/opencode/bladebro-node && ./setup-bladebro.sh
 | `way-of-the-turtle` | Knowledge base from 'Way of the Turtle' by Curtis M. Faith (systematic trend following, position sizing) |
 | `wyckoff-2-0` | Knowledge base from 'Wyckoff 2.0' by Rubén Villahermosa Chaves (volume profile, order flow, Wyckoff Method) |
 | `config/AGENTS.md` | Global rules that load skills automatically + headroom compression mandatory |
-| `config/opencode.json` | Provider/model configuration + MCP servers (headroom, trading, rea, bladebro, alphavantage) |
+| `config/opencode.json` | Provider/model configuration + MCP servers (headroom, trading, rea, browse); portable `{env:HOME}` paths |
 | `config/bin/rea-mcp.sh` | Wrapper MCP `rea`: serves the local rea repo, rebuilds only on HEAD/dirty change (`REA_REPO`, `REA_MCP_SKIP_BUILD`, `--check`) |
 | `setup-headroom.sh` | Installs headroom in a dedicated venv for token compression (60-95% savings) |
 | `setup-rea-mcp.sh` | Clones + builds the separate [rea](https://github.com/morluto/rea) repo and validates the `rea` MCP wrapper |
 | `setup-bladebro.sh` | Installs bladebro (stealth browser MCP) into `~/.local/share/opencode/bladebro-node` and links Chrome |
-| `install-vscode.py` | Generates the VS Code / Copilot Chat layer (skills symlinks, agents, prompts, MCP, hooks) |
+| `install-vscode.py` | Generates the VS Code layer (skill links, agents, command skills, MCP, hooks); `install.sh` runs it |
 | `scripts/ste_conformance.py` | ASD-STE100 conformance test: wiring check, text lint, self-test fixtures |
 | `vscode/` | VS Code-native templates: `copilot-instructions.md`, Python instructions, verifica-gate / graphify hooks, docs |
 
 ## Requires
 
-- [opencode](https://opencode.ai) CLI installed
-- Python 3.10+ (for `install.py`)
-- VS Code 1.144+ with GitHub Copilot Chat (only for `install-vscode.py`)
+- [opencode](https://opencode.ai) CLI installed (for the opencode layer)
+- bash, git, Python 3.10+ (for `install.sh`, `install-vscode.py` and the MCP venvs)
+- VS Code 1.146+ with GitHub Copilot, Copilot harness (only for the VS Code layer)
 
 ## Prerequisites per skill
 

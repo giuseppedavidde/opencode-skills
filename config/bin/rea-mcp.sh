@@ -3,7 +3,9 @@
 # when the repo HEAD or the tracked working tree changes.
 #
 # Env vars:
-#   REA_REPO            path to the rea checkout (default: $HOME/Progetti/Github/rea)
+#   REA_REPO            path to the rea checkout (default: the folder `rea` next to
+#                       the opencode-skills repository, found through the link
+#                       ~/.config/opencode/opencode-skills; else ~/.local/share/opencode/rea)
 #   REA_MCP_SKIP_BUILD  set to 1 to never rebuild (serve existing dist)
 #   REA_MCP_AUTO_UPDATE set to 0 to skip the git fetch/fast-forward step
 #                       (default: 1); update runs only on branch main with a
@@ -21,7 +23,16 @@
 # redirected to the log and all diagnostics go to stderr.
 set -euo pipefail
 
-REPO="${REA_REPO:-$HOME/Progetti/Github/rea}"
+default_rea_repo() {
+  local anchor="$HOME/.config/opencode/opencode-skills"
+  if [ -e "$anchor" ]; then
+    printf '%s/rea\n' "$(dirname "$(readlink -f "$anchor")")"
+  else
+    printf '%s\n' "$HOME/.local/share/opencode/rea"
+  fi
+}
+
+REPO="${REA_REPO:-$(default_rea_repo)}"
 STATE="${XDG_CACHE_HOME:-$HOME/.cache}/rea-mcp"
 STAMP="$STATE/stamp"
 LOG="$STATE/build.log"
@@ -46,6 +57,12 @@ CHECK_ONLY=0
 if [ "${1:-}" = "--check" ]; then
   CHECK_ONLY=1
   shift
+fi
+
+if [ ! -d "$REPO" ] && [ "$CHECK_ONLY" = 0 ]; then
+  echo "[rea-mcp] rea checkout not found at $REPO" >&2
+  echo "[rea-mcp] run ./setup-rea-mcp.sh in the opencode-skills repository, or set REA_REPO" >&2
+  exit 1
 fi
 
 BRANCH="$(git -C "$REPO" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"

@@ -16,8 +16,9 @@ live daemon only by the ``network``-marked test.
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from trading_mcp import config
 from trading_mcp.data.backends.base import (
@@ -31,6 +32,7 @@ from trading_mcp.data.backends.rest import (
     RestOptionsBackend,
     build_options_chain,
     date_str,
+    epoch_time,
     normalize_right,
     parse_expiry,
     pick,
@@ -39,6 +41,7 @@ from trading_mcp.data.backends.rest import (
 )
 
 logger = logging.getLogger(__name__)
+_EASTERN = ZoneInfo("America/New_York")
 
 
 def _rows_from_response(payload: Any) -> list[dict[str, Any]]:
@@ -57,6 +60,21 @@ def _rows_from_response(payload: Any) -> list[dict[str, Any]]:
     if fmt and response and isinstance(response[0], list):
         return [dict(zip(fmt, row)) for row in response if isinstance(row, list)]
     return [row for row in response if isinstance(row, dict)]
+
+
+def _row_time(row: dict[str, Any]) -> datetime | None:
+    """Quote time from ``timestamp`` (ISO or epoch) or ``date`` + ``ms_of_day`` (US/Eastern)."""
+    stamp = epoch_time(pick(row, "timestamp", "quote_timestamp", "updated"))
+    if stamp is not None:
+        return stamp
+    day, millis = pick(row, "date"), to_float(pick(row, "ms_of_day"))
+    if day is None or millis is None:
+        return None
+    try:
+        start = datetime.strptime(str(int(float(day))), "%Y%m%d")
+    except (TypeError, ValueError):
+        return None
+    return (start + timedelta(milliseconds=millis)).replace(tzinfo=_EASTERN)
 
 
 class ThetaDataBackend(RestOptionsBackend):
@@ -171,6 +189,7 @@ class ThetaDataBackend(RestOptionsBackend):
         if not oi:
             oi = oi_by_key.get(key, 0)
         return OptionQuote(
+            quote_time=_row_time(row),
             strike=strike,
             right=right,
             expiry=expiry,

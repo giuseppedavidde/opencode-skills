@@ -48,7 +48,7 @@ The setting `tradeAssistant.chat.provider` selects the backend.
 | Value | Behaviour |
 | --- | --- |
 | `auto` | Uses OpenCode Go when a key exists in `~/.local/share/opencode/auth.json`. Falls back to GitHub Copilot models. |
-| `opencode-go` | Always uses OpenCode Go. |
+| `opencode-go` | Always uses OpenCode Go models (see the protocol rule below). |
 | `copilot` | Always uses GitHub Copilot language models. |
 
 ### OpenCode Go
@@ -70,7 +70,13 @@ The setting `tradeAssistant.chat.provider` selects the backend.
 | `x-opencode-session` | The stable chat session id. The value does not change across turns of one session. |
 
 The model id is exactly the id from `GET /models`, for example `deepseek-v4.1-flash`.
-The extension strips the `opencode-go/` prefix from `agents/trade.md` and from `tradeAssistant.chat.model`.
+The extension strips the `opencode-go/` prefix and the `#effort` suffix from `agents/trade.md` and from `tradeAssistant.chat.model`.
+
+The direct client speaks only the chat-completions protocol. `GET /models` lists the protocols of each model in `api`:
+
+1. A model with `chat-completions` uses the direct client.
+2. A model without it (for example `gemini-4-argon`, which needs `generate-content`) uses the VS Code language model API with the vendor `tradeAssistant.chat.lmVendor` (default `opencodego`).
+3. Install the extension `OnesoftQwQ.opencode-go-copilot-provider` for step 2. Without it, the chat uses a GitHub Copilot model and the log says so.
 Responses stream over SSE.
 The extension joins text deltas, joins tool-call argument fragments by index and counts the reported tokens.
 

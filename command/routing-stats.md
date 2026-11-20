@@ -11,7 +11,7 @@ registrati dal plugin `routing-stats`.
 3. Lo script `stats_report.py` si trova in `routing-eval`, incluso in
    `opencode-skills` e installato come symlink in `~/.config/opencode/routing-eval`.
    Risoluzione (in ordine): `$ROUTING_EVAL_DIR` → `~/.config/opencode/routing-eval`
-   → `~/Progetti/Github/opencode-skills/routing-eval` → `~/opencode-skills/routing-eval`.
+   → `~/.config/opencode/opencode-skills/routing-eval` (link alla repo creato da `./install.sh`).
 
 Esegui il comando equivalente a questo script bash:
 ```bash
@@ -25,11 +25,11 @@ if [ -z "$PYTHON" ]; then
     exit 1
 fi
 SCRIPT=""
-for d in "${ROUTING_EVAL_DIR:-}" "$HOME/.config/opencode/routing-eval" "$HOME/Progetti/Github/opencode-skills/routing-eval" "$HOME/opencode-skills/routing-eval"; do
+for d in "${ROUTING_EVAL_DIR:-}" "$HOME/.config/opencode/routing-eval" "$HOME/.config/opencode/opencode-skills/routing-eval"; do
     if [ -n "$d" ] && [ -f "$d/stats_report.py" ]; then SCRIPT="$d/stats_report.py"; break; fi
 done
 if [ -z "$SCRIPT" ]; then
-    echo "ERRORE: routing-eval non trovato. Rilancia python3 install.py dalla repo."
+    echo "ERRORE: routing-eval non trovato. Rilancia ./install.sh dalla repo."
     exit 1
 fi
 exec "$PYTHON" "$SCRIPT" $ARGUMENTS
@@ -53,6 +53,6 @@ un messaggio che indica plugin non attivo o nessuna delegazione.
 installato come symlink in `~/.config/opencode/routing-eval`. Dopo un `git pull`
 non serve reinstallare. Se non viene trovato, esegui dalla repo:
 ```bash
-python3 install.py
+./install.sh
 pip install -r routing-eval/requirements.txt
 ```

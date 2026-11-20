@@ -11,10 +11,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any
 
-from trading_mcp.data.backends.base import BackendCapabilities, OptionsChain, OptionRight
+from trading_mcp.data.backends.base import BackendCapabilities, OptionsChain, OptionRight, data_time
 
 logger = logging.getLogger(__name__)
 
@@ -128,21 +128,45 @@ def parse_expiry(expiry: str) -> date | None:
         return None
 
 
+def epoch_time(value: Any) -> datetime | None:
+    """Aware UTC datetime from epoch seconds, milliseconds or nanoseconds (or ISO text)."""
+    if value is None:
+        return None
+    if isinstance(value, str) and not value.strip().replace(".", "", 1).isdigit():
+        try:
+            parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return parsed if parsed.tzinfo is not None else None
+    number = to_float(value)
+    if number is None or number <= 0:
+        return None
+    for scale in (1.0, 1e3, 1e6, 1e9):
+        seconds = number / scale
+        if 1e9 <= seconds <= 4e9:
+            return datetime.fromtimestamp(seconds, timezone.utc)
+    return None
+
+
 def build_options_chain(
-    ticker: str, source: str, expiry: date | None, quotes: list
+    ticker: str, source: str, expiry: date | None, quotes: list, *, truncated: bool = False
 ) -> OptionsChain | None:
     """Assemble an :class:`OptionsChain` from parsed quotes (``None`` if empty)."""
     if expiry is None or not quotes:
         return None
+    as_of, basis = data_time(quotes)
     return OptionsChain(
         ticker=ticker,
         spot=0.0,
         expiry=expiry,
         quotes=quotes,
-        as_of=datetime.now(),
+        as_of=as_of,
+        as_of_basis=basis,
+        fetched_at=datetime.now(timezone.utc),
         source=source,
         greeks_are_native=any(quote.gamma is not None for quote in quotes),
         iv_is_native=True,
+        truncated=truncated,
     )
 
 

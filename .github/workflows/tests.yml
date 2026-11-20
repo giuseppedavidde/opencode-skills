@@ -1,0 +1,99 @@
+name: tests
+
+# Offline test suites of the trading workflow: MCP server, skills, plugins and
+# the trade-assistant extension. No job needs market data or API keys.
+on:
+  push:
+    paths:
+      - "mcp/**"
+      - "skills/**"
+      - "plugins/**"
+      - "extensions/trade-assistant/**"
+      - "agents/**"
+      - "config/**"
+      - "scripts/ste_conformance.py"
+      - ".github/workflows/tests.yml"
+  pull_request:
+    paths:
+      - "mcp/**"
+      - "skills/**"
+      - "plugins/**"
+      - "extensions/trade-assistant/**"
+      - "agents/**"
+      - "config/**"
+      - "scripts/ste_conformance.py"
+      - ".github/workflows/tests.yml"
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+
+jobs:
+  mcp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the locked runtime
+        run: |
+          python -m pip install --quiet -r mcp/requirements.lock
+          python -m pip install --quiet -e mcp --no-deps pytest
+      - name: Server starts
+        run: python -c "from trading_mcp.mcp import initialize_mcp; initialize_mcp()"
+      - name: Offline tests and contract
+        working-directory: mcp
+        run: |
+          export XDG_CACHE_HOME="$RUNNER_TEMP/cache" XDG_DATA_HOME="$RUNNER_TEMP/data" XDG_CONFIG_HOME="$RUNNER_TEMP/config"
+          export TRADING_DATA_CACHE_DIR="$RUNNER_TEMP/c" TRADING_RESULT_CACHE_DIR="$RUNNER_TEMP/r" TRADING_CACHE_DIR="$RUNNER_TEMP/o"
+          python -m pytest -q -p no:cacheprovider -m "not network" tests/
+          python scripts/export_contract.py --check
+
+  skills:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install
+        run: |
+          python -m pip install --quiet -r mcp/requirements.lock
+          python -m pip install --quiet -e mcp --no-deps pytest
+      - name: Diagram engine
+        run: |
+          node skills/interactive-trade-diagram/tests/test_diagram.mjs
+          node skills/interactive-trade-diagram/scripts/check_diagram.mjs skills/interactive-trade-diagram/assets/template.html
+      - name: Skill scripts
+        run: python -m pytest -q -p no:cacheprovider skills/stock-crypto-analysis/tests skills/market-accumulation-scanner/tests
+      - name: Agent writing standard and model claims
+        run: |
+          python -m pip install --quiet pydantic pyyaml
+          python scripts/ste_conformance.py --wiring
+          python -m pytest -q -p no:cacheprovider vscode/tests/test_agent_models.py
+
+  plugins:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node --test plugins/auto-headroom/index.test.js plugins/verifica-gate/index.test.js
+
+  trade-assistant:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: extensions/trade-assistant
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+      - run: npx tsc -p . --noEmit

@@ -26,7 +26,7 @@ Returns: current_price_usd, market_cap, OHLCV, CoinGecko info.
 Call: fetch_options_chain(ticker="<TICKER>", expiry=None)
 ```
 Returns: calls, puts with Greeks, IV metrics, P/C ratios.
-Weekend fallback: cached data from last 7 days.
+Outside market hours the chain can come from a cache. The output gives `as_of` and the source: say the data time, and never show old quotes as live.
 
 ### CLI (standalone, terminal use)
 ```bash
@@ -37,4 +37,4 @@ trading-cli fetch options AAPL --expiry 2026-09-18
 
 ## Data sources
 - Stocks/ETFs: yfinance (free, no API key)
-- Crypto: CoinGecko API (free tier, key: CG-EoA39f23q3bCsnkGuDuz11vP)
+- Crypto: CoinGecko API (free tier). An optional key comes from the `COINGECKO_API_KEY` environment variable. Never write a key in a skill file.

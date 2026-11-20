@@ -8,7 +8,7 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WRAPPER="$HOME/.config/opencode/bin/rea-mcp.sh"
 [ -x "$WRAPPER" ] || WRAPPER="$REPO_DIR/config/bin/rea-mcp.sh"
 
-TARGET="${1:-${REA_REPO:-$HOME/Progetti/Github/rea}}"
+TARGET="${1:-${REA_REPO:-$(dirname "$REPO_DIR")/rea}}"
 # Alternativa ssh (se hai una chiave configurata):
 #   git clone git@github.com:morluto/rea.git "$TARGET"
 CLONE_URL="https://github.com/morluto/rea.git"
@@ -76,7 +76,7 @@ if [ -x "$WRAPPER" ]; then
     REA_REPO="$TARGET" bash "$WRAPPER" --check
 else
     echo "ATTENZIONE: wrapper non trovato in $WRAPPER (né in $REPO_DIR/config/bin)." >&2
-    echo "           Esegui prima: python3 $REPO_DIR/install.py" >&2
+    echo "           Esegui prima: $REPO_DIR/install.sh" >&2
 fi
 
 echo ""

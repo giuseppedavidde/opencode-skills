@@ -40,6 +40,9 @@ Count boxes across congestion zones on P&F charts to project price targets. Weis
 ### Principle of Contraction/Expansion (Crabel)
 Markets alternate between contraction (narrow ranges, low volatility) and expansion (wide ranges, trend). NR7, 2Bar NR, 3Bar NR, ID/NR4 are specific setups. Contraction areas at support/resistance with volume confirmation offer high-probability entries. Weis integrates Crabel's quantified patterns with Wyckoff's contextual reading.
 
+Terminology (SC, BC, VWAP, LVN): the Canonical Terminology table in `volume-price-analysis/SKILL.md` is the reference.
+Success-rate statements in this book are the author's observations, not tested statistics.
+
 ## Chapter Index
 | # | Chapter | Topic |
 |---|---------|-------|

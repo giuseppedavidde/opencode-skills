@@ -1,253 +1,190 @@
-"""Alpha Vantage fundamentals enrichment for the MCP server.
+"""Alpha Vantage fundamentals for the MCP server.
 
-Free tier: 25 API calls/day, 5 calls/minute.
-Fallback a yfinance quando il limite è raggiunto.
+Free tier: 25 API calls per day and 5 per minute. The limiter is shared by
+every thread (lock) and, best effort, by every process of the same user: the
+daily count is stored in the private cache (``alpha_vantage/usage.json``).
 
-Carica API key da:
+Loads the API key from:
 1. TRADING_AV_API_KEY env var
 2. ALPHA_VANTAGE_API_KEY env var
 3. ~/.config/opencode/alpha_vantage_key.txt
+
+The key travels in the query string, so only exception types and redacted
+messages are logged. :func:`fetch_av_normalized` maps only documented
+``OVERVIEW`` keys (checked against a recorded payload, see
+``tests/fixtures/av_overview_IBM.json``) into the typed
+:class:`~trading_mcp.data.fundamentals_schema.Fundamentals`;
+:func:`fetch_av_fundamentals` renders it in yfinance keys and units.
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, date
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import requests
 
+from trading_mcp.data.cache_paths import atomic_write_json, cache_dir, read_json
+from trading_mcp.data.fundamentals_schema import Fundamentals, from_alpha_vantage
+from trading_mcp.data.redact import install_log_redaction, redact
+
 logger = logging.getLogger(__name__)
+install_log_redaction()
 
 AV_BASE = "https://www.alphavantage.co/query"
-AV_TIMEOUT = 10  # secondi
+AV_TIMEOUT = 10  # seconds
 
 
-# ─── Rate limiter (5 chiamate/min, 25/giorno) ───────────────────────
-
-@dataclass
 class RateLimiter:
-    """Semplice rate limiter per Alpha Vantage free tier."""
-    max_per_minute: int = 5
-    max_per_day: int = 25
-    calls_minute: list[float] = field(default_factory=list)
-    calls_day: int = 0
-    _day_reset: str = ""
+    """Thread-safe free-tier limiter (5 per minute, 25 per UTC day).
 
-    def allow(self) -> bool:
-        now = time.time()
-        today = date.today().isoformat()
+    The daily count is persisted in the private cache so parallel server
+    processes share one budget (best effort: no inter-process lock).
+    """
 
-        # Reset giornaliero
-        if self._day_reset != today:
-            self.calls_day = 0
-            self._day_reset = today
+    def __init__(self, max_per_minute: int = 5, max_per_day: int = 25, persist: bool = True) -> None:
+        self.max_per_minute = max_per_minute
+        self.max_per_day = max_per_day
+        self._persist = persist
+        self._lock = threading.Lock()
+        self._minute: list[float] = []
+        self._memory_day = ""
+        self._memory_count = 0
 
-        # Check limiti
-        if self.calls_day >= self.max_per_day:
-            return False
+    @staticmethod
+    def _today() -> str:
+        return datetime.now(timezone.utc).date().isoformat()
 
-        # Pulisci chiamate più vecchie di 60s
-        self.calls_minute = [t for t in self.calls_minute if now - t < 60]
-        if len(self.calls_minute) >= self.max_per_minute:
-            return False
+    def _usage_path(self) -> Path | None:
+        if not self._persist:
+            return None
+        directory = cache_dir("alpha_vantage")
+        return directory / "usage.json" if directory is not None else None
 
-        return True
+    def _read_day_count(self) -> int:
+        path = self._usage_path()
+        data = read_json(path) if path is not None else None
+        if not isinstance(data, dict) or data.get("day") != self._today():
+            return self._memory_day_count()
+        try:
+            return max(int(data.get("count", 0)), self._memory_day_count())
+        except (TypeError, ValueError):
+            return self._memory_day_count()
 
-    def record_call(self) -> None:
-        now = time.time()
-        today = date.today().isoformat()
-        if self._day_reset != today:
-            self.calls_day = 0
-            self._day_reset = today
-        self.calls_minute.append(now)
-        self.calls_day += 1
+    def _memory_day_count(self) -> int:
+        return self._memory_count if self._memory_day == self._today() else 0
+
+    def try_acquire(self) -> bool:
+        """Reserve one call when both limits allow it."""
+        with self._lock:
+            now = time.time()
+            self._minute = [stamp for stamp in self._minute if now - stamp < 60]
+            used = self._read_day_count()
+            if used >= self.max_per_day or len(self._minute) >= self.max_per_minute:
+                return False
+            self._minute.append(now)
+            self._memory_day, self._memory_count = self._today(), used + 1
+            path = self._usage_path()
+            if path is not None:
+                atomic_write_json(path, {"day": self._memory_day, "count": self._memory_count})
+            return True
 
     def remaining_today(self) -> int:
-        today = date.today().isoformat()
-        if self._day_reset != today:
-            return self.max_per_day
-        return max(0, self.max_per_day - self.calls_day)
+        """Calls left today (shared count)."""
+        with self._lock:
+            return max(0, self.max_per_day - self._read_day_count())
 
 
 _av_limiter = RateLimiter()
 
 
-# ─── API key ───────────────────────────────────────────────────────
-
-ALPHA_VANTAGE_API_KEY: str | None = None
-
-
 def _load_api_key() -> str | None:
-    """Load Alpha Vantage API key from standard locations."""
-    # 1. Trading-specific env var
-    key = os.environ.get("TRADING_AV_API_KEY")
-    if key:
-        return key
-
-    # 2. Generic env var
-    key = os.environ.get("ALPHA_VANTAGE_API_KEY")
-    if key:
-        return key
-
-    # 3. Text file
+    """Load the Alpha Vantage API key from the standard locations."""
+    for name in ("TRADING_AV_API_KEY", "ALPHA_VANTAGE_API_KEY"):
+        key = os.environ.get(name)
+        if key:
+            return key
     key_file = Path.home() / ".config" / "opencode" / "alpha_vantage_key.txt"
     if key_file.exists():
         for line in key_file.read_text().splitlines():
             line = line.strip()
             if line and not line.startswith("#"):
                 return line
-
     return None
 
 
-# ─── API calls ─────────────────────────────────────────────────────
-
 def _av_get(function: str, symbol: str) -> dict[str, Any] | None:
-    """Call Alpha Vantage API, return parsed JSON or None on failure.
-
-    Rispetta il rate limiter free tier (5/min, 25/giorno).
-    Restituisce None silenziosamente se il limite è raggiunto.
-    """
+    """Call Alpha Vantage once under the shared limiter; ``None`` on failure."""
     key = _load_api_key()
     if not key:
         return None
-
-    if not _av_limiter.allow():
-        logger.debug("AV rate limit: %d calls remaining today",
-                     _av_limiter.remaining_today())
+    if not _av_limiter.try_acquire():
+        logger.debug("AV limit reached: %d calls remaining today", _av_limiter.remaining_today())
         return None
-
     try:
-        r = requests.get(
+        response = requests.get(
             AV_BASE,
             params={"function": function, "symbol": symbol, "apikey": key},
             timeout=AV_TIMEOUT,
         )
-        data = r.json()
-
-        # Rileva errori API
-        if isinstance(data, dict):
-            if "Error Message" in data:
-                logger.warning("AV error for %s: %s", symbol, data["Error Message"])
-                return None
-            if "Note" in data:
-                logger.warning("AV rate limited for %s: %s", symbol, data["Note"])
-                return None
-            if "Information" in data:
-                logger.info("AV info for %s: %s", symbol, data["Information"])
-                return None
-
-        _av_limiter.record_call()
-        return data
-
-    except Exception as e:
-        logger.debug("AV request failed for %s: %s", symbol, e)
+        data = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        logger.warning("AV %s request failed for %s: %s", function, symbol, type(exc).__name__)
         return None
+    if not isinstance(data, dict) or not data:
+        return None
+    for marker in ("Error Message", "Note", "Information"):
+        if marker in data:
+            logger.warning("AV %s for %s: %s", marker, symbol, redact(data[marker])[:160])
+            return None
+    return data
 
 
-# ─── Enrichment ────────────────────────────────────────────────────
-
-def fetch_av_fundamentals(symbol: str) -> dict[str, Any]:
-    """Fetch fundamentals from Alpha Vantage.
-
-    1 chiamata API per ticker (OVERVIEW → ~25 campi chiave).
-    Consuma 1 delle 25 chiamate giornaliere del free tier.
-
-    Per dati storici (INCOME_STATEMENT, EARNINGS) usa
-    fetch_av_historical() separatamente — consuma altre 2 chiamate.
-
-    Restituisce dict vuoto se AV non disponibile o rate-limited.
-    """
-    result: dict[str, Any] = {}
-
+def fetch_av_normalized(symbol: str) -> Fundamentals | None:
+    """Typed Alpha Vantage OVERVIEW fundamentals (one API call), or ``None``."""
     overview = _av_get("OVERVIEW", symbol)
     if not overview:
-        return result
-
-    overview_map = {
-        "PERatio": "trailingPE",
-        "PriceToBookRatio": "priceToBook",
-        "PriceToSalesRatio": "priceToSalesTrailing12Months",
-        "ReturnOnEquityTTM": "returnOnEquity",
-        "ReturnOnAssetsTTM": "returnOnAssets",
-        "DebtToEquityRatio": "debtToEquity",
-        "ProfitMargin": "profitMargins",
-        "OperatingMarginTTM": "operatingMargins",
-        "QuarterlyEarningsGrowthYOY": "earningsGrowth",
-        "RevenueGrowth": "revenueGrowth",
-        "CurrentRatio": "currentRatio",
-        "MarketCapitalization": "marketCap",
-        "Beta": "beta",
-        "DividendYield": "dividendYield",
-        "EPS": "trailingEps",
-        "ForwardPE": "forwardPE",
-        "PEGRatio": "pegRatio",
-        "EVToEBITDA": "enterpriseToEbitda",
-        "EVToRevenue": "enterpriseToRevenue",
-        "ShortRatio": "shortRatio",
-        "SharesOutstanding": "sharesOutstanding",
-        "RevenueTTM": "totalRevenue",
-        "OperatingCashFlowTTM": "operatingCashflow",
-        "FreeCashFlowTTM": "freeCashflow",
-        "AnalystTargetPrice": "targetMeanPrice",
-        "52WeekHigh": "fiftyTwoWeekHigh",
-        "52WeekLow": "fiftyTwoWeekLow",
-        "50DayMovingAverage": "fiftyDayAverage",
-        "200DayMovingAverage": "twoHundredDayAverage",
-        "ReturnOnEquity": "returnOnEquity",
-    }
-
-    for av_key, yf_key in overview_map.items():
-        val = overview.get(av_key)
-        if val is not None and val != "None" and val != "":
-            try:
-                result[yf_key] = float(val)
-            except (ValueError, TypeError):
-                pass
-
-    if result:
-        result["_fundamentals_source"] = "alpha_vantage"
-        remaining = _av_limiter.remaining_today()
-        logger.info("AV enriched %s with %d fields (remaining: %d/%d)",
-                    symbol, len(result), remaining, _av_limiter.max_per_day)
-
+        return None
+    result = from_alpha_vantage(symbol, overview)
+    if not result.fields:
+        return None
+    logger.info("AV fundamentals for %s: %d fields (remaining %d/%d)", symbol, len(result.fields),
+                _av_limiter.remaining_today(), _av_limiter.max_per_day)
     return result
 
 
+def fetch_av_fundamentals(symbol: str) -> dict[str, Any]:
+    """Alpha Vantage fundamentals in yfinance keys AND yfinance units (``{}`` without data)."""
+    normalized = fetch_av_normalized(symbol)
+    if normalized is None:
+        return {}
+    legacy = normalized.to_legacy_info()
+    legacy["_fundamentals_source"] = "alpha_vantage"
+    return legacy
+
+
 def fetch_av_historical(symbol: str) -> dict[str, Any]:
-    """Fetch historical financial data per backtest point-in-time.
+    """Historical statements for point-in-time studies (two API calls).
 
-    Consuma 2 chiamate API: INCOME_STATEMENT + EARNINGS.
-    Solo per backtest LGBM o analisi fondamentali storiche.
-
-    Restituisce dict con:
-    - _av_annual_reports: ultimi 5 anni
-    - _av_quarterly_reports: ultimi 8 trimestri
-    - _av_earnings_history: ultimi 8 trimestri
+    Returns ``_av_annual_reports`` (last 5 years), ``_av_quarterly_reports``
+    (last 8 quarters) and ``_av_earnings_history`` (last 8 quarters).
     """
     result: dict[str, Any] = {}
-
     income = _av_get("INCOME_STATEMENT", symbol)
     if income and "annualReports" in income:
         result["_av_annual_reports"] = income["annualReports"][:5]
         result["_av_quarterly_reports"] = income.get("quarterlyReports", [])[:8]
-
     earnings = _av_get("EARNINGS", symbol)
     if earnings and "annualEarnings" in earnings:
         result["_av_earnings_history"] = earnings.get("quarterlyEarnings", [])[:8]
-
-    if result:
-        logger.info("AV historical data for %s (remaining: %d/%d)",
-                    symbol, _av_limiter.remaining_today(), _av_limiter.max_per_day)
-
     return result
 
 
 def remaining_calls_today() -> int:
-    """Quante chiamate AV rimangono oggi (free tier)."""
+    """Alpha Vantage calls left today (free tier, shared count)."""
     return _av_limiter.remaining_today()

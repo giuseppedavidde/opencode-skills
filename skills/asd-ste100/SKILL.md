@@ -83,7 +83,7 @@ Eccezione ammessa per `non`: solo in avvisi e divieti. Esempio: "Non superare il
 Quando l'output è in inglese, vale il dizionario ASD-STE100, Parte 2.
 
 1. Usa una parola approvata. Se la parola non è approvata, usa l'alternativa approvata.
-2. I nomi tecnici e i verbi tecnici sono ammessi senza limite. Esempio: `strike`, `delta`, `break-even`, `LightGBM`.
+2. I nomi tecnici e i verbi tecnici sono ammessi senza limite. Esempio: `strike`, `delta`, `break-even`, `Black-Scholes`.
 3. Un nome composto ha massimo 3 parole. Esempio: `option expiry date`, non `date of the expiry of the option`.
 4. Verbi: solo forme approvate. Voce attiva. Tempi semplici.
 5. Non usare la forma in `-ing` come verbo. Usa il sostantivo tecnico o una frase semplice.

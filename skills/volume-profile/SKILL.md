@@ -20,7 +20,7 @@ The price range where ~70% of total volume occurred. Defined by VAH (Value Area 
 Price levels with heavy volume (wide profile). Represents institutional accumulation/distribution zones. Acts as strong support/resistance. Price stops, rotates, consolidates at HVNs.
 
 ### LVN (Low Volume Node)
-Price levels with minimal volume (thin profile). Represents gaps/inefficiency. Price moves through LVNs rapidly. Acts as weak support/resistance — expects breakage.
+Price levels with minimal volume (thin profile). Represents gaps/inefficiency and rejection. Price moves through LVNs rapidly or turns fast at them; it does not consolidate inside. Treat an LVN as a reaction level, not a strong support/resistance, and put stops beyond it. Canonical definition: `volume-price-analysis/SKILL.md`, Canonical Terminology.
 
 ### TPO (Time Price Opportunity)
 Each letter/time-slot represents price acceptance at a level. TPO count = time spent at price. Wide TPO clusters = acceptance. Narrow TPO = rejection/fast move.

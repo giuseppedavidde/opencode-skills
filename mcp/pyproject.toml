@@ -9,21 +9,25 @@ description = "MCP server for stock/crypto market analysis using Wyckoff, Volume
 license = {text = "Apache-2.0"}
 readme = "README.md"
 requires-python = ">=3.11"
+# Upper bounds stop a new major release from changing the numbers without a
+# review (DATA-16). The exact versions live in requirements.lock; regenerate it with
+#   uv pip compile mcp/pyproject.toml --universal --python-version 3.11 -o mcp/requirements.lock
 dependencies = [
-    "fastmcp>=3.0.0",
-    "yfinance>=0.2.50",
-    "pandas>=2.0.0",
-    "numpy>=1.24.0",
-    "pydantic>=2.0.0",
-    "pyyaml>=6.0",
-    "click>=8.0.0",
-    "scipy>=1.10.0",
+    "fastmcp>=3.0,<4",
+    "yfinance>=1.5,<2",
+    "pandas>=2.2,<4",
+    "numpy>=1.26,<3",
+    "scipy>=1.11,<2",
+    "pydantic>=2.7,<3",
+    "pyyaml>=6.0,<7",
+    "click>=8.1,<9",
+    "requests>=2.31,<3",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pylint>=3.0.0",
-    "pytest>=7.0.0",
+    "pylint>=3.0,<5",
+    "pytest>=8.0,<10",
 ]
 
 [project.scripts]

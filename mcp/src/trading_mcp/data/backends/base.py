@@ -7,12 +7,20 @@ degradation (ThetaData -> Polygon -> MarketData.app -> yfinance).
 Conventions / units
 -------------------
 - ``gamma`` is **per share** (1 / unit of underlying), matching the local
-  Black-Scholes gamma in :mod:`trading_mcp.data.options_chain` and the GEX
+  Black-Scholes gamma in :mod:`trading_mcp.analysis.pricing` and the GEX
   formula ``+/- gamma * OI * 100 * S^2 * 0.01``. Backends that expose
   per-contract gamma (x100) or dollar-gamma must normalise before returning.
-- ``implied_volatility`` is an **annualised decimal** (e.g. ``0.20``).
+- ``implied_volatility`` is an **annualised decimal** (e.g. ``0.20``). The
+  options tools use it only as a cross-check: they solve their own IV from
+  the mid.
 - ``open_interest`` / ``volume`` are contract counts.
 - ``contract_multiplier`` defaults to ``100`` (equity options).
+- A missing ``bid``/``ask``/``implied_volatility`` is ``None`` and becomes
+  ``NaN`` in the frames, never ``0.0``. A vendor bid of 0 stays 0 (no buyer).
+- ``quote_time`` is the vendor time of the bid/ask, ``last_trade_time`` the
+  time of the last trade (aware datetimes). ``OptionsChain.as_of`` is the
+  latest quote time, else the latest trade time (``as_of_basis`` says which),
+  else ``None``; ``fetched_at`` is the request time.
 """
 
 from __future__ import annotations
@@ -67,6 +75,8 @@ class OptionQuote(BaseModel):
     vega: float | None = None
     contract_multiplier: int = 100
     currency: str = "USD"
+    quote_time: datetime | None = None
+    last_trade_time: datetime | None = None
 
 
 class OptionsChain(BaseModel):
@@ -76,14 +86,28 @@ class OptionsChain(BaseModel):
     spot: float
     expiry: date
     quotes: list[OptionQuote] = Field(default_factory=list)
-    as_of: datetime
+    as_of: datetime | None = None
+    as_of_basis: str | None = None
+    fetched_at: datetime | None = None
     source: str
     greeks_are_native: bool = False
     iv_is_native: bool = False
+    truncated: bool = False
 
     def quotes_for(self, right: OptionRight) -> list[OptionQuote]:
         """Return the quotes for one option side."""
         return [quote for quote in self.quotes if quote.right is right]
+
+
+def data_time(quotes: list[OptionQuote]) -> tuple[datetime | None, str | None]:
+    """Latest vendor quote time, else latest trade time, with its basis."""
+    quote_times = [q.quote_time for q in quotes if q.quote_time is not None and q.quote_time.tzinfo]
+    if quote_times:
+        return max(quote_times), "quote_time"
+    trades = [q.last_trade_time for q in quotes if q.last_trade_time is not None and q.last_trade_time.tzinfo]
+    if trades:
+        return max(trades), "last_trade"
+    return None, None
 
 
 @runtime_checkable
@@ -111,6 +135,7 @@ _FRAME_COLUMNS: list[str] = [
     "strike",
     "bid",
     "ask",
+    "lastPrice",
     "volume",
     "openInterest",
     "impliedVolatility",
@@ -118,25 +143,36 @@ _FRAME_COLUMNS: list[str] = [
     "gamma",
     "theta",
     "vega",
+    "quoteTime",
+    "lastTradeDate",
 ]
 
 
+def _nan(value: float | None) -> float:
+    return float(value) if value is not None else float("nan")
+
+
+def _stamp(value: datetime | None) -> str | None:
+    return value.isoformat() if value is not None and value.tzinfo is not None else None
+
+
 def _quotes_to_frame(quotes: list[OptionQuote]) -> pd.DataFrame:
-    """Build a pipeline-ready DataFrame from normalised quotes."""
+    """Build a pipeline-ready DataFrame from normalised quotes (missing values are NaN)."""
     rows = [
         {
             "strike": quote.strike,
-            "bid": quote.bid if quote.bid is not None else 0.0,
-            "ask": quote.ask if quote.ask is not None else 0.0,
+            "bid": _nan(quote.bid),
+            "ask": _nan(quote.ask),
+            "lastPrice": _nan(quote.last),
             "volume": quote.volume,
             "openInterest": quote.open_interest,
-            "impliedVolatility": (
-                quote.implied_volatility if quote.implied_volatility is not None else 0.0
-            ),
+            "impliedVolatility": _nan(quote.implied_volatility),
             "delta": quote.delta,
             "gamma": quote.gamma,
             "theta": quote.theta,
             "vega": quote.vega,
+            "quoteTime": _stamp(quote.quote_time),
+            "lastTradeDate": _stamp(quote.last_trade_time),
         }
         for quote in quotes
     ]
@@ -145,21 +181,39 @@ def _quotes_to_frame(quotes: list[OptionQuote]) -> pd.DataFrame:
 
 @dataclass
 class ChainData:
-    """Provider-level chain payload (mirrors the yfinance namedtuple API)."""
+    """Provider-level chain payload (mirrors the yfinance namedtuple API).
+
+    ``as_of`` is the vendor data time (ISO 8601) or ``None``; ``as_of_basis``
+    is ``quote_time`` or ``last_trade``.
+    """
 
     calls: pd.DataFrame
     puts: pd.DataFrame
     source: str
     greeks_are_native: bool = False
     spot: float = 0.0
+    expiry: str | None = None
+    as_of: str | None = None
+    as_of_basis: str | None = None
+    contract_multiplier: int = 100
+    truncated: bool = False
 
 
 def chain_to_chaindata(chain: OptionsChain) -> ChainData:
     """Bridge a normalised :class:`OptionsChain` to pipeline DataFrames."""
+    as_of, basis = chain.as_of, chain.as_of_basis
+    if as_of is None:
+        as_of, basis = data_time(chain.quotes)
+    multipliers = {quote.contract_multiplier for quote in chain.quotes}
     return ChainData(
         calls=_quotes_to_frame(chain.quotes_for(OptionRight.CALL)),
         puts=_quotes_to_frame(chain.quotes_for(OptionRight.PUT)),
         source=chain.source,
         greeks_are_native=chain.greeks_are_native,
         spot=chain.spot,
+        expiry=chain.expiry.isoformat(),
+        as_of=_stamp(as_of),
+        as_of_basis=basis if as_of is not None else None,
+        contract_multiplier=multipliers.pop() if len(multipliers) == 1 else 100,
+        truncated=chain.truncated,
     )

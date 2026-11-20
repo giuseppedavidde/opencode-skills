@@ -1,807 +1,587 @@
-"""Technical indicators: Candlestick, Fibonacci, Bollinger, OBV, S/R, Psychology, Ichimoku, Risk/Reward, Point & Figure."""
+"""Technical indicators on one 0-100 scale (50 = neutral; documented, unvalidated rules).
+
+Rules of this module (SIG-08, SIG-13, SIG-14, SIG-21):
+
+- Every score is ``50 + points``, clipped to [0, 100]. Each bullish rule has
+  a mirror bearish rule with the same points, so a driftless random walk
+  gives a mean near 50 (tested in ``tests/test_signal_null.py``).
+- Rules that carry no direction (Bollinger squeeze, doji clusters, range
+  compression) are reported in the detail but add no points.
+- The last row is the last COMPLETE session (the provider drops the open bar).
+- ATR is Wilder's (see :mod:`trading_mcp.analysis.ta_core`); Bollinger bands
+  use the population standard deviation (ddof=0), as in Bollinger's definition.
+- No rule here was validated out of sample.
+"""
 
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 
+from trading_mcp.analysis.ta_core import atr_last
+
+
+def _clip(score: float) -> int:
+    return int(round(min(100.0, max(0.0, score))))
+
+
+def _streak(close: np.ndarray, max_bars: int = 30) -> tuple[str | None, int]:
+    """Direction (``up``/``down``) and length of the CURRENT run of closes (no flat bar)."""
+    if len(close) < 2:
+        return None, 0
+    last = float(close[-1]) - float(close[-2])
+    if last == 0:
+        return None, 0
+    direction = "up" if last > 0 else "down"
+    count = 0
+    for i in range(len(close) - 1, max(0, len(close) - 1 - max_bars), -1):
+        change = float(close[i]) - float(close[i - 1])
+        if (direction == "up" and change > 0) or (direction == "down" and change < 0):
+            count += 1
+        else:
+            break
+    return direction, count
+
+
+def _trend_sign(close: np.ndarray, bars: int = 20) -> int:
+    """Sign of the close change over ``bars`` bars (0 when flat or too short)."""
+    if len(close) <= bars:
+        return 0
+    change = float(close[-1]) - float(close[-1 - bars])
+    return 1 if change > 0 else -1 if change < 0 else 0
+
 
 def compute_candlestick_patterns(hist: pd.DataFrame) -> tuple[int, str]:
-    """Detect basic candlestick patterns: Hammer, Shooting Star, Engulfing, Doji, Stars.
+    """Hammer/shooting star, engulfing and morning/evening stars over the last 20 bars.
 
-    Based on VPA (Coulling) and Crypto TA (John & Law) frameworks.
+    Mirror pairs score +-5 (+-2 without volume above 0.8x the prior 20-bar
+    average), +-7 (+-3) and +-10 (+-5). Doji clusters are reported, not scored.
     """
     if hist.empty or len(hist) < 10:
         return 50, "Insufficient data"
 
-    score = 50
-    details = []
-    close = hist["Close"].values
-    high = hist["High"].values
-    low = hist["Low"].values
-    open_p = hist["Open"].values
-    volume = hist["Volume"].values
+    score = 50.0
+    details: list[str] = []
+    close = hist["Close"].to_numpy(dtype=float)
+    high = hist["High"].to_numpy(dtype=float)
+    low = hist["Low"].to_numpy(dtype=float)
+    open_p = hist["Open"].to_numpy(dtype=float)
+    volume = hist["Volume"].to_numpy(dtype=float)
 
-    def _body(i: int) -> float:
-        return abs(float(close[i]) - float(open_p[i]))
+    def body(i: int) -> float:
+        return abs(close[i] - open_p[i])
 
-    def _upper_shadow(i: int) -> float:
-        return float(high[i]) - max(float(open_p[i]), float(close[i]))
+    def upper(i: int) -> float:
+        return high[i] - max(open_p[i], close[i])
 
-    def _lower_shadow(i: int) -> float:
-        return min(float(open_p[i]), float(close[i])) - float(low[i])
+    def lower(i: int) -> float:
+        return min(open_p[i], close[i]) - low[i]
 
-    def _is_doji(i: int) -> bool:
-        rng = float(high[i]) - float(low[i])
-        return rng > 0 and _body(i) < rng * 0.05
+    def doji(i: int) -> bool:
+        rng = high[i] - low[i]
+        return rng > 0 and body(i) < rng * 0.05
 
-    def _is_hammer(i: int) -> bool:
-        rng = float(high[i]) - float(low[i])
-        if rng == 0:
-            return False
-        return _lower_shadow(i) > _body(i) * 2 and _upper_shadow(i) < _body(i) * 0.5
+    def hammer(i: int) -> bool:
+        return high[i] > low[i] and lower(i) > body(i) * 2 and upper(i) < body(i) * 0.5
 
-    def _is_shooting_star(i: int) -> bool:
-        rng = float(high[i]) - float(low[i])
-        if rng == 0:
-            return False
-        return _upper_shadow(i) > _body(i) * 2 and _lower_shadow(i) < _body(i) * 0.5
+    def shooting_star(i: int) -> bool:
+        return high[i] > low[i] and upper(i) > body(i) * 2 and lower(i) < body(i) * 0.5
 
-    def _is_engulfing_bullish(i: int) -> bool:
-        if i < 1:
-            return False
-        return (
-            close[i - 1] < open_p[i - 1]
-            and close[i] > open_p[i]
-            and close[i] > open_p[i - 1]
-            and open_p[i] < close[i - 1]
-        )
+    def bull_engulf(i: int) -> bool:
+        return (close[i - 1] < open_p[i - 1] and close[i] > open_p[i]
+                and close[i] > open_p[i - 1] and open_p[i] < close[i - 1])
 
-    def _is_engulfing_bearish(i: int) -> bool:
-        if i < 1:
-            return False
-        return (
-            close[i - 1] > open_p[i - 1]
-            and close[i] < open_p[i]
-            and close[i] < open_p[i - 1]
-            and open_p[i] > close[i - 1]
-        )
+    def bear_engulf(i: int) -> bool:
+        return (close[i - 1] > open_p[i - 1] and close[i] < open_p[i]
+                and close[i] < open_p[i - 1] and open_p[i] > close[i - 1])
 
-    def _is_morning_star(i: int) -> bool:
-        if i < 2:
-            return False
-        return (
-            close[i - 2] < open_p[i - 2]
-            and _is_doji(i - 1)
-            and close[i] > open_p[i]
-            and close[i] > (open_p[i - 2] + close[i - 2]) / 2
-        )
+    def morning_star(i: int) -> bool:
+        return (close[i - 2] < open_p[i - 2] and doji(i - 1) and close[i] > open_p[i]
+                and close[i] > (open_p[i - 2] + close[i - 2]) / 2)
 
-    def _is_evening_star(i: int) -> bool:
-        if i < 2:
-            return False
-        return (
-            close[i - 2] > open_p[i - 2]
-            and _is_doji(i - 1)
-            and close[i] < open_p[i]
-            and close[i] < (open_p[i - 2] + close[i - 2]) / 2
-        )
+    def evening_star(i: int) -> bool:
+        return (close[i - 2] > open_p[i - 2] and doji(i - 1) and close[i] < open_p[i]
+                and close[i] < (open_p[i - 2] + close[i - 2]) / 2)
 
-    avg_vol = float(volume[-20:].mean()) if len(volume) >= 20 else float(volume.mean())
+    rules = (
+        (hammer, 5, 2, "Hammer"), (shooting_star, -5, -2, "Shooting Star"),
+        (bull_engulf, 7, 3, "Bullish Engulfing"), (bear_engulf, -7, -3, "Bearish Engulfing"),
+        (morning_star, 10, 5, "Morning Star"), (evening_star, -10, -5, "Evening Star"),
+    )
     doji_count = 0
-
     for i in range(max(2, len(close) - 20), len(close)):
-        vol = float(volume[i])
-        vol_conf = vol > avg_vol * 0.8
-
-        if _is_hammer(i):
-            if vol_conf:
-                score += 5
-                details.append(f"Hammer @ {i} (+5 vol-conf)")
-            else:
-                score += 2
-        if _is_shooting_star(i):
-            if vol_conf:
-                score -= 5
-                details.append(f"Shooting Star @ {i} (-5 vol-conf)")
-            else:
-                score -= 2
-        if _is_engulfing_bullish(i):
-            if vol_conf:
-                score += 7
-                details.append(f"Bullish Engulfing @ {i} (+7)")
-            else:
-                score += 3
-        if _is_engulfing_bearish(i):
-            if vol_conf:
-                score -= 7
-                details.append(f"Bearish Engulfing @ {i} (-7)")
-            else:
-                score -= 3
-        if _is_morning_star(i):
-            if vol_conf:
-                score += 10
-                details.append(f"Morning Star @ {i} (+10)")
-            else:
-                score += 5
-        if _is_evening_star(i):
-            if vol_conf:
-                score -= 10
-                details.append(f"Evening Star @ {i} (-10)")
-            else:
-                score -= 5
-        if _is_doji(i):
-            doji_count += 1
-
+        prior = volume[max(0, i - 20):i]
+        vol_conf = len(prior) > 0 and volume[i] > prior.mean() * 0.8
+        for rule, strong, weak, label in rules:
+            if rule(i):
+                points = strong if vol_conf else weak
+                score += points
+                details.append(f"{label} @ {i} ({points:+d})")
+        doji_count += int(doji(i))
     if doji_count >= 3:
-        score += 3
-        details.append(f"{doji_count} doji (indecision +3)")
-
+        details.append(f"{doji_count} doji (indecision, not scored)")
     if not details:
         details.append("No major patterns")
-    return min(100, max(0, score)), " | ".join(details)
+    return _clip(score), " | ".join(details)
 
 
 def compute_fibonacci(hist: pd.DataFrame) -> tuple[int, str]:
-    """Fibonacci retracement levels from recent 60-bar swing high/low."""
+    """Direction-aware Fibonacci zone of the last 60-bar swing.
+
+    Up swing (low before high): a pullback into the 50-78.6% retracement
+    zone scores +8, a pullback beyond 78.6% scores -8. Down swing: a bounce
+    into the 50-78.6% zone scores -8, a bounce beyond 78.6% scores +8.
+    """
     if hist.empty or len(hist) < 30:
         return 50, "Insufficient data"
-
-    score = 50
-    details = []
     recent = hist.tail(60)
-    swing_high = float(recent["High"].max())
-    swing_low = float(recent["Low"].min())
+    high_i = int(np.argmax(recent["High"].to_numpy(dtype=float)))
+    low_i = int(np.argmin(recent["Low"].to_numpy(dtype=float)))
+    swing_high = float(recent["High"].iloc[high_i])
+    swing_low = float(recent["Low"].iloc[low_i])
     current = float(hist["Close"].iloc[-1])
-
     if swing_high <= swing_low:
         return 50, "No valid swing"
-
-    price_range = swing_high - swing_low
-    levels = {
-        "0.236": swing_high - price_range * 0.236,
-        "0.382": swing_high - price_range * 0.382,
-        "0.500": swing_high - price_range * 0.500,
-        "0.618": swing_high - price_range * 0.618,
-        "0.786": swing_high - price_range * 0.786,
-    }
-
-    dist_to_618 = abs(current - levels["0.618"]) / price_range
-    dist_to_786 = abs(current - levels["0.786"]) / price_range
-    dist_to_382 = abs(current - levels["0.382"]) / price_range
-    dist_to_236 = abs(current - levels["0.236"]) / price_range
-
-    if dist_to_618 < 0.03:
-        score += 15
-        details.append("Price @ 61.8% retracement (+15)")
-    elif dist_to_786 < 0.03:
-        score += 10
-        details.append("Price @ 78.6% retracement (+10 deep support)")
-    elif dist_to_382 < 0.03:
-        score -= 10
-        details.append("Price @ 38.2% retracement (-10 shallow)")
-    elif dist_to_236 < 0.03:
-        score -= 15
-        details.append("Price @ 23.6% retracement (-15 very shallow)")
-
-    if current > levels["0.500"]:
-        score += 5
-        details.append("Above 50% fib (+5)")
+    span = swing_high - swing_low
+    score = 50.0
+    if low_i < high_i:
+        frac = (swing_high - current) / span
+        label = f"Up swing {swing_low:.2f}->{swing_high:.2f}, retracement {frac:.0%}"
+        if 0.5 <= frac <= 0.786:
+            score += 8
+            label += " (golden zone support +8)"
+        elif frac > 0.786:
+            score -= 8
+            label += " (swing failure -8)"
     else:
-        score -= 5
-        details.append("Below 50% fib (-5)")
-
-    if not details:
-        details.append(f"Fib levels: H={swing_high:.2f} L={swing_low:.2f}")
-    return min(100, max(0, score)), " | ".join(details)
+        frac = (current - swing_low) / span
+        label = f"Down swing {swing_high:.2f}->{swing_low:.2f}, bounce {frac:.0%}"
+        if 0.5 <= frac <= 0.786:
+            score -= 8
+            label += " (golden zone resistance -8)"
+        elif frac > 0.786:
+            score += 8
+            label += " (swing failure +8)"
+    return _clip(score), label
 
 
 def compute_bollinger(hist: pd.DataFrame) -> tuple[int, str]:
-    """Bollinger Bands: squeeze detection, %B position, bandwidth."""
+    """Bollinger(20, 2, population std): %B extremes and band walks; a squeeze is not scored."""
     if hist.empty or len(hist) < 20:
         return 50, "Insufficient data"
 
-    score = 50
-    details = []
-    close = hist["Close"]
-
+    score = 50.0
+    details: list[str] = []
+    close = hist["Close"].astype(float)
     ma20 = close.rolling(20).mean()
-    std20 = close.rolling(20).std()
+    std20 = close.rolling(20).std(ddof=0)
     upper = ma20 + 2 * std20
     lower = ma20 - 2 * std20
 
     current = float(close.iloc[-1])
-    upper_now = float(upper.iloc[-1])
-    lower_now = float(lower.iloc[-1])
+    band = float(upper.iloc[-1] - lower.iloc[-1])
     ma_now = float(ma20.iloc[-1])
-    bandwidth = (upper_now - lower_now) / ma_now if ma_now > 0 else 0
-    bb_range = upper_now - lower_now
-    pct_b = (current - lower_now) / bb_range if bb_range > 0 else 0.5
+    pct_b = (current - float(lower.iloc[-1])) / band if band > 0 else 0.5
+    bandwidth = band / ma_now if ma_now > 0 else 0.0
 
     if len(hist) >= 40:
-        avg_bandwidth = float(((upper - lower) / ma20).tail(20).mean())
-        if bandwidth < avg_bandwidth * 0.5 and bandwidth < 0.05:
-            score += 15
-            details.append(f"BB Squeeze! bandwidth={bandwidth:.2%} (+15)")
-        elif bandwidth < 0.05:
-            score += 10
-            details.append(f"BB Squeeze bandwidth={bandwidth:.2%} (+10)")
+        avg_bw = float(((upper - lower) / ma20).tail(20).mean())
+        if avg_bw > 0 and bandwidth < avg_bw * 0.5:
+            details.append(f"BB squeeze bandwidth={bandwidth:.2%} (direction-neutral, not scored)")
 
-    if pct_b > 0.95:
-        score -= 10
-        details.append(f"%B={pct_b:.2f} >0.95 (overbought -10)")
-    elif pct_b < 0.05:
-        score += 10
-        details.append(f"%B={pct_b:.2f} <0.05 (oversold +10)")
-    elif pct_b > 0.8:
-        score -= 5
-        details.append(f"%B={pct_b:.2f} >0.8 (extended -5)")
-    elif pct_b < 0.2:
-        score += 5
-        details.append(f"%B={pct_b:.2f} <0.2 (cheap +5)")
+    for threshold, points, label in ((0.95, 10, "overbought"), (0.8, 5, "extended")):
+        if pct_b > threshold:
+            score -= points
+            details.append(f"%B={pct_b:.2f} >{threshold} ({label} -{points})")
+            break
+        if pct_b < 1 - threshold:
+            score += points
+            details.append(f"%B={pct_b:.2f} <{1 - threshold:.2f} ({'oversold' if points == 10 else 'cheap'} +{points})")
+            break
     else:
         details.append(f"%B={pct_b:.2f} (neutral)")
 
-    if len(hist) >= 5:
-        above_upper = sum(1 for i in range(-5, 0) if float(close.iloc[i]) > float(upper.iloc[i]))
-        below_lower = sum(1 for i in range(-5, 0) if float(close.iloc[i]) < float(lower.iloc[i]))
-        if above_upper >= 3:
-            score += 10
-            details.append("Walking upper band (strong uptrend +10)")
-        elif below_lower >= 3:
-            score -= 10
-            details.append("Walking lower band (strong downtrend -10)")
-
-    return min(100, max(0, score)), " | ".join(details)
+    above = sum(1 for i in range(-5, 0) if float(close.iloc[i]) > float(upper.iloc[i]))
+    below = sum(1 for i in range(-5, 0) if float(close.iloc[i]) < float(lower.iloc[i]))
+    if above >= 3:
+        score += 10
+        details.append("Walking upper band (trend +10)")
+    elif below >= 3:
+        score -= 10
+        details.append("Walking lower band (trend -10)")
+    return _clip(score), " | ".join(details)
 
 
 def compute_obv(hist: pd.DataFrame) -> tuple[int, str]:
-    """On-Balance Volume divergence detection."""
-    if hist.empty or len(hist) < 20:
+    """On-Balance Volume: divergence (+-15) or confirmation (+-10) over 20 bars, OBV vs its mean (+-5).
+
+    The OBV change is normalized by the volume traded in the window, so it
+    is in [-1, 1] and never divides by an OBV level near zero.
+    """
+    if hist.empty or len(hist) < 21:
         return 50, "Insufficient data"
+    close = hist["Close"].to_numpy(dtype=float)
+    volume = hist["Volume"].to_numpy(dtype=float)
+    signed = np.sign(np.diff(close)) * volume[1:]
+    obv = np.concatenate([[0.0], np.cumsum(signed)])
+    traded = float(volume[-19:].sum())
+    price_slope = (close[-1] - close[-20]) / close[-20] if close[-20] != 0 else 0.0
+    obv_slope = (obv[-1] - obv[-20]) / traded if traded > 0 else 0.0
 
-    score = 50
-    details = []
-    close = hist["Close"].values
-    volume = hist["Volume"].values
-
-    obv_vals = [0.0]
-    for i in range(1, len(close)):
-        if close[i] > close[i - 1]:
-            obv_vals.append(obv_vals[-1] + float(volume[i]))
-        elif close[i] < close[i - 1]:
-            obv_vals.append(obv_vals[-1] - float(volume[i]))
-        else:
-            obv_vals.append(obv_vals[-1])
-
-    obv_arr = np.array(obv_vals)
-    price_slope = (close[-1] - close[-20]) / close[-20] if close[-20] != 0 else 0
-    obv_slope = (obv_arr[-1] - obv_arr[-20]) / abs(obv_arr[-20]) if obv_arr[-20] != 0 else 0
-
+    score = 50.0
     if price_slope > 0.05 and obv_slope < 0:
         score -= 15
-        details.append(f"OBV divergence bearish: price +{price_slope:.1%} OBV {obv_slope:.1%} (-15)")
+        detail = f"OBV bearish divergence: price {price_slope:+.1%}, OBV flow {obv_slope:+.2f} (-15)"
     elif price_slope < -0.05 and obv_slope > 0:
         score += 15
-        details.append(f"OBV divergence bullish: price {price_slope:.1%} OBV +{obv_slope:.1%} (+15)")
+        detail = f"OBV bullish divergence: price {price_slope:+.1%}, OBV flow {obv_slope:+.2f} (+15)"
     elif price_slope > 0 and obv_slope > 0:
         score += 10
-        details.append("OBV confirms uptrend (+10)")
+        detail = "OBV confirms the rise (+10)"
     elif price_slope < 0 and obv_slope < 0:
         score -= 10
-        details.append("OBV confirms downtrend (-10)")
+        detail = "OBV confirms the fall (-10)"
     else:
-        details.append(f"OBV slope={obv_slope:.2f} vs price={price_slope:.2f}")
-
-    if len(obv_arr) >= 20:
-        obv_ma = float(np.mean(obv_arr[-20:]))
-        if obv_arr[-1] > obv_ma * 1.05:
-            score += 5
-            details.append("OBV above MA20 (+5)")
-        elif obv_arr[-1] < obv_ma * 0.95:
-            score -= 5
-            details.append("OBV below MA20 (-5)")
-
-    return min(100, max(0, score)), " | ".join(details)
+        detail = f"OBV flow {obv_slope:+.2f} vs price {price_slope:+.1%}"
+    adv = float(volume[-20:].mean())
+    gap = obv[-1] - float(np.mean(obv[-20:]))
+    if adv > 0 and gap > adv:
+        score += 5
+        detail += " | OBV above its 20-bar mean (+5)"
+    elif adv > 0 and gap < -adv:
+        score -= 5
+        detail += " | OBV below its 20-bar mean (-5)"
+    return _clip(score), detail
 
 
 def compute_support_resistance(hist: pd.DataFrame) -> tuple[int, str]:
-    """Support/Resistance role reversal detection via swing point clustering."""
+    """Swing-cluster support/resistance: proximity (+-10 / +-5) and failed breaks (+-5).
+
+    A cluster is two or more confirmed swing points (3 bars each side) within
+    2%. Near support (<3% / <5%) scores +10 / +5, near resistance mirrors it.
+    A poke above resistance in the last 10 bars that closed back below scores
+    -5 (rejection); a poke below support that recovered scores +5.
+    """
     if hist.empty or len(hist) < 30:
         return 50, "Insufficient data"
-
-    score = 50
-    details = []
-    close = hist["Close"].values
-    high = hist["High"].values
-    low = hist["Low"].values
-
-    def _local_extrema(arr, window=3):
-        extrema = []
-        for i in range(window, len(arr) - window):
-            if all(arr[i] >= arr[i - j] for j in range(1, window + 1)) and \
-               all(arr[i] >= arr[i + j] for j in range(1, window + 1)):
-                extrema.append((i, float(arr[i]), "high"))
-            elif all(arr[i] <= arr[i - j] for j in range(1, window + 1)) and \
-                 all(arr[i] <= arr[i + j] for j in range(1, window + 1)):
-                extrema.append((i, float(arr[i]), "low"))
-        return extrema
-
-    highs = _local_extrema(high, 3)
-    lows = _local_extrema(low, 3)
-    all_extrema = sorted(highs + lows, key=lambda x: x[1])
-
-    if len(all_extrema) < 4:
+    close = hist["Close"].to_numpy(dtype=float)
+    high = hist["High"].to_numpy(dtype=float)
+    low = hist["Low"].to_numpy(dtype=float)
+    points: list[float] = []
+    for i in range(3, len(close) - 3):
+        if high[i] == high[i - 3:i + 4].max():
+            points.append(float(high[i]))
+        if low[i] == low[i - 3:i + 4].min():
+            points.append(float(low[i]))
+    if len(points) < 4:
         return 50, "Not enough swing points"
-
     clusters: list[dict] = []
-    for _, val, kind in all_extrema:
-        matched = False
-        for c in clusters:
-            if abs(val - c["price"]) / c["price"] < 0.02:
-                c["count"] += 1
-                c["types"].append(kind)
-                c["price"] = (c["price"] * (c["count"] - 1) + val) / c["count"]
-                matched = True
-                break
-        if not matched:
-            clusters.append({"price": val, "count": 1, "types": [kind]})
-
+    for value in sorted(points):
+        if clusters and abs(value - clusters[-1]["price"]) / clusters[-1]["price"] < 0.02:
+            c = clusters[-1]
+            c["count"] += 1
+            c["price"] += (value - c["price"]) / c["count"]
+        else:
+            clusters.append({"price": value, "count": 1})
     clusters = [c for c in clusters if c["count"] >= 2]
-    clusters.sort(key=lambda x: x["price"])
-    current = float(close[-1])
-
     if not clusters:
         return 50, "No clear S/R levels"
 
-    supports = [c for c in clusters if c["price"] < current]
-    resistances = [c for c in clusters if c["price"] > current]
-
-    nearest_support = max(supports, key=lambda x: x["price"]) if supports else None
-    nearest_resistance = min(resistances, key=lambda x: x["price"]) if resistances else None
-
-    if nearest_support:
-        dist = (current - nearest_support["price"]) / current if current > 0 else 0
+    current = float(close[-1])
+    supports = [c["price"] for c in clusters if c["price"] < current]
+    resistances = [c["price"] for c in clusters if c["price"] > current]
+    score = 50.0
+    details: list[str] = []
+    if supports:
+        level = max(supports)
+        dist = (current - level) / current
         if dist < 0.03:
             score += 10
-            details.append(f"Price at support ${nearest_support['price']:.2f} (+10)")
+            details.append(f"At support ${level:.2f} (+10)")
         elif dist < 0.05:
             score += 5
-            details.append(f"Price near support ${nearest_support['price']:.2f} (+5)")
-
-    if nearest_resistance:
-        dist = (nearest_resistance["price"] - current) / current if current > 0 else 0
+            details.append(f"Near support ${level:.2f} (+5)")
+        if float(low[-10:].min()) < level * 0.99:
+            score += 5
+            details.append(f"Failed break below ${level:.2f}, recovered (+5)")
+    if resistances:
+        level = min(resistances)
+        dist = (level - current) / current
         if dist < 0.03:
             score -= 10
-            details.append(f"Price at resistance ${nearest_resistance['price']:.2f} (-10)")
+            details.append(f"At resistance ${level:.2f} (-10)")
         elif dist < 0.05:
             score -= 5
-            details.append(f"Price near resistance ${nearest_resistance['price']:.2f} (-5)")
-
-    if len(hist) >= 10 and nearest_resistance:
-        recent_high = float(max(high[-10:]))
-        if recent_high > nearest_resistance["price"] * 1.01:
-            score += 10
-            details.append("Role reversal: broke resistance -> support (+10)")
-
-    if len(hist) >= 10 and nearest_support:
-        recent_low = float(min(low[-10:]))
-        if recent_low < nearest_support["price"] * 0.99:
-            score -= 10
-            details.append("Role reversal: broke support -> resistance (-10)")
-
+            details.append(f"Near resistance ${level:.2f} (-5)")
+        if float(high[-10:].max()) > level * 1.01:
+            score -= 5
+            details.append(f"Rejected above ${level:.2f} (-5)")
     if not details:
         details.append("S/R neutral")
-    return min(100, max(0, score)), " | ".join(details)
+    return _clip(score), " | ".join(details)
 
 
 def compute_psychology_score(hist: pd.DataFrame) -> tuple[int, str]:
-    """Trading psychology: FOMO/Panic detection via consecutive candles, gaps, volume spikes, RSI."""
-    if hist.empty or len(hist) < 20:
+    """Contrarian streak rule and volume-spike rule (both mirrored).
+
+    Current run of 7+ up closes -20 (5+: -10); 7+ down closes +20 (5+: +10).
+    A volume spike (>2.5x the prior 20-bar average) with a flat 5-bar move is
+    absorption: -10 after a 20-bar rise, +10 after a fall. A spike with a
+    5-bar move beyond +-5% scores +-10 (initiative). RSI is scored in Price Action.
+    """
+    if hist.empty or len(hist) < 21:
         return 50, "Insufficient data"
+    close = hist["Close"].to_numpy(dtype=float)
+    volume = hist["Volume"].to_numpy(dtype=float)
+    score = 50.0
+    details: list[str] = []
+    direction, run = _streak(close, 20)
+    if direction == "up" and run >= 5:
+        points = 20 if run >= 7 else 10
+        score -= points
+        details.append(f"{run} consecutive up closes (exhaustion -{points})")
+    elif direction == "down" and run >= 5:
+        points = 20 if run >= 7 else 10
+        score += points
+        details.append(f"{run} consecutive down closes (capitulation +{points})")
 
-    score = 50
-    details = []
-    close = hist["Close"].values
-    volume = hist["Volume"].values
-
-    green_streak = 0
-    red_streak = 0
-    for i in range(-1, -min(20, len(close)), -1):
-        if close[i] > close[i - 1]:
-            green_streak += 1
-            red_streak = 0
-        elif close[i] < close[i - 1]:
-            red_streak += 1
-            green_streak = 0
-        else:
-            break
-
-    if green_streak >= 7:
-        score = max(score - 20, 0)
-        details.append(f"{green_streak} consecutive green candles (FOMO -20)")
-    elif green_streak >= 5:
-        score = max(score - 10, 0)
-        details.append(f"{green_streak} consecutive green (exhaustion -10)")
-    elif red_streak >= 7:
-        score = min(score + 20, 100)
-        details.append(f"{red_streak} consecutive red candles (panic/capitulation +20)")
-    elif red_streak >= 5:
-        score = min(score + 10, 100)
-        details.append(f"{red_streak} consecutive red (oversold +10)")
-
-    if len(hist) >= 5:
-        vol_avg = float(volume[-20:].mean()) if len(volume) >= 20 else float(volume.mean())
-        recent_vol = float(volume[-1])
-        recent_range = (close[-1] - close[-5]) / close[-5] if close[-5] != 0 else 0
-        if recent_vol > vol_avg * 2.5 and abs(recent_range) < 0.02:
-            score = max(score - 15, 0)
-            details.append("Vol spike + flat price (distribution -15)")
-        elif recent_vol > vol_avg * 2.5 and recent_range > 0.05:
-            score = min(score + 10, 100)
-            details.append("Vol spike + strong move (initiative +10)")
-
-    if len(close) >= 15:
-        delta = pd.Series(close).diff()
-        up = delta.clip(lower=0)
-        down = -delta.clip(upper=0)
-        ma_up_psy = up.ewm(com=13).mean()
-        ma_down_psy = down.ewm(com=13).mean()
-        rsi = 100.0 - (100.0 / (1.0 + ma_up_psy / ma_down_psy))
-        rsi_val = float(rsi.iloc[-1])
-        if rsi_val > 75:
-            score = max(score - 10, 0)
-            details.append(f"RSI {rsi_val:.0f} extreme overbought (-10)")
-        elif rsi_val < 25:
-            score = min(score + 10, 100)
-            details.append(f"RSI {rsi_val:.0f} extreme oversold (+10)")
-
+    prior = float(volume[-21:-1].mean())
+    move_5 = (close[-1] - close[-6]) / close[-6] if close[-6] != 0 else 0.0
+    if prior > 0 and volume[-1] > prior * 2.5:
+        if abs(move_5) < 0.02:
+            sign = _trend_sign(close)
+            if sign > 0:
+                score -= 10
+                details.append("Volume spike with no progress after a rise (absorption -10)")
+            elif sign < 0:
+                score += 10
+                details.append("Volume spike with no progress after a fall (absorption +10)")
+        elif move_5 > 0.05:
+            score += 10
+            details.append("Volume spike on a strong rise (initiative +10)")
+        elif move_5 < -0.05:
+            score -= 10
+            details.append("Volume spike on a strong fall (initiative -10)")
     if not details:
         details.append("Psychology neutral")
-    return min(100, max(0, score)), " | ".join(details)
+    return _clip(score), " | ".join(details)
 
 
 def compute_ichimoku(hist: pd.DataFrame) -> tuple[int, str]:
-    """Ichimoku Kinko Hyo cloud analysis."""
-    if hist.empty or len(hist) < 52:
-        return 50, "Insufficient data (<52 bars)"
+    """Ichimoku: cloud position (+-15, inside +-5), Tenkan/Kijun cross (+-15), Chikou (+-10).
 
-    score = 50
-    details = []
-    close = hist["Close"]
-    high = hist["High"]
-    low = hist["Low"]
-
+    The cloud plotted at today is built from data 26 bars ago (no look-ahead).
+    Chikou compares today's close with the close 26 bars ago (the lagging line
+    plotted 26 bars back): above +10, below -10.
+    """
+    if hist.empty or len(hist) < 78:
+        return 50, "Insufficient data (<78 bars)"
+    close = hist["Close"].astype(float)
+    high = hist["High"].astype(float)
+    low = hist["Low"].astype(float)
     tenkan = (high.rolling(9).max() + low.rolling(9).min()) / 2
     kijun = (high.rolling(26).max() + low.rolling(26).min()) / 2
-    senkou_a = ((tenkan + kijun) / 2).shift(26)
-    senkou_b = ((high.rolling(52).max() + low.rolling(52).min()) / 2).shift(26)
+    span_a = ((tenkan + kijun) / 2).shift(26)
+    span_b = ((high.rolling(52).max() + low.rolling(52).min()) / 2).shift(26)
 
+    score = 50.0
+    details: list[str] = []
     current = float(close.iloc[-1])
-    tenkan_now = float(tenkan.iloc[-1])
-    kijun_now = float(kijun.iloc[-1])
-    cloud_top = float(senkou_a.iloc[-1]) if not pd.isna(senkou_a.iloc[-1]) else None
-    cloud_bot = float(senkou_b.iloc[-1]) if not pd.isna(senkou_b.iloc[-1]) else None
-
-    if cloud_top is not None and cloud_bot is not None:
-        if current > cloud_top:
+    a, b = span_a.iloc[-1], span_b.iloc[-1]
+    if pd.notna(a) and pd.notna(b):
+        top, bottom = max(float(a), float(b)), min(float(a), float(b))
+        green = float(a) >= float(b)
+        if current > top:
             score += 15
-            details.append("Price above cloud (bullish +15)")
-        elif current < cloud_bot:
+            details.append("Price above cloud (+15)")
+        elif current < bottom:
             score -= 15
-            details.append("Price below cloud (bearish -15)")
-        elif cloud_top > cloud_bot and cloud_bot <= current <= cloud_top:
+            details.append("Price below cloud (-15)")
+        elif green:
             score += 5
-            details.append("Price inside bullish cloud (+5)")
-        elif cloud_bot > cloud_top and cloud_top <= current <= cloud_bot:
-            score -= 10
-            details.append("Price inside bearish cloud (-10)")
-        if cloud_top > cloud_bot:
-            details.append("Cloud green (bullish ahead)")
+            details.append("Price inside a green cloud (+5)")
         else:
-            details.append("Cloud red (bearish ahead)")
-
-    if len(close) >= 27:
-        tenkan_prev = float(tenkan.iloc[-2])
-        kijun_prev = float(kijun.iloc[-2])
-        if tenkan_prev <= kijun_prev and tenkan_now > kijun_now:
-            score += 15
-            details.append("Tenkan/Kijun bullish cross (+15)")
-        elif tenkan_prev >= kijun_prev and tenkan_now < kijun_now:
-            score -= 15
-            details.append("Tenkan/Kijun bearish cross (-15)")
-
-    if len(close) >= 27:
-        chikou = close.shift(-26)
-        chikou_now = float(chikou.iloc[-27]) if not pd.isna(chikou.iloc[-27]) else None
-        if chikou_now is not None:
-            if chikou_now > current:
-                score += 10
-                details.append("Chikou above price (+10)")
-            else:
-                score -= 10
-                details.append("Chikou below price (-10)")
-
+            score -= 5
+            details.append("Price inside a red cloud (-5)")
+    t_now, k_now = float(tenkan.iloc[-1]), float(kijun.iloc[-1])
+    t_prev, k_prev = float(tenkan.iloc[-2]), float(kijun.iloc[-2])
+    if t_prev <= k_prev and t_now > k_now:
+        score += 15
+        details.append("Tenkan/Kijun bullish cross (+15)")
+    elif t_prev >= k_prev and t_now < k_now:
+        score -= 15
+        details.append("Tenkan/Kijun bearish cross (-15)")
+    lagged = float(close.iloc[-27])
+    if current > lagged:
+        score += 10
+        details.append("Chikou above the price 26 bars ago (+10)")
+    elif current < lagged:
+        score -= 10
+        details.append("Chikou below the price 26 bars ago (-10)")
     if not details:
         details.append("Ichimoku neutral")
-    return min(100, max(0, score)), " | ".join(details)
+    return _clip(score), " | ".join(details)
 
 
 def compute_risk_reward(hist: pd.DataFrame, current_price: float) -> tuple[int, str]:
-    """Risk/Reward ratio + ATR-based stops + Kelly-inspired position sizing."""
-    if hist.empty or len(hist) < 20:
+    """Room to the 60-bar high vs a 2x Wilder-ATR stop (informational; not in the composite).
+
+    The trade plan (:mod:`trading_mcp.analysis.signal_engine`) computes the
+    real reward/risk; this score is kept for the indicator table only.
+    """
+    if hist.empty or len(hist) < 20 or not current_price or current_price <= 0:
         return 50, "Insufficient data"
-
-    score = 50
-    details = []
-    high = hist["High"].values
-    low = hist["Low"].values
-    close = hist["Close"].values
-
-    tr_list = []
-    for i in range(1, len(close)):
-        tr_list.append(max(
-            float(high[i]) - float(low[i]),
-            abs(float(high[i]) - float(close[i - 1])),
-            abs(float(low[i]) - float(close[i - 1])),
-        ))
-    tr_arr = np.array(tr_list)
-    atr14 = float(np.mean(tr_arr[-14:])) if len(tr_arr) >= 14 else float(np.mean(tr_arr))
-
-    recent = hist.tail(60)
-    swing_low = float(recent["Low"].min())
-    swing_high = float(recent["High"].max())
-
-    reward_pct = (swing_high - current_price) / current_price if current_price > 0 else 0
-    risk_pct = (2 * atr14) / current_price if current_price > 0 else 0.05
-    rrr = reward_pct / risk_pct if risk_pct > 0 else 0
-
+    atr = atr_last(hist)
+    if atr is None:
+        return 50, "ATR unavailable"
+    swing_high = float(hist.tail(60)["High"].max())
+    reward = max(0.0, swing_high - current_price)
+    rrr = reward / (2 * atr)
     if rrr >= 3.0:
-        score += 20
-        details.append(f"RRR {rrr:.1f}:1 (excellent +20)")
+        score = 70
     elif rrr >= 2.0:
-        score += 15
-        details.append(f"RRR {rrr:.1f}:1 (good +15)")
+        score = 60
     elif rrr >= 1.0:
-        score += 5
-        details.append(f"RRR {rrr:.1f}:1 (acceptable +5)")
+        score = 50
     else:
-        score -= 15
-        details.append(f"RRR {rrr:.1f}:1 (poor -15)")
-
-    stop_2atr = current_price - (2 * atr14)
-    details.append(f"ATR14=${atr14:.2f} | Stop 2ATR=${stop_2atr:.2f}")
-
-    dist_to_support = (current_price - swing_low) / current_price if current_price > 0 else 0
-    if dist_to_support > 0 and reward_pct > 0:
-        win_prob = 0.55
-        kelly_fraction = win_prob - (1 - win_prob) / (reward_pct / risk_pct) if risk_pct > 0 else 0
-        kelly_fraction = max(0.0, min(0.25, kelly_fraction))
-        if kelly_fraction > 0.1:
-            score += 10
-            details.append(f"Kelly sizing {kelly_fraction:.0%} (favorable +10)")
-        else:
-            score += 5
-            details.append(f"Kelly sizing {kelly_fraction:.0%} (conservative +5)")
-
-    return min(100, max(0, score)), " | ".join(details)
+        score = 35
+    return score, f"Room to 60-bar high {reward:.2f} vs 2 ATR {2 * atr:.2f}: {rrr:.1f}:1 | ATR14(Wilder)={atr:.2f}"
 
 
 def compute_psychology_advanced(hist: pd.DataFrame) -> tuple[int, str]:
-    """Advanced trading psychology: Cycle of Doom, volume climax, compression, anchoring."""
+    """Climax and anchoring rules (mirrored); the streak itself is scored by :func:`compute_psychology_score`.
+
+    Volume > 3x the prior 20-bar average after 3+ down closes: +20 (selling
+    climax); after 3+ up closes: -20 (buying climax). Volume < 0.5x with 3+
+    down closes: +10 (selling dries up); with 3+ up closes: -10. Price in the
+    bottom 15% of the 60-bar close range +15, top 15% -15 (anchoring, contrarian).
+    """
     if hist.empty or len(hist) < 30:
         return 50, "Insufficient data"
-
-    score = 50
-    details = []
-    close = hist["Close"].values
-    volume = hist["Volume"].values
-
-    reds = 0
-    for i in range(-1, -min(30, len(close)), -1):
-        if close[i] < close[i - 1]:
-            reds += 1
-        else:
-            break
-
-    greens = 0
-    for i in range(-1, -min(30, len(close)), -1):
-        if close[i] > close[i - 1]:
-            greens += 1
-        else:
-            break
-
-    if reds >= 8:
-        score = min(score + 25, 100)
-        details.append(f"Cycle: Capitulation/Depression ({reds} reds, contrarian +25)")
-    elif reds >= 5:
-        score = min(score + 15, 100)
-        details.append(f"Cycle: Panic ({reds} reds, near capitulation +15)")
-    elif greens >= 8:
-        score = max(score - 25, 0)
-        details.append(f"Cycle: Euphoria/Greed ({greens} greens, FOMO peak -25)")
-    elif greens >= 5:
-        score = max(score - 15, 0)
-        details.append(f"Cycle: Optimism ({greens} greens, extended -15)")
-
-    if len(volume) >= 5:
-        vol_now = float(volume[-1])
-        vol_20avg = float(volume[-20:].mean()) if len(volume) >= 20 else float(volume.mean())
-        vol_ratio = vol_now / vol_20avg if vol_20avg > 0 else 1.0
-
-        if vol_ratio > 3.0 and reds >= 3:
-            score = min(score + 20, 100)
-            details.append(f"Selling climax (vol {vol_ratio:.1f}x + reds {reds}) (+20)")
-        elif vol_ratio > 3.0 and greens >= 3:
-            score = max(score - 20, 0)
-            details.append(f"Buying climax (vol {vol_ratio:.1f}x + greens {greens}) (-20)")
-        elif reds >= 3 and vol_ratio < 0.5:
-            score = min(score + 10, 100)
-            details.append(f"Exhaustion selling (low vol + reds) (+10)")
-
+    close = hist["Close"].to_numpy(dtype=float)
+    volume = hist["Volume"].to_numpy(dtype=float)
+    score = 50.0
+    details: list[str] = []
+    direction, run = _streak(close, 30)
+    prior = float(volume[-21:-1].mean())
+    ratio = volume[-1] / prior if prior > 0 else 1.0
+    if run >= 3:
+        if ratio > 3.0:
+            points = 20 if direction == "down" else -20
+            details.append(f"{'Selling' if direction == 'down' else 'Buying'} climax (vol {ratio:.1f}x after {run} "
+                           f"{direction} closes, {points:+d})")
+            score += points
+        elif ratio < 0.5:
+            points = 10 if direction == "down" else -10
+            details.append(f"{'Selling' if direction == 'down' else 'Buying'} dries up (vol {ratio:.1f}x, {points:+d})")
+            score += points
     if len(close) >= 20 and close[-1] != 0:
-        range_5d = (max(close[-5:]) - min(close[-5:])) / close[-1]
-        range_20d = (max(close[-20:]) - min(close[-20:])) / close[-1]
-        vol_trend = float(volume[-5:].mean()) / float(volume[-20:].mean()) if float(volume[-20:].mean()) > 0 else 1.0
-        if range_5d < range_20d * 0.2 and vol_trend < 0.7:
-            score += 10
-            details.append("Indecision compression (breakout imminent +10)")
-
+        range_5 = (max(close[-5:]) - min(close[-5:])) / close[-1]
+        range_20 = (max(close[-20:]) - min(close[-20:])) / close[-1]
+        if range_20 > 0 and range_5 < range_20 * 0.2:
+            details.append("Range compression (direction-neutral, not scored)")
     if len(close) >= 60:
-        h52 = max(close[-60:])
-        l52 = min(close[-60:])
-        pos_52 = (close[-1] - l52) / (h52 - l52) if h52 != l52 else 0.5
-        if pos_52 < 0.15:
-            score = min(score + 15, 100)
-            details.append(f"Near 52w low ({pos_52:.0%}) anchoring/extreme fear (+15)")
-        elif pos_52 > 0.85:
-            score = max(score - 15, 0)
-            details.append(f"Near 52w high ({pos_52:.0%}) anchoring/greed (-15)")
-
+        h60, l60 = max(close[-60:]), min(close[-60:])
+        pos = (close[-1] - l60) / (h60 - l60) if h60 != l60 else 0.5
+        if pos < 0.15:
+            score += 15
+            details.append(f"Near the 60-bar low ({pos:.0%}) (+15)")
+        elif pos > 0.85:
+            score -= 15
+            details.append(f"Near the 60-bar high ({pos:.0%}) (-15)")
     if not details:
         details.append("Psychology advanced neutral")
-    return min(100, max(0, score)), " | ".join(details)
+    return _clip(score), " | ".join(details)
 
 
 def compute_candlestick_advanced(hist: pd.DataFrame) -> tuple[int, str]:
-    """Advanced candlestick patterns: Harami, Piercing, Dark Cloud, Abandoned Baby, 3-bar Engulfing."""
+    """Piercing line (+7) and dark cloud cover (-7) over the last 20 bars."""
     if hist.empty or len(hist) < 10:
         return 50, "Insufficient data"
-
-    score = 50
-    details = []
-    close = hist["Close"].values
-    high = hist["High"].values
-    low = hist["Low"].values
-    open_p = hist["Open"].values
-    volume = hist["Volume"].values
-
-    def _body(i: int) -> float:
-        return abs(float(close[i]) - float(open_p[i]))
-
-    def _range(i: int) -> float:
-        return float(high[i]) - float(low[i])
-
-    def _is_piercing(i: int) -> bool:
-        if i < 1:
-            return False
-        prev_bear = close[i - 1] < open_p[i - 1]
-        curr_bull = close[i] > open_p[i]
-        if not (prev_bear and curr_bull):
-            return False
-        body_prev = _body(i - 1)
-        if body_prev == 0:
-            return False
-        return (
-            open_p[i] < low[i - 1]
-            and close[i] > (open_p[i - 1] + close[i - 1]) / 2
-            and close[i] < open_p[i - 1]
-        )
-
-    def _is_dark_cloud(i: int) -> bool:
-        if i < 1:
-            return False
-        prev_bull = close[i - 1] > open_p[i - 1]
-        curr_bear = close[i] < open_p[i]
-        if not (prev_bull and curr_bear):
-            return False
-        body_prev = _body(i - 1)
-        if body_prev == 0:
-            return False
-        return (
-            open_p[i] > high[i - 1]
-            and close[i] < (open_p[i - 1] + close[i - 1]) / 2
-            and close[i] > open_p[i - 1]
-        )
-
-    avg_vol = float(volume[-20:].mean()) if len(volume) >= 20 else float(volume.mean())
-    found = False
-
+    close = hist["Close"].to_numpy(dtype=float)
+    high = hist["High"].to_numpy(dtype=float)
+    low = hist["Low"].to_numpy(dtype=float)
+    open_p = hist["Open"].to_numpy(dtype=float)
+    score = 50.0
+    details: list[str] = []
     for i in range(max(4, len(close) - 20), len(close)):
-        if _is_piercing(i):
+        prev_body = abs(close[i - 1] - open_p[i - 1])
+        if prev_body == 0:
+            continue
+        mid = (open_p[i - 1] + close[i - 1]) / 2
+        if (close[i - 1] < open_p[i - 1] and close[i] > open_p[i] and open_p[i] < low[i - 1]
+                and mid < close[i] < open_p[i - 1]):
             score += 7
             details.append(f"Piercing Pattern @ {i} (+7)")
-            found = True
-        if _is_dark_cloud(i):
+        if (close[i - 1] > open_p[i - 1] and close[i] < open_p[i] and open_p[i] > high[i - 1]
+                and open_p[i - 1] < close[i] < mid):
             score -= 7
             details.append(f"Dark Cloud Cover @ {i} (-7)")
-            found = True
-
-    if not found:
+    if not details:
         details.append("No advanced patterns")
-    return min(100, max(0, score)), " | ".join(details)
+    return _clip(score), " | ".join(details)
+
+
+def _pf_columns(close: np.ndarray, box: float, reversal: int = 3) -> list[dict]:
+    """Close-only Point & Figure columns (3-box reversal from the column extreme)."""
+    columns: list[dict] = []
+    direction: str | None = None
+    extreme = start = float(close[0])
+    for price in close[1:]:
+        price = float(price)
+        if direction is None:
+            if abs(price - start) >= reversal * box:
+                direction = "up" if price > start else "down"
+                extreme = price
+        elif direction == "up":
+            if price > extreme:
+                extreme = price
+            elif extreme - price >= reversal * box:
+                columns.append({"direction": "up", "high": extreme, "low": start})
+                direction, start, extreme = "down", extreme, price
+        else:
+            if price < extreme:
+                extreme = price
+            elif price - extreme >= reversal * box:
+                columns.append({"direction": "down", "high": start, "low": extreme})
+                direction, start, extreme = "up", extreme, price
+    if direction is not None:
+        columns.append({"direction": direction, "high": max(start, extreme), "low": min(start, extreme),
+                        "open": True})
+    return columns
 
 
 def compute_point_figure(hist: pd.DataFrame) -> tuple[int, str]:
-    """Point & Figure simplified projection (Weis)."""
+    """Point & Figure (1% box, 3-box reversal): double-top breakout +15, double-bottom breakdown -15.
+
+    The column majority of the last six columns adds +-5.
+    """
     if hist.empty or len(hist) < 40:
         return 50, "Insufficient data"
-
-    score = 50
-    details = []
-    close = hist["Close"].values
-
-    avg_price = float(np.mean(close[-40:]))
-    box_size = avg_price * 0.01
-
-    columns = []
-    current_col = {"direction": None, "boxes": 0, "start_price": float(close[0])}
-
-    for i in range(1, len(close)):
-        box_move = (float(close[i]) - current_col["start_price"]) / box_size
-
-        if current_col["direction"] is None:
-            if abs(box_move) >= 3:
-                current_col["direction"] = "up" if box_move > 0 else "down"
-                current_col["boxes"] = int(abs(box_move))
-                current_col["start_price"] = float(close[i])
-        elif current_col["direction"] == "up":
-            if box_move <= -3:
-                columns.append(current_col)
-                current_col = {"direction": "down", "boxes": int(abs(box_move)), "start_price": float(close[i])}
-            elif int(box_move) > current_col.get("boxes", 0):
-                current_col["boxes"] = int(box_move)
-        else:
-            if box_move >= 3:
-                columns.append(current_col)
-                current_col = {"direction": "up", "boxes": int(box_move), "start_price": float(close[i])}
-            elif int(abs(box_move)) > current_col.get("boxes", 0):
-                current_col["boxes"] = int(abs(box_move))
-    columns.append(current_col)
-
+    close = hist["Close"].to_numpy(dtype=float)
+    box = float(np.mean(close[-40:])) * 0.01
+    columns = _pf_columns(close, box)
     if len(columns) < 3:
         return 50, "Not enough P&F columns"
-
-    recent_cols = columns[-5:]
-    up_cols = [c for c in recent_cols if c["direction"] == "up"]
-    down_cols = [c for c in recent_cols if c["direction"] == "down"]
-    current_price = float(close[-1])
-
-    if up_cols:
-        congestion_width = len(up_cols) * 3
-        projection = current_price + (congestion_width * 3 * box_size)
-        if projection > current_price * 1.05:
+    score = 50.0
+    details: list[str] = []
+    current = columns[-1]
+    same = [c for c in columns[:-1] if c["direction"] == current["direction"]]
+    if same:
+        if current["direction"] == "up" and current["high"] > same[-1]["high"]:
             score += 15
-            details.append(f"P&F bullish target ${projection:.2f} (+{projection/current_price-1:+.1%}) (+15)")
-        else:
-            score += 5
-            details.append(f"P&F bullish target ${projection:.2f} (+5)")
-
-    if down_cols:
-        congestion_width = len(down_cols) * 3
-        projection = current_price - (congestion_width * 3 * box_size)
-        if projection < current_price * 0.95:
+            details.append(f"P&F double-top breakout above {same[-1]['high']:.2f} (+15)")
+        elif current["direction"] == "down" and current["low"] < same[-1]["low"]:
             score -= 15
-            details.append(f"P&F bearish target ${projection:.2f} ({projection/current_price-1:+.1%}) (-15)")
-
-    col_dirs = [c["direction"] for c in columns[-6:]]
-    if col_dirs.count("down") > col_dirs.count("up"):
-        score -= 10
-        details.append(f"P&F: {col_dirs.count('down')}D vs {col_dirs.count('up')}U columns (bearish -10)")
-    elif col_dirs.count("up") > col_dirs.count("down"):
-        score += 10
-        details.append(f"P&F: {col_dirs.count('up')}U vs {col_dirs.count('down')}D columns (bullish +10)")
-
+            details.append(f"P&F double-bottom breakdown below {same[-1]['low']:.2f} (-15)")
+    dirs = [c["direction"] for c in columns[-6:]]
+    ups, downs = dirs.count("up"), dirs.count("down")
+    if ups > downs:
+        score += 5
+        details.append(f"P&F {ups}U vs {downs}D columns (+5)")
+    elif downs > ups:
+        score -= 5
+        details.append(f"P&F {ups}U vs {downs}D columns (-5)")
     if not details:
-        details.append(f"P&F {len(columns)} cols | box ${box_size:.2f}")
-    return min(100, max(0, score)), " | ".join(details)
+        details.append(f"P&F {len(columns)} columns | box {box:.2f}")
+    return _clip(score), " | ".join(details)

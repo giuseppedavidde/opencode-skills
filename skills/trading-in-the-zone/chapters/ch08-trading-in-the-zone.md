@@ -12,12 +12,12 @@ There is a structural paradox at the heart of trading: every technical *edge* im
   2. **Objectivity** — conscious access to everything learned about market movement; nothing blocked or altered by pain-avoidance mechanisms.
   3. **Make yourself available** — trading with nothing to prove, no agenda to win/avoid losing/get even; letting the market unfold and acting only on what it offers.
   4. **Now-moment** — no potential to associate any current opportunity with a past experience that already exists in the mental environment.
-- **Five fundamental truths recap** — the operating beliefs that, once integrated, neutralize the fear-driven error loop:
-  1. Anything can happen.
-  2. You don't need to know what's going to happen next to make money.
-  3. There is a random distribution between wins and losses for any given set of variables that define an edge.
-  4. An edge is simply an indication of a higher probability of one thing happening over another.
-  5. Every moment in the market is unique.
+- **Five fundamental truths recap** — the operating beliefs that, once integrated, neutralize the fear-driven error loop (paraphrase; the exact wording is in the book):
+  1. Any outcome is possible: one other participant can cancel your edge.
+  2. You can make money without knowing what the market does next.
+  3. For any set of conditions that defines an edge, wins and losses come in random order.
+  4. An edge only moves the odds toward one outcome; it does not promise it.
+  5. No market moment repeats exactly.
 - **Uniqueness belief as counterforce**: belief in uniqueness acts as the internal force that neutralizes the association mechanism. The stronger the uniqueness belief, the less internal material exists for association to link to — opening perception to what is actually offered.
 
 ## Key Concepts

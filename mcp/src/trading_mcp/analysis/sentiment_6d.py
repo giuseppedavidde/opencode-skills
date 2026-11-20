@@ -1,221 +1,200 @@
-"""Sentiment 6-dimension engine with optional web sentiment."""
+"""Sentiment dimension (0-100, 50 = neutral; ``None`` when no input is known) — SIG-09.
+
+Sub-scores and their signs follow the published evidence (documented priors,
+unvalidated here):
+
+- ``short_interest``: HIGH short interest is BEARISH. Heavily shorted stocks
+  underperform on average (Desai, Ramesh, Thiagarajan & Balachandran 2002,
+  Journal of Finance 57(5); Asquith, Pathak & Ritter 2005, Journal of
+  Financial Economics 78(2)), and lightly shorted stocks earn positive
+  abnormal returns (Boehmer, Huszar & Jordan 2010, Journal of Financial
+  Economics 96(1)). Short % of float: > 20% 25, 10-20% 35, 5-10% 45,
+  2-5% 50, < 2% 55; days to cover > 10 subtracts 5.
+- ``options_sentiment``: a HIGH put/call volume ratio is BEARISH. Option
+  volume carries information about future stock prices, and stocks with
+  high put/call ratios underperform (Pan & Poteshman 2006, Review of
+  Financial Studies 19(3)). The ratio here is total volume over the first
+  four expiries (not open-buy volume, so it is noisier): > 1.5 35,
+  1.0-1.5 42, 0.7-1.0 50, 0.5-0.7 55, < 0.5 58.
+- ``institutional``: held by institutions > 70% 55, 40-70% 52, 10-40% 48,
+  < 10% 45 (weak evidence; small effect).
+- ``web_news``: negation-aware headline score
+  (:func:`trading_mcp.analysis.sentiment_web.headline_polarity`).
+- ``social_media``: retail attention on WSB, contrarian (high attention 40).
+
+Weights: short_interest 0.30, options_sentiment 0.25, institutional 0.15,
+web_news 0.20, social_media 0.10, renormalized over the known sub-scores.
+Earnings quality (a fundamentals input) and price momentum (a price input)
+are NOT part of sentiment, so they are not counted twice. Insider and retail
+inputs were never filled, so they were removed.
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
 import pandas as pd
-import yfinance as yf
 
 WEIGHTS = {
-    "short_interest": 0.12,
-    "options_sentiment": 0.12,
-    "insider_trading": 0.12,
-    "retail_sentiment": 0.08,
-    "institutional": 0.12,
-    "momentum": 0.08,
-    "web_news": 0.08,
-    "social_media": 0.08,
-    "earnings_quality": 0.20,
+    "short_interest": 0.30,
+    "options_sentiment": 0.25,
+    "institutional": 0.15,
+    "web_news": 0.20,
+    "social_media": 0.10,
 }
 
 
+def short_interest_score(si: float | None, dtc: float | None) -> float | None:
+    """Score of the short % of float (FRACTION) and days to cover (see the module docstring)."""
+    if si is None:
+        return None
+    si = float(si)
+    if si > 0.20:
+        score = 25.0
+    elif si > 0.10:
+        score = 35.0
+    elif si > 0.05:
+        score = 45.0
+    elif si > 0.02:
+        score = 50.0
+    else:
+        score = 55.0
+    if dtc is not None and float(dtc) > 10:
+        score -= 5.0
+    return score
+
+
+def put_call_score(ratio: float | None) -> float | None:
+    """Score of a put/call volume ratio (see the module docstring)."""
+    if ratio is None:
+        return None
+    if ratio > 1.5:
+        return 35.0
+    if ratio > 1.0:
+        return 42.0
+    if ratio > 0.7:
+        return 50.0
+    if ratio > 0.5:
+        return 55.0
+    return 58.0
+
+
+def institutional_score(held: float | None) -> float | None:
+    """Score of the share held by institutions (FRACTION)."""
+    if held is None:
+        return None
+    held = float(held)
+    if held > 0.70:
+        return 55.0
+    if held > 0.40:
+        return 52.0
+    if held > 0.10:
+        return 48.0
+    return 45.0
+
+
+def _put_call_ratio(symbol: str) -> float | None:
+    from trading_mcp.data.provider import data_provider  # pylint: disable=import-outside-toplevel
+
+    exps = data_provider.get_options_expirations(symbol)
+    if not exps or len(exps) < 2:
+        return None
+    ratios: list[float] = []
+    for exp in exps[:4]:
+        chain = data_provider.get_options_chain(symbol, exp)
+        if chain is None or chain.calls.empty or chain.puts.empty:
+            continue
+        c_vol = float(pd.to_numeric(chain.calls.get("volume"), errors="coerce").fillna(0).sum())
+        p_vol = float(pd.to_numeric(chain.puts.get("volume"), errors="coerce").fillna(0).sum())
+        if c_vol > 0:
+            ratios.append(p_vol / c_vol)
+    return sum(ratios) / len(ratios) if ratios else None
+
+
 def compute_sentiment_6d(
-    ticker: yf.Ticker,
+    ticker: Any,
     info: dict[str, Any],
-    hist: pd.DataFrame,
+    hist: pd.DataFrame | None = None,
     spx_hist: pd.DataFrame | None = None,
     wsb_hotlist: dict | None = None,
     fetch_news: bool = False,
-) -> tuple[int, str, dict[str, float | None]]:
-    """Compute 9-dimension sentiment score.
+    *,
+    options: bool = True,
+) -> tuple[float | None, str, dict[str, float | None]]:
+    """Sentiment score, detail and sub-scores (see the module docstring).
 
-    When fetch_news=True, also scrapes Finviz headlines and WSB hotlist
-    to fill web_news and social_media sub-dimensions.
+    Args:
+        ticker: Symbol (or a ``yf.Ticker``; only its symbol is used).
+        info: yfinance ``info`` (short interest, institutional ownership).
+        hist: Unused (kept for the call signature).
+        spx_hist: Unused (momentum is no longer a sentiment input).
+        wsb_hotlist: Pre-fetched WSB hotlist.
+        fetch_news: Fetch headlines (yfinance, then Finviz) and the WSB hotlist.
+        options: Read the put/call ratio from the option chains.
     """
-    symbol = info.get("symbol", "")
-    subs: dict[str, float | None] = {
-        "short_interest": None,
-        "options_sentiment": None,
-        "insider_trading": None,
-        "retail_sentiment": None,
-        "institutional": None,
-        "momentum": None,
-        "earnings_quality": None,
-        "web_news": None,
-        "social_media": None,
-    }
-    detail_parts = []
+    del hist, spx_hist
+    symbol = ticker if isinstance(ticker, str) else str(getattr(ticker, "ticker", "") or info.get("symbol") or "")
+    subs: dict[str, float | None] = {name: None for name in WEIGHTS}
+    detail_parts: list[str] = []
 
-    si = info.get("shortPercentOfFloat")
-    dtc = info.get("shortRatio")
-    if si is not None and dtc is not None:
-        si_val = float(si)
-        dtc_val = float(dtc)
-        score_si = 50.0
-        if si_val > 0.20 and dtc_val > 7:
-            score_si = 90.0
-        elif si_val > 0.15 and dtc_val > 5:
-            score_si = 80.0
-        elif si_val > 0.10:
-            score_si = 65.0
-        elif si_val > 0.05:
-            score_si = 55.0
-        subs["short_interest"] = score_si
-        detail_parts.append(f"SI {si_val:.1%} DTC {dtc_val:.1f}")
+    si, dtc = info.get("shortPercentOfFloat"), info.get("shortRatio")
+    subs["short_interest"] = short_interest_score(si, dtc)
+    if si is not None:
+        detail_parts.append(f"SI {float(si):.1%}" + (f" DTC {float(dtc):.1f}" if dtc is not None else ""))
 
     inst = info.get("heldPercentInstitutions")
+    subs["institutional"] = institutional_score(inst)
     if inst is not None:
-        inst_val = float(inst)
-        if inst_val > 0.60:
-            subs["institutional"] = 80.0
-        elif inst_val > 0.40:
-            subs["institutional"] = 60.0
-        else:
-            subs["institutional"] = 45.0
-        detail_parts.append(f"Inst {inst_val:.0%}")
+        detail_parts.append(f"Inst {float(inst):.0%}")
 
-    if not hist.empty and len(hist) >= 50 and spx_hist is not None and not spx_hist.empty:
-        close_hist = hist["Close"].dropna()
-        close_spx = spx_hist["Close"].dropna()
-        if len(close_hist) >= 50 and len(close_spx) >= 50:
-            stock_ret = float(close_hist.iloc[-1]) / float(close_hist.iloc[-50]) - 1
-            spx_ret = float(close_spx.iloc[-1]) / float(close_spx.iloc[-50]) - 1
-            rel_momentum = stock_ret - spx_ret
-        if rel_momentum > 0.10:
-            subs["momentum"] = 80.0
-        elif rel_momentum > 0.0:
-            subs["momentum"] = 60.0
-        elif rel_momentum > -0.10:
-            subs["momentum"] = 40.0
-        else:
-            subs["momentum"] = 20.0
-        detail_parts.append(f"RelMom {rel_momentum:+.1%}")
-
-    pe = info.get("trailingPE")
-    eps_growth = info.get("earningsGrowth")
-    if pe is not None and eps_growth is not None:
-        pe_val = float(pe)
-        eps_val = float(eps_growth)
-        if 0 < pe_val < 15 and eps_val > 0.10:
-            subs["earnings_quality"] = 80.0
-        elif eps_val > 0.10:
-            subs["earnings_quality"] = 70.0
-        elif eps_val > 0:
-            subs["earnings_quality"] = 55.0
-        else:
-            subs["earnings_quality"] = 30.0
-        detail_parts.append(f"P/E {pe_val:.1f} EPSg {eps_val:.1%}")
-
-    try:
-        # fix A2: opzioni via DataProvider (cache centralizzata, niente
-        # chiamate yfinance dirette per ticker).
-        from trading_mcp.data.provider import data_provider
-        exps = data_provider.get_options_expirations(symbol)
-        if exps and len(exps) >= 2:
-            pc_ratios = []
-            for exp in exps[:4]:
-                try:
-                    chain = data_provider.get_options_chain(symbol, exp)
-                    if chain is None:
-                        continue
-                    calls = chain.calls
-                    puts = chain.puts
-                    if not calls.empty and not puts.empty:
-                        c_vol = int(calls["volume"].sum()) if "volume" in calls.columns else 0
-                        p_vol = int(puts["volume"].sum()) if "volume" in puts.columns else 0
-                        if c_vol > 0:
-                            pc_ratios.append(p_vol / c_vol)
-                except Exception:
-                    continue
-            if pc_ratios:
-                avg_pc = sum(pc_ratios) / len(pc_ratios)
-                if avg_pc > 1.5:
-                    subs["options_sentiment"] = 80.0
-                elif avg_pc > 1.0:
-                    subs["options_sentiment"] = 65.0
-                elif avg_pc > 0.7:
-                    subs["options_sentiment"] = 50.0
-                else:
-                    subs["options_sentiment"] = 35.0
-                detail_parts.append(f"P/C avg {avg_pc:.2f}")
-    except Exception:
-        pass
+    if options and symbol:
+        try:
+            ratio = _put_call_ratio(symbol)
+        except Exception:  # pylint: disable=broad-exception-caught
+            ratio = None
+        subs["options_sentiment"] = put_call_score(ratio)
+        if ratio is not None:
+            detail_parts.append(f"P/C {ratio:.2f}")
 
     if fetch_news and symbol:
-        try:
-            from trading_mcp.analysis.sentiment_web import (
-                compute_social_sentiment,
-                fetch_yfinance_news,
-                fetch_wsb_hotlist,
-            )
+        from trading_mcp.analysis.sentiment_web import (  # pylint: disable=import-outside-toplevel
+            compute_social_sentiment,
+            fetch_finviz_news,
+            fetch_wsb_hotlist,
+            fetch_yfinance_news,
+        )
 
-            news_score, news_detail = fetch_yfinance_news(symbol, timeout=5)
-            if news_score is not None:
-                subs["web_news"] = news_score
-                detail_parts.append(f"News: {news_detail}")
-            else:
-                from trading_mcp.analysis.sentiment_web import fetch_finviz_news
-                news_score, news_detail = fetch_finviz_news(symbol, timeout=5)
-                if news_score is not None:
-                    subs["web_news"] = news_score
-                    detail_parts.append(f"Finviz: {news_detail}")
+        news_score, news_detail = fetch_yfinance_news(symbol, timeout=5)
+        if news_score is None:
+            news_score, news_detail = fetch_finviz_news(symbol, timeout=5)
+        if news_score is not None:
+            subs["web_news"] = news_score
+            detail_parts.append(f"News: {news_detail}")
+        if wsb_hotlist is None:
+            wsb_hotlist = fetch_wsb_hotlist(timeout=5)
+    if wsb_hotlist and symbol:
+        from trading_mcp.analysis.sentiment_web import compute_social_sentiment  # pylint: disable=import-outside-toplevel
 
-            if wsb_hotlist is None:
-                try:
-                    wsb_hotlist = fetch_wsb_hotlist(timeout=5)
-                except Exception:
-                    wsb_hotlist = None
+        social_score, social_detail = compute_social_sentiment(symbol, wsb_hotlist)
+        if social_score is not None:
+            subs["social_media"] = social_score
+            detail_parts.append(f"Social: {social_detail}")
 
-            social_score, social_detail = compute_social_sentiment(symbol, wsb_hotlist)
-            if social_score is not None:
-                subs["social_media"] = social_score
-                detail_parts.append(f"Social: {social_detail}")
-
-        except Exception:
-            pass
-    elif wsb_hotlist:
-        symbol_upper = symbol.upper() if symbol else ""
-        if symbol_upper and symbol_upper in wsb_hotlist:
-            from trading_mcp.analysis.sentiment_web import compute_social_sentiment
-            social_score, social_detail = compute_social_sentiment(symbol, wsb_hotlist)
-            if social_score is not None:
-                subs["social_media"] = social_score
-                detail_parts.append(f"Social: {social_detail}")
-
-    total_weight = 0.0
-    weighted_sum = 0.0
-    for dim, weight in WEIGHTS.items():
-        sub_score = subs.get(dim)
-        if sub_score is not None:
-            weighted_sum += sub_score * weight
-            total_weight += weight
-
-    if total_weight > 0:
-        final_score = int(round(min(100.0, max(0.0, weighted_sum / total_weight))))
-    else:
-        final_score = 50
-
-    detail = " | ".join(detail_parts) if detail_parts else "Basic sentiment"
-
-    return final_score, detail, subs
+    known = {k: v for k, v in subs.items() if v is not None}
+    mass = sum(WEIGHTS[k] for k in known)
+    final = round(sum(WEIGHTS[k] * v for k, v in known.items()) / mass, 1) if mass > 0 else None
+    coverage = mass / sum(WEIGHTS.values())
+    detail = " | ".join(detail_parts) if detail_parts else "No sentiment inputs"
+    detail += f" | coverage {coverage:.0%}"
+    return final, detail, subs
 
 
 def earnings_proximity_adjustment(
     _symbol: str, days_to_earnings: int | None, _iv_rank: float | None
 ) -> float | None:
-    """Return a scoring multiplier for the upcoming earnings date.
+    """Legacy alias of :func:`trading_mcp.analysis.earnings.earnings_proximity_adjustment`."""
+    from trading_mcp.analysis.earnings import (  # pylint: disable=import-outside-toplevel
+        earnings_proximity_adjustment as _impl,
+    )
 
-    The return value is a *factor* added to the composite (0.15 / 0.10 /
-    0.05), never a number of days. Callers that need the day count must keep
-    ``days_to_earnings`` themselves.
-    """
-    if days_to_earnings is None:
-        return None
-    if days_to_earnings <= 3:
-        return 0.15
-    if days_to_earnings <= 7:
-        return 0.10
-    if days_to_earnings <= 14:
-        return 0.05
-    return 0.0
+    return _impl(_symbol, days_to_earnings, _iv_rank)

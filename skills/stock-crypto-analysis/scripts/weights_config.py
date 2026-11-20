@@ -1,97 +1,37 @@
 """
-Shared dimension weight tables for the stock-crypto-analysis scoring engine.
+Dimension weights of the stock-crypto-analysis scripts: a view of the trading MCP.
 
-Single source of truth for all weight-related configuration.
-Used by backtest.py, dynamic_weights.py, and any other scoring scripts.
+The trading MCP (``mcp/src/trading_mcp``) is the only source of the weights:
+
+- base weights: ``trading_mcp.weights_config.get_weights()`` (defaults, or the user file
+  ``~/.config/opencode/weights.json`` / ``$TRADING_WEIGHTS_FILE``);
+- regime detection and regime adjustment: ``trading_mcp.analysis.macro``.
+
+This module keeps no number of its own. The old local copy had other weights and other
+regime rules, so the local scripts gave a second ``final_score``.
 """
 
 from __future__ import annotations
 
-from enum import Enum
+import sys
+from pathlib import Path
 
+_MCP_SRC = Path(__file__).resolve().parents[3] / "mcp" / "src"
+if (_MCP_SRC / "trading_mcp").is_dir() and str(_MCP_SRC) not in sys.path:
+    sys.path.insert(0, str(_MCP_SRC))
 
-class Regime(str, Enum):
-    """Market regime classification."""
+try:
+    # pylint: disable=wrong-import-position
+    from trading_mcp.analysis.macro import Regime, detect_regime, get_dynamic_weights  # noqa: E402
+    from trading_mcp.weights_config import get_weights  # noqa: E402
+except ImportError as exc:  # pragma: no cover - environment problem
+    raise ImportError(
+        "weights_config: the trading MCP package is not importable. Run the script with the "
+        "trading MCP venv (~/.local/share/opencode/trading-mcp-venv/bin/python) or from this "
+        f"repository. Cause: {exc}"
+    ) from exc
 
-    TRENDING_BULL = "trending_bull"
-    TRENDING_BEAR = "trending_bear"
-    HIGH_VOLATILITY = "high_volatility"  # VIX > 25
-    RANGE_BOUND = "range_bound"          # Sideways, low vol
-    CRISIS = "crisis"                    # VIX > 35, macro stress
-    UNKNOWN = "unknown"
+BASE_WEIGHTS_STOCK: dict[str, float] = get_weights().stocks.to_dict()
+BASE_WEIGHTS_CRYPTO: dict[str, float] = get_weights().crypto.to_dict()
 
-
-# Base weights (stock)
-BASE_WEIGHTS_STOCK: dict[str, float] = {
-    "wyckoff": 0.15,
-    "volume_profile": 0.20,
-    "price_action": 0.20,
-    "sentiment": 0.15,
-    "fundamentals": 0.20,
-    "competitive": 0.10,
-}
-
-# Base weights (crypto) — uses crypto_layer instead of shifting fundamentals
-BASE_WEIGHTS_CRYPTO: dict[str, float] = {
-    "wyckoff": 0.10,
-    "volume_profile": 0.15,
-    "price_action": 0.15,
-    "sentiment": 0.10,
-    "fundamentals": 0.10,
-    "competitive": 0.05,
-    "crypto_layer": 0.35,
-}
-
-# Regime adjustments (delta applied to base, then normalized)
-REGIME_ADJUSTMENTS: dict[Regime, dict[str, float]] = {
-    Regime.TRENDING_BULL: {
-        "wyckoff": 0.05,
-        "price_action": 0.05,
-        "sentiment": -0.05,
-        "fundamentals": -0.05,
-    },
-    Regime.TRENDING_BEAR: {
-        "wyckoff": 0.05,
-        "sentiment": 0.05,
-        "price_action": 0.00,
-        "volume_profile": -0.05,
-        "fundamentals": -0.05,
-    },
-    Regime.HIGH_VOLATILITY: {
-        "sentiment": 0.10,
-        "volume_profile": -0.05,
-        "price_action": -0.05,
-    },
-    Regime.RANGE_BOUND: {
-        "volume_profile": 0.10,
-        "price_action": -0.05,
-        "sentiment": -0.05,
-    },
-    Regime.CRISIS: {
-        "wyckoff": 0.05,
-        "sentiment": 0.10,
-        "fundamentals": -0.10,
-        "competitive": -0.05,
-    },
-    Regime.UNKNOWN: {},
-}
-
-
-def get_dynamic_weights(regime: Regime, is_crypto: bool = False) -> dict[str, float]:
-    """Compute regime-adjusted dimensional weights.
-
-    Returns dict dimension_name → weight (sum = 1.0).
-    """
-    base = BASE_WEIGHTS_CRYPTO if is_crypto else BASE_WEIGHTS_STOCK
-    adjustments = REGIME_ADJUSTMENTS.get(regime, {})
-
-    adjusted = dict(base)
-    for dim, delta in adjustments.items():
-        if dim in adjusted:
-            adjusted[dim] = max(0.01, adjusted[dim] + delta)
-
-    total = sum(adjusted.values())
-    if total > 0:
-        adjusted = {k: round(v / total, 4) for k, v in adjusted.items()}
-
-    return adjusted
+__all__ = ["BASE_WEIGHTS_CRYPTO", "BASE_WEIGHTS_STOCK", "Regime", "detect_regime", "get_dynamic_weights"]

@@ -47,7 +47,8 @@ An **option** is a contract giving the owner the right to buy or sell an asset a
 | Straddle/Strangle (short) | Unlimited/substantial | Premium received | Unlimited |
 
 ### Greeks Overview
-- **Delta (Δ)**: Expected price change of option per $1 stock move. Calls: 0 to +1. Puts: -1 to 0. ATM ≈ 0.50. Also interpreted as probability of finishing ITM.
+- **Delta (Δ)**: Expected price change of option per $1 stock move. Calls: 0 to +1. Puts: -1 to 0. ATM ≈ 0.50.
+  Delta is NOT the probability of finishing ITM. Under Black-Scholes, call delta = e^(−qT)·N(d1), while the risk-neutral P(ITM) = N(d2) for a call and N(−d2) for a put. The gap grows with IV and time.
 - **Gamma (Γ)**: Rate of change of delta per $1 stock move. Highest for ATM near-term options. "Acceleration."
 - **Theta (Θ)**: Daily time decay. Option buyer's enemy, seller's friend. ATM options decay fastest. Decay accelerates near expiration.
 - **Vega (ν)**: Price change per 1-point change in IV. Longer-term options have higher vega. Only affects time value.
@@ -102,22 +103,28 @@ IV reflects the market's expectation of future stock movement magnitude (not dir
 | Iron Condor | chapters/08-condor-four-leg-spreads.md | Width - credit |
 | Short Call Spread | chapters/03-vertical-spreads.md | Width - credit |
 | Short Put Spread | chapters/03-vertical-spreads.md | Width - credit |
+| Long Call Butterfly | chapters/07-butterfly-spreads.md | Net debit |
+| Long Put Butterfly | chapters/07-butterfly-spreads.md | Net debit |
+| Long Condor | chapters/08-condor-four-leg-spreads.md | Net debit |
+| Calendar Spread (ATM) | chapters/06-calendar-diagonal-spreads.md | Net debit |
+
+Long butterflies, long condors and ATM calendars profit when the stock stays near the body.
+They are short gamma near the center. They lose on a big move in either direction.
+A long calendar is long vega; a long butterfly or condor near the body is short vega.
 
 ### Volatile (Direction-Uncertain) Strategies
 | Strategy | File | Max Risk |
 |---|---|---|
 | Long Straddle | chapters/04-volatility-strategies.md | Premium |
 | Long Strangle | chapters/04-volatility-strategies.md | Premium |
-| Long Call Butterfly | chapters/07-butterfly-spreads.md | Net debit |
-| Long Put Butterfly | chapters/07-butterfly-spreads.md | Net debit |
-| Long Condor | chapters/08-condor-four-leg-spreads.md | Net debit |
-| Calendar Spread | chapters/06-calendar-diagonal-spreads.md | Net debit |
+| Back Spread w/ Calls | chapters/05-combination-ratio-spreads.md | Limited/calculated |
+| Back Spread w/ Puts | chapters/05-combination-ratio-spreads.md | Limited/calculated |
 
 ## Greek Reference
 - **Delta**: Directional sensitivity. Used for position sizing and hedging (position delta).
 - **Gamma**: Convexity risk. High gamma = rapid delta changes. ATM near-term = highest gamma.
 - **Theta**: Time decay. Key for premium sellers. Sell 30-45 day options for optimal theta.
-- **Vega**: IV sensitivity. Buy when IV low, sell when IV high. Calendar spreads reduce vega exposure.
+- **Vega**: IV sensitivity. Buy when IV low, sell when IV high. A long calendar is long vega: it gains when IV rises (mostly back-month IV).
 - **Rho**: Interest rate sensitivity. Skip for short-term trades.
 
 ## Supporting Files

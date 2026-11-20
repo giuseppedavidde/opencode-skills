@@ -5,7 +5,7 @@
 - **Anomaly**: Core VPA signal. Volume and price disagree. Two types: (a) wide spread + low volume = trap/manipulation, (b) narrow spread + high volume = absorption/exhaustion.
 
 ## B
-- **Buying Climax**: Firework display at bottom of bear trend. Insiders buy aggressively, public panic-sells. Ultra-high volume, narrow spreads, deep lower wicks. Signals imminent markup.
+- **Buying Climax**: Firework display at bottom of bear trend. Insiders buy aggressively, public panic-sells. Ultra-high volume, narrow spreads, deep lower wicks. Signals imminent markup. Coulling naming: Wyckoff calls this event the Selling Climax (SC).
 
 ## C
 - **Candle Volume Charts**: Hybrid equivolume + candlesticks. Variable-width candles reflecting volume, with wicks preserved.
@@ -46,7 +46,7 @@
 - **Rising Triangle**: Congestion pattern with higher lows + flat ceiling. Bullish bias — likely upside breakout.
 
 ## S
-- **Selling Climax**: Firework display at top of bull trend. Insiders sell aggressively, public buys greedily. Ultra-high volume, deep upper wicks. Signals imminent markdown.
+- **Selling Climax**: Firework display at top of bull trend. Insiders sell aggressively, public buys greedily. Ultra-high volume, deep upper wicks. Signals imminent markdown. Coulling naming: Wyckoff calls this event the Buying Climax (BC).
 - **Shooting Star**: Candle with long upper wick, small body at bottom. Sign of weakness — buyers rejected. Volume grades significance.
 - **Stopping Volume**: Multiple candles with deep lower wicks + high volume in downtrend. Insiders applying brakes. Precursor to buying climax.
 - **Support/Resistance**: Horizontal price zones from past congestion. Floors become ceilings on breakdown; ceilings become floors on breakout.

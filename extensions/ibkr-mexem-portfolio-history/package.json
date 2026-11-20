@@ -230,7 +230,7 @@
         },
         "ibkrHistory.chat.marketDataCommand": {
           "type": "string",
-          "default": "/home/giuseppe/.local/share/opencode/trading-mcp-venv/bin/python -m trading_mcp.trading_cli",
+          "default": "~/.local/share/opencode/trading-mcp-venv/bin/python -m trading_mcp.trading_cli",
           "description": "Whitespace-separated command template of the local trading CLI. The extension appends fetch options <TICKER> --expiry <YYYY-MM-DD>. The value is split into arguments and run without a shell. A leading ~/ expands to the home directory."
         },
         "ibkrHistory.chat.maxHistoryMessages": {

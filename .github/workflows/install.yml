@@ -1,0 +1,63 @@
+name: install
+
+# Clone on a clean machine, run the installer with an empty HOME, and verify
+# that the opencode and VS Code layers are complete.
+on:
+  push:
+    paths:
+      - "install.sh"
+      - "install.py"
+      - "install-vscode.py"
+      - "agents/**"
+      - "command/**"
+      - "config/**"
+      - "skills/**"
+      - "vscode/**"
+      - "scripts/sync-vscode.sh"
+      - ".github/workflows/install.yml"
+  pull_request:
+    paths:
+      - "install.sh"
+      - "install.py"
+      - "install-vscode.py"
+      - "agents/**"
+      - "command/**"
+      - "config/**"
+      - "skills/**"
+      - "vscode/**"
+      - "scripts/sync-vscode.sh"
+      - ".github/workflows/install.yml"
+
+jobs:
+  clean-machine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install with an empty HOME
+        run: |
+          export HOME="$RUNNER_TEMP/home"
+          mkdir -p "$HOME"
+          ./install.sh --no-mcp --yes
+
+      - name: opencode layer links resolve
+        run: |
+          export HOME="$RUNNER_TEMP/home"
+          test -d "$HOME/.config/opencode/opencode-skills/plugins/verifica-gate"
+          test -f "$HOME/.config/opencode/opencode.json"
+          test -f "$HOME/.config/opencode/agents/router.md"
+          python3 -m json.tool config/opencode.json > /dev/null
+
+      - name: VS Code layer has no drift
+        run: HOME="$RUNNER_TEMP/home" python3 install-vscode.py --verify --target user
+
+      - name: Tests
+        run: |
+          python3 -m pip install --quiet pytest pyyaml
+          python3 -m pytest -q vscode/

@@ -1,5 +1,5 @@
 {
-  "contract_version": "2.0.0",
+  "contract_version": "4.0.0",
   "tools": {
     "analyze_options": {
       "description": "Analyze a multi-leg options position.\n\nComputes Greeks per leg and total, payoff scenarios at 100 price levels,\nbreak-even points, probabilities (ITM/OTM, profit), and strategy classification\nusing the Options Playbook framework.\n\nSupports multi-expiry positions (calendar spreads, diagonal spreads): each\nleg dict may carry an optional ``expiry`` key (YYYY-MM-DD). Per-leg expiry\ntakes precedence over the global ``expiry`` parameter.",
@@ -43,13 +43,35 @@
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "description": "Data time of the main numbers (ISO 8601 with offset); never a fetch time"
           },
           "breakevens": {
             "items": {
               "type": "number"
             },
             "type": "array"
+          },
+          "cache_age_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Age of the cached answer in seconds"
+          },
+          "cached": {
+            "default": false,
+            "description": "True when served from the result cache",
+            "type": "boolean"
+          },
+          "computed_at": {
+            "description": "When the server built the answer (ISO 8601)",
+            "type": "string"
           },
           "data_quality": {
             "default": "mixed",
@@ -58,6 +80,11 @@
           "data_source": {
             "default": "options",
             "type": "string"
+          },
+          "degraded": {
+            "default": false,
+            "description": "True when any input is missing, stale or failed",
+            "type": "boolean"
           },
           "dte": {
             "anyOf": [
@@ -90,7 +117,8 @@
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "description": "blocking | degraded"
           },
           "error_retryable": {
             "anyOf": [
@@ -162,8 +190,15 @@
             "type": "object"
           },
           "schema_version": {
-            "default": "2.0.0",
+            "default": "4.0.0",
             "type": "string"
+          },
+          "sources": {
+            "description": "Data sources used",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "strategy_classification": {
             "anyOf": [
@@ -208,6 +243,12 @@
               }
             ],
             "default": null
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "type": "object"
@@ -260,7 +301,36 @@
                 "type": "null"
               }
             ],
+            "default": null,
+            "description": "Data time of the main numbers (ISO 8601 with offset); never a fetch time"
+          },
+          "bars_as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "default": null
+          },
+          "cache_age_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Age of the cached answer in seconds"
+          },
+          "cached": {
+            "default": false,
+            "description": "True when served from the result cache",
+            "type": "boolean"
           },
           "composite_score": {
             "anyOf": [
@@ -272,6 +342,10 @@
               }
             ],
             "default": null
+          },
+          "computed_at": {
+            "description": "When the server built the answer (ISO 8601)",
+            "type": "string"
           },
           "confidence": {
             "anyOf": [
@@ -303,6 +377,11 @@
             "default": "yfinance",
             "type": "string"
           },
+          "degraded": {
+            "default": false,
+            "description": "True when any input is missing, stale or failed",
+            "type": "boolean"
+          },
           "dimensions": {
             "items": {
               "additionalProperties": true,
@@ -330,7 +409,8 @@
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "description": "blocking | degraded"
           },
           "error_retryable": {
             "anyOf": [
@@ -426,6 +506,244 @@
             ],
             "default": null
           },
+          "price_as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "price_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "description": "Last price with its data time and freshness (see :mod:`trading_mcp.data.quotes`).\n\n``freshness`` is ``realtime`` (regular session, age <= 60 s), ``delayed``\n(inside the declared vendor delay), ``last_close`` (market closed; the\nprice is the last session close), ``stale`` or ``unknown``.",
+                "properties": {
+                  "age_s": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "description": "Seconds between as_of and the answer time"
+                  },
+                  "as_of": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "description": "Data time of price (ISO 8601 with offset)"
+                  },
+                  "ask": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "bid": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "currency": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "delayed_by_min": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "error": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "error_kind": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "fetched_at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "freshness": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "market_state": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "mid": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "previous_close": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "price": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "session_state": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "description": "pre | regular | post | closed"
+                  },
+                  "source": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "stale": {
+                    "anyOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "symbol": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "reason": {
             "anyOf": [
               {
@@ -449,7 +767,7 @@
             "default": null
           },
           "schema_version": {
-            "default": "2.0.0",
+            "default": "4.0.0",
             "type": "string"
           },
           "sector": {
@@ -471,6 +789,13 @@
           "signal_alignment": {
             "additionalProperties": true,
             "type": "object"
+          },
+          "sources": {
+            "description": "Data sources used",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "status": {
             "anyOf": [
@@ -515,6 +840,12 @@
               }
             ],
             "default": null
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "type": "object"
@@ -560,7 +891,8 @@
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "description": "Data time of the main numbers (ISO 8601 with offset); never a fetch time"
           },
           "atm_call_iv": {
             "anyOf": [
@@ -599,6 +931,23 @@
             "default": 0,
             "type": "integer"
           },
+          "cache_age_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Age of the cached answer in seconds"
+          },
+          "cached": {
+            "default": false,
+            "description": "True when served from the result cache",
+            "type": "boolean"
+          },
           "calibrated": {
             "default": false,
             "type": "boolean"
@@ -622,6 +971,10 @@
             "default": "not_calibrated",
             "type": "string"
           },
+          "computed_at": {
+            "description": "When the server built the answer (ISO 8601)",
+            "type": "string"
+          },
           "data_quality": {
             "default": "mixed",
             "type": "string"
@@ -630,9 +983,21 @@
             "default": "yfinance+options",
             "type": "string"
           },
+          "degraded": {
+            "default": false,
+            "description": "True when any input is missing, stale or failed",
+            "type": "boolean"
+          },
           "dte": {
-            "default": 30,
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "error": {
             "anyOf": [
@@ -654,7 +1019,8 @@
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "description": "blocking | degraded"
           },
           "error_retryable": {
             "anyOf": [
@@ -721,8 +1087,15 @@
             "type": "integer"
           },
           "schema_version": {
-            "default": "2.0.0",
+            "default": "4.0.0",
             "type": "string"
+          },
+          "sources": {
+            "description": "Data sources used",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "spot": {
             "anyOf": [
@@ -799,27 +1172,62 @@
             "type": "string"
           },
           "vrp": {
-            "additionalProperties": true,
-            "description": "Variance risk premium estimate (Bakshi & Kapadia 2003).",
-            "properties": {
-              "description": {
-                "default": "",
-                "type": "string"
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "description": "Variance risk premium estimate (Bakshi & Kapadia 2003).",
+                "properties": {
+                  "description": {
+                    "default": "",
+                    "type": "string"
+                  },
+                  "regime": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "vrp_annualized": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "vrp_pct_of_premium": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  }
+                },
+                "type": "object"
               },
-              "regime": {
-                "default": "NORMAL_VOL",
-                "type": "string"
-              },
-              "vrp_annualized": {
-                "default": 0.0,
-                "type": "number"
-              },
-              "vrp_pct_of_premium": {
-                "default": 0.0,
-                "type": "number"
+              {
+                "type": "null"
               }
+            ],
+            "default": null
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
             },
-            "type": "object"
+            "type": "array"
           }
         },
         "required": [
@@ -861,7 +1269,8 @@
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "description": "Data time of the main numbers (ISO 8601 with offset); never a fetch time"
           },
           "atm_call_iv": {
             "anyOf": [
@@ -904,6 +1313,23 @@
             "default": 0,
             "type": "integer"
           },
+          "cache_age_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Age of the cached answer in seconds"
+          },
+          "cached": {
+            "default": false,
+            "description": "True when served from the result cache",
+            "type": "boolean"
+          },
           "composite_bali_score": {
             "anyOf": [
               {
@@ -914,6 +1340,10 @@
               }
             ],
             "default": null
+          },
+          "computed_at": {
+            "description": "When the server built the answer (ISO 8601)",
+            "type": "string"
           },
           "cvol_pvol_score": {
             "anyOf": [
@@ -945,6 +1375,11 @@
             "default": "yfinance+options",
             "type": "string"
           },
+          "degraded": {
+            "default": false,
+            "description": "True when any input is missing, stale or failed",
+            "type": "boolean"
+          },
           "direction": {
             "default": "unavailable",
             "type": "string"
@@ -973,7 +1408,8 @@
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "description": "blocking | degraded"
           },
           "error_retryable": {
             "anyOf": [
@@ -1028,8 +1464,15 @@
             "default": null
           },
           "schema_version": {
-            "default": "2.0.0",
+            "default": "4.0.0",
             "type": "string"
+          },
+          "sources": {
+            "description": "Data sources used",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "spot": {
             "anyOf": [
@@ -1044,6 +1487,12 @@
           },
           "ticker": {
             "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -1085,7 +1534,8 @@
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "description": "Data time of the main numbers (ISO 8601 with offset); never a fetch time"
           },
           "bias_guard": {
             "additionalProperties": true,
@@ -1095,6 +1545,27 @@
             "additionalProperties": true,
             "type": "object"
           },
+          "cache_age_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Age of the cached answer in seconds"
+          },
+          "cached": {
+            "default": false,
+            "description": "True when served from the result cache",
+            "type": "boolean"
+          },
+          "computed_at": {
+            "description": "When the server built the answer (ISO 8601)",
+            "type": "string"
+          },
           "data_quality": {
             "default": "mixed",
             "type": "string"
@@ -1102,6 +1573,11 @@
           "data_source": {
             "default": "yfinance+options",
             "type": "string"
+          },
+          "degraded": {
+            "default": false,
+            "description": "True when any input is missing, stale or failed",
+            "type": "boolean"
           },
           "error": {
             "anyOf": [
@@ -1123,7 +1599,8 @@
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "description": "blocking | degraded"
           },
           "error_retryable": {
             "anyOf": [
@@ -1164,11 +1641,24 @@
             "type": "object"
           },
           "schema_version": {
-            "default": "2.0.0",
+            "default": "4.0.0",
             "type": "string"
+          },
+          "sources": {
+            "description": "Data sources used",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "ticker": {
             "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -1178,7 +1668,7 @@
       }
     },
     "clear_macro_cache": {
-      "description": "Force clear the macro context cache. Next call will re-fetch fresh data.",
+      "description": "Clear every macro cache layer: the 60 s answer, the provider quotes and bars of the macro symbols (memory and disk), the risk-free snapshot and the crypto context. The next get_macro_context call fetches every input again; the regime hysteresis state is kept.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {},
@@ -1197,7 +1687,41 @@
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "description": "Data time of the main numbers (ISO 8601 with offset); never a fetch time"
+          },
+          "cache_age_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Age of the cached answer in seconds"
+          },
+          "cached": {
+            "default": false,
+            "description": "True when served from the result cache",
+            "type": "boolean"
+          },
+          "cleared_entries": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "cleared_symbols": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "computed_at": {
+            "description": "When the server built the answer (ISO 8601)",
+            "type": "string"
           },
           "data_quality": {
             "default": "derived",
@@ -1207,102 +1731,10 @@
             "default": "core",
             "type": "string"
           },
-          "error_kind": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "error_retryable": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "message": {
-            "default": "",
-            "type": "string"
-          },
-          "schema_version": {
-            "default": "2.0.0",
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "status"
-        ],
-        "type": "object"
-      }
-    },
-    "fetch_crypto_data": {
-      "description": "Fetch crypto data from CoinGecko and yfinance.",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "coin_id": {
-            "description": "CoinGecko coin id (e.g. 'bitcoin', 'ethereum', 'solana').",
-            "type": "string"
-          },
-          "period": {
-            "default": "1y",
-            "description": "Data period for yfinance history.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "coin_id"
-        ],
-        "type": "object"
-      },
-      "output_schema": {
-        "additionalProperties": true,
-        "description": "Output of ``fetch_crypto_data``.",
-        "properties": {
-          "as_of": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "coin_id": {
-            "type": "string"
-          },
-          "current_price_usd": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "data_quality": {
-            "default": "eod",
-            "type": "string"
-          },
-          "data_source": {
-            "default": "coingecko+yfinance",
-            "type": "string"
+          "degraded": {
+            "default": false,
+            "description": "True when any input is missing, stale or failed",
+            "type": "boolean"
           },
           "error": {
             "anyOf": [
@@ -1324,7 +1756,8 @@
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "description": "blocking | degraded"
           },
           "error_retryable": {
             "anyOf": [
@@ -1337,6 +1770,207 @@
             ],
             "default": null
           },
+          "message": {
+            "default": "",
+            "type": "string"
+          },
+          "schema_version": {
+            "default": "4.0.0",
+            "type": "string"
+          },
+          "sources": {
+            "description": "Data sources used",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      }
+    },
+    "fetch_crypto_data": {
+      "description": "Crypto price, CoinGecko market data and complete daily bars (UTC days).\n\ncurrent_price_usd comes from the Yahoo quote (as_of = vendor data\ntime), else from CoinGecko; it is null when no source answers, never\n0. symbol is the Yahoo symbol used (symbol_source tells how it was\nmapped; for example Uniswap is UNI7083-USD). Bars are complete UTC\ndays (the current day is dropped). market_cap and total_volume are\nUSD from CoinGecko (as of market_data_as_of; cached 60 s).",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "coin_id": {
+            "description": "CoinGecko id (e.g. 'bitcoin', 'ethereum') or Yahoo symbol (e.g. 'BTC-USD').",
+            "type": "string"
+          },
+          "fields": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sections to return (default all): quote, ohlcv, market."
+          },
+          "max_bars": {
+            "default": 365,
+            "description": "Newest bars to return (1..2000, default 365).",
+            "type": "integer"
+          },
+          "period": {
+            "default": "1y",
+            "description": "History period: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "coin_id"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
+        "description": "Output of ``fetch_crypto_data``.\n\n``symbol`` is the Yahoo symbol used for bars and quotes\n(``symbol_source`` says how it was resolved). ``current_price_usd`` is\n``null`` when no price source answers, never ``0.0``.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Data time of the main numbers (ISO 8601 with offset); never a fetch time"
+          },
+          "bars_as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "bars_available": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "bars_returned": {
+            "default": 0,
+            "type": "integer"
+          },
+          "cache_age_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Age of the cached answer in seconds"
+          },
+          "cached": {
+            "default": false,
+            "description": "True when served from the result cache",
+            "type": "boolean"
+          },
+          "coin_id": {
+            "type": "string"
+          },
+          "computed_at": {
+            "description": "When the server built the answer (ISO 8601)",
+            "type": "string"
+          },
+          "current_price_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "data_quality": {
+            "default": "daily_complete_bars",
+            "type": "string"
+          },
+          "data_source": {
+            "default": "coingecko+yfinance",
+            "type": "string"
+          },
+          "degraded": {
+            "default": false,
+            "description": "True when any input is missing, stale or failed",
+            "type": "boolean"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "blocking | degraded"
+          },
+          "error_retryable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "market_cap": {
             "anyOf": [
               {
@@ -1348,11 +1982,33 @@
             ],
             "default": null
           },
+          "market_data_as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "ohlcv": {
             "items": {
               "additionalProperties": true,
-              "description": "One daily OHLCV bar.",
+              "description": "One daily OHLCV bar.\n\n``open/high/low/close`` are split-adjusted raw prices (they match broker\ncharts); ``adj_close`` also carries dividends (use it for returns).",
               "properties": {
+                "adj_close": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
                 "close": {
                   "type": "number"
                 },
@@ -1369,7 +2025,15 @@
                   "type": "number"
                 },
                 "volume": {
-                  "type": "integer"
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
                 }
               },
               "required": [
@@ -1377,18 +2041,262 @@
                 "open",
                 "high",
                 "low",
-                "close",
-                "volume"
+                "close"
               ],
               "type": "object"
             },
             "type": "array"
           },
+          "price_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "description": "Last price with its data time and freshness (see :mod:`trading_mcp.data.quotes`).\n\n``freshness`` is ``realtime`` (regular session, age <= 60 s), ``delayed``\n(inside the declared vendor delay), ``last_close`` (market closed; the\nprice is the last session close), ``stale`` or ``unknown``.",
+                "properties": {
+                  "age_s": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "description": "Seconds between as_of and the answer time"
+                  },
+                  "as_of": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "description": "Data time of price (ISO 8601 with offset)"
+                  },
+                  "ask": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "bid": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "currency": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "delayed_by_min": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "error": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "error_kind": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "fetched_at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "freshness": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "market_state": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "mid": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "previous_close": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "price": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "session_state": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "description": "pre | regular | post | closed"
+                  },
+                  "source": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "stale": {
+                    "anyOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "symbol": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "schema_version": {
-            "default": "2.0.0",
+            "default": "4.0.0",
             "type": "string"
           },
+          "sources": {
+            "description": "Data sources used",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "symbol_source": {
             "anyOf": [
               {
                 "type": "string"
@@ -1409,6 +2317,16 @@
               }
             ],
             "default": null
+          },
+          "truncated": {
+            "default": false,
+            "type": "boolean"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -1462,7 +2380,25 @@
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "description": "Data time of the main numbers (ISO 8601 with offset); never a fetch time"
+          },
+          "cache_age_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Age of the cached answer in seconds"
+          },
+          "cached": {
+            "default": false,
+            "description": "True when served from the result cache",
+            "type": "boolean"
           },
           "calls": {
             "items": {
@@ -1470,6 +2406,10 @@
               "type": "object"
             },
             "type": "array"
+          },
+          "computed_at": {
+            "description": "When the server built the answer (ISO 8601)",
+            "type": "string"
           },
           "data_quality": {
             "anyOf": [
@@ -1492,6 +2432,11 @@
               }
             ],
             "default": null
+          },
+          "degraded": {
+            "default": false,
+            "description": "True when any input is missing, stale or failed",
+            "type": "boolean"
           },
           "dte": {
             "anyOf": [
@@ -1524,7 +2469,8 @@
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "description": "blocking | degraded"
           },
           "error_retryable": {
             "anyOf": [
@@ -1662,7 +2608,7 @@
             "type": "object"
           },
           "schema_version": {
-            "default": "2.0.0",
+            "default": "4.0.0",
             "type": "string"
           },
           "selected_expiry": {
@@ -1675,6 +2621,13 @@
               }
             ],
             "default": null
+          },
+          "sources": {
+            "description": "Data sources used",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "ticker": {
             "type": "string"
@@ -1689,6 +2642,12 @@
               }
             ],
             "default": null
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -1698,17 +2657,37 @@
       }
     },
     "fetch_stock_data": {
-      "description": "Fetch complete stock data: OHLCV history, fundamentals, and indicators.",
+      "description": "Stock quote, complete daily OHLCV bars, curated fundamentals, indicators and corporate events.\n\ncurrent_price comes from the quote (yfinance chart, data time in\nquote.as_of, freshness realtime/delayed/last_close/stale); it is null\nwhen no quote exists, never 0. Bars are complete sessions only\n(the open session bar is dropped): open/high/low/close are\nsplit-adjusted raw prices (they match broker charts) and adj_close\nalso carries dividends. info is a curated subset with units in\ninfo_units (fractions, ratios, currency). events gives the next\nearnings window, ex-dividend date and dividend_yield as a fraction.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "fields": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sections to return (default all): quote, ohlcv, info, indicators, events."
+          },
+          "max_bars": {
+            "default": 252,
+            "description": "Newest bars to return (1..2000, default 252); see bars_available and truncated.",
+            "type": "integer"
+          },
           "period": {
             "default": "1y",
-            "description": "Data period (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max).",
+            "description": "History period: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max.",
             "type": "string"
           },
           "ticker": {
-            "description": "Stock ticker symbol (e.g. 'AAPL', 'ENI.MI').",
+            "description": "Yahoo symbol (e.g. 'AAPL', 'ENI.MI').",
             "type": "string"
           }
         },
@@ -1719,7 +2698,7 @@
       },
       "output_schema": {
         "additionalProperties": true,
-        "description": "Output of ``fetch_stock_data``.",
+        "description": "Output of ``fetch_stock_data``.\n\n``current_price`` comes from ``quote`` (never from ``info``); ``null``\nwhen no quote is available. ``ohlcv`` holds complete sessions only\n(``partial_bar_dropped``); ``bars_available``/``bars_returned``/\n``truncated`` describe the cut to ``max_bars``. ``info`` is a curated\nsubset with units in ``info_units``.",
         "properties": {
           "as_of": {
             "anyOf": [
@@ -1730,7 +2709,55 @@
                 "type": "null"
               }
             ],
+            "default": null,
+            "description": "Data time of the main numbers (ISO 8601 with offset); never a fetch time"
+          },
+          "bars_as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "default": null
+          },
+          "bars_available": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "bars_returned": {
+            "default": 0,
+            "type": "integer"
+          },
+          "cache_age_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Age of the cached answer in seconds"
+          },
+          "cached": {
+            "default": false,
+            "description": "True when served from the result cache",
+            "type": "boolean"
+          },
+          "computed_at": {
+            "description": "When the server built the answer (ISO 8601)",
+            "type": "string"
           },
           "current_price": {
             "anyOf": [
@@ -1744,12 +2771,17 @@
             "default": null
           },
           "data_quality": {
-            "default": "eod",
+            "default": "daily_complete_bars",
             "type": "string"
           },
           "data_source": {
             "default": "yfinance",
             "type": "string"
+          },
+          "degraded": {
+            "default": false,
+            "description": "True when any input is missing, stale or failed",
+            "type": "boolean"
           },
           "error": {
             "anyOf": [
@@ -1771,7 +2803,8 @@
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "description": "blocking | degraded"
           },
           "error_retryable": {
             "anyOf": [
@@ -1784,6 +2817,24 @@
             ],
             "default": null
           },
+          "events": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "indicators": {
             "additionalProperties": true,
             "type": "object"
@@ -1792,11 +2843,39 @@
             "additionalProperties": true,
             "type": "object"
           },
+          "info_as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "info_units": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
           "ohlcv": {
             "items": {
               "additionalProperties": true,
-              "description": "One daily OHLCV bar.",
+              "description": "One daily OHLCV bar.\n\n``open/high/low/close`` are split-adjusted raw prices (they match broker\ncharts); ``adj_close`` also carries dividends (use it for returns).",
               "properties": {
+                "adj_close": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
                 "close": {
                   "type": "number"
                 },
@@ -1813,7 +2892,15 @@
                   "type": "number"
                 },
                 "volume": {
-                  "type": "integer"
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
                 }
               },
               "required": [
@@ -1821,19 +2908,273 @@
                 "open",
                 "high",
                 "low",
-                "close",
-                "volume"
+                "close"
               ],
               "type": "object"
             },
             "type": "array"
           },
+          "partial_bar_dropped": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "price_adjustment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "description": "Last price with its data time and freshness (see :mod:`trading_mcp.data.quotes`).\n\n``freshness`` is ``realtime`` (regular session, age <= 60 s), ``delayed``\n(inside the declared vendor delay), ``last_close`` (market closed; the\nprice is the last session close), ``stale`` or ``unknown``.",
+                "properties": {
+                  "age_s": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "description": "Seconds between as_of and the answer time"
+                  },
+                  "as_of": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "description": "Data time of price (ISO 8601 with offset)"
+                  },
+                  "ask": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "bid": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "currency": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "delayed_by_min": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "error": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "error_kind": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "fetched_at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "freshness": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "market_state": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "mid": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "previous_close": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "price": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "session_state": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "description": "pre | regular | post | closed"
+                  },
+                  "source": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "stale": {
+                    "anyOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "symbol": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "schema_version": {
-            "default": "2.0.0",
+            "default": "4.0.0",
             "type": "string"
+          },
+          "sources": {
+            "description": "Data sources used",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "ticker": {
             "type": "string"
+          },
+          "truncated": {
+            "default": false,
+            "type": "boolean"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -1843,7 +3184,7 @@
       }
     },
     "get_macro_context": {
-      "description": "Get current macro context: VIX, DXY, Fed rate, Fear & Greed, BTC dominance.\n\nFetches real-time macro indicators from yfinance and detects the\ncurrent market regime (CRISIS, HIGH_VOLATILITY, RANGE_BOUND,\nTRENDING_BULL, TRENDING_BEAR) with dynamic weight recommendations.\n\nResults are cached for 60 seconds to prevent yfinance rate limiting.\nUse clear_macro_cache() to force a refresh.",
+      "description": "Macro context and equity regime: VIX, VIX3M, S&P 500 trend, DXY, T-bill rate, crypto context.\n\nEvery input has value, as_of (data time) and source in ``inputs``; a\nmissing input is null and sets ``degraded``. The regime (CRISIS,\nHIGH_VOLATILITY, RANGE_BOUND, TRENDING_BULL, TRENDING_BEAR, UNKNOWN)\nuses equity inputs only, with VIX hysteresis (high band: enter 25,\nleave below 23; crisis: enter 35, leave below 32). UNKNOWN maps to the\nDEFENSIVE window. ``fed_rate`` is the ^IRX 13-week T-bill yield in\npercent; null with ``fallback_reason`` when the live value is missing.\nBTC price, BTC dominance and Fear & Greed are crypto context only.\nComplete answers are cached for 60 s (``cached``, ``cache_age_s``);\nclear_macro_cache() forces a refetch of every input.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {},
@@ -1851,7 +3192,7 @@
       },
       "output_schema": {
         "additionalProperties": true,
-        "description": "Output of ``get_macro_context``.\n\n``macro_window`` is derived from ``detected_regime`` so the two can never\ncontradict each other.",
+        "description": "Output of ``get_macro_context``.\n\n``macro_window`` is derived from ``detected_regime`` so the two can never\ncontradict each other (UNKNOWN gives DEFENSIVE). ``inputs`` holds value,\n``as_of`` and source of every input; ``regime`` is the full\n:class:`~trading_mcp.analysis.macro.RegimeState` (hysteresis, reasons).\nBTC fields are crypto context only.",
         "properties": {
           "as_of": {
             "anyOf": [
@@ -1862,7 +3203,8 @@
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "description": "Data time of the main numbers (ISO 8601 with offset); never a fetch time"
           },
           "btc_dominance": {
             "anyOf": [
@@ -1886,6 +3228,27 @@
             ],
             "default": null
           },
+          "cache_age_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Age of the cached answer in seconds"
+          },
+          "cached": {
+            "default": false,
+            "description": "True when served from the result cache",
+            "type": "boolean"
+          },
+          "computed_at": {
+            "description": "When the server built the answer (ISO 8601)",
+            "type": "string"
+          },
           "data_quality": {
             "default": "eod",
             "type": "string"
@@ -1893,6 +3256,11 @@
           "data_source": {
             "default": "yfinance",
             "type": "string"
+          },
+          "degraded": {
+            "default": false,
+            "description": "True when any input is missing, stale or failed",
+            "type": "boolean"
           },
           "detected_regime": {
             "anyOf": [
@@ -1939,7 +3307,7 @@
             },
             "type": "object"
           },
-          "error_kind": {
+          "equity_trend": {
             "anyOf": [
               {
                 "type": "string"
@@ -1950,10 +3318,44 @@
             ],
             "default": null
           },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "blocking | degraded"
+          },
           "error_retryable": {
             "anyOf": [
               {
                 "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "fallback_reason": {
+            "anyOf": [
+              {
+                "type": "string"
               },
               {
                 "type": "null"
@@ -1981,7 +3383,34 @@
                 "type": "null"
               }
             ],
+            "default": null,
+            "description": "^IRX 13-week T-bill yield, percent"
+          },
+          "fed_rate_as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "default": null
+          },
+          "fed_rate_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "inputs": {
+            "additionalProperties": true,
+            "type": "object"
           },
           "macro_window": {
             "anyOf": [
@@ -1994,9 +3423,20 @@
             ],
             "default": null
           },
+          "regime": {
+            "additionalProperties": true,
+            "type": "object"
+          },
           "schema_version": {
-            "default": "2.0.0",
+            "default": "4.0.0",
             "type": "string"
+          },
+          "sources": {
+            "description": "Data sources used",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "timestamp": {
             "anyOf": [
@@ -2019,6 +3459,34 @@
               }
             ],
             "default": null
+          },
+          "vix3m": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "vix_term_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "type": "object"
@@ -2076,7 +3544,29 @@
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "description": "Data time of the main numbers (ISO 8601 with offset); never a fetch time"
+          },
+          "cache_age_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Age of the cached answer in seconds"
+          },
+          "cached": {
+            "default": false,
+            "description": "True when served from the result cache",
+            "type": "boolean"
+          },
+          "computed_at": {
+            "description": "When the server built the answer (ISO 8601)",
+            "type": "string"
           },
           "content": {
             "anyOf": [
@@ -2096,6 +3586,11 @@
           "data_source": {
             "default": "skill",
             "type": "string"
+          },
+          "degraded": {
+            "default": false,
+            "description": "True when any input is missing, stale or failed",
+            "type": "boolean"
           },
           "error": {
             "anyOf": [
@@ -2117,7 +3612,8 @@
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "description": "blocking | degraded"
           },
           "error_retryable": {
             "anyOf": [
@@ -2137,7 +3633,7 @@
             "type": "array"
           },
           "schema_version": {
-            "default": "2.0.0",
+            "default": "4.0.0",
             "type": "string"
           },
           "section": {
@@ -2176,9 +3672,22 @@
             ],
             "default": null
           },
+          "sources": {
+            "description": "Data sources used",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "truncated": {
             "default": false,
             "type": "boolean"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "type": "object"
@@ -2239,7 +3748,25 @@
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "description": "Data time of the main numbers (ISO 8601 with offset); never a fetch time"
+          },
+          "cache_age_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Age of the cached answer in seconds"
+          },
+          "cached": {
+            "default": false,
+            "description": "True when served from the result cache",
+            "type": "boolean"
           },
           "call_wall": {
             "anyOf": [
@@ -2251,6 +3778,10 @@
               }
             ],
             "default": null
+          },
+          "computed_at": {
+            "description": "When the server built the answer (ISO 8601)",
+            "type": "string"
           },
           "convention": {
             "anyOf": [
@@ -2285,6 +3816,11 @@
             ],
             "default": null
           },
+          "degraded": {
+            "default": false,
+            "description": "True when any input is missing, stale or failed",
+            "type": "boolean"
+          },
           "distance_to_flip_pct": {
             "anyOf": [
               {
@@ -2316,7 +3852,8 @@
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "description": "blocking | degraded"
           },
           "error_retryable": {
             "anyOf": [
@@ -2420,7 +3957,7 @@
             "default": null
           },
           "schema_version": {
-            "default": "2.0.0",
+            "default": "4.0.0",
             "type": "string"
           },
           "source": {
@@ -2433,6 +3970,13 @@
               }
             ],
             "default": null
+          },
+          "sources": {
+            "description": "Data sources used",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "spot_position": {
             "anyOf": [
@@ -2494,281 +4038,24 @@
         "type": "object"
       }
     },
-    "lgbm_postprocess": {
-      "description": "Post-processing dello score LGBM con 8 skill-adjustments.\n\nApplica correzioni basate sulle skill di trading per affinare\nla confidenza dello score LGBM grezzo. NON usa LightGBM — solo\nnumpy, pandas, e DataProvider per i dati.",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "lgbm_score": {
-            "default": 50.0,
-            "description": "Score LGBM grezzo 0-100 (default 50.0).",
-            "type": "number"
-          },
-          "ticker": {
-            "description": "Simbolo del titolo (es. 'AAPL', 'GME').",
-            "type": "string"
-          }
-        },
-        "required": [
-          "ticker"
-        ],
-        "type": "object"
-      },
-      "output_schema": {
-        "additionalProperties": true,
-        "description": "Output of ``lgbm_postprocess``.",
-        "properties": {
-          "adjusted_score": {
-            "default": 50.0,
-            "type": "number"
-          },
-          "adjustments": {
-            "additionalProperties": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "type": "object"
-          },
-          "as_of": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "data_quality": {
-            "default": "eod",
-            "type": "string"
-          },
-          "data_source": {
-            "default": "yfinance",
-            "type": "string"
-          },
-          "error_kind": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "error_retryable": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "lgbm_raw_score": {
-            "default": 50.0,
-            "type": "number"
-          },
-          "schema_version": {
-            "default": "2.0.0",
-            "type": "string"
-          },
-          "ticker": {
-            "type": "string"
-          },
-          "total_adjustment": {
-            "default": 0,
-            "type": "integer"
-          },
-          "warnings": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "ticker"
-        ],
-        "type": "object"
-      }
-    },
-    "lgbm_predict": {
-      "description": "LightGBM stacking ensemble prediction.\n\nCarica il modello LGBM pre-addestrato per il ticker e produce\nuno score 0-100 (stacking ensemble con meta-model).\n\nUSA IL DATAPROVIDER per i dati OHLCV e macro (cache hit garantito\nse analyze_stock e' stato chiamato prima).\n\nSe non esiste un modello pre-addestrato, restituisce un errore\nesplicativo. Per addestrare un modello:\n  python scripts/run_stacking.py --ticker {ticker} --start 2020-01-01",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "ticker": {
-            "description": "Simbolo del titolo (es. 'AAPL', 'GME').",
-            "type": "string"
-          }
-        },
-        "required": [
-          "ticker"
-        ],
-        "type": "object"
-      },
-      "output_schema": {
-        "additionalProperties": true,
-        "description": "Output of ``lgbm_predict``.\n\nThe 0-100 score is not a probability: ``calibrated_probability`` stays\nNone until an out-of-sample calibration artifact is validated.",
-        "properties": {
-          "as_of": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "available": {
-            "default": false,
-            "type": "boolean"
-          },
-          "available_bars": {
-            "default": 0,
-            "type": "integer"
-          },
-          "calibrated_probability": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "calibration_status": {
-            "default": "not_calibrated",
-            "type": "string"
-          },
-          "data_quality": {
-            "default": "eod",
-            "type": "string"
-          },
-          "data_source": {
-            "default": "yfinance",
-            "type": "string"
-          },
-          "error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "error_is_blocking": {
-            "default": false,
-            "type": "boolean"
-          },
-          "error_kind": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "error_retryable": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "individual_signals": {
-            "additionalProperties": {
-              "type": "number"
-            },
-            "type": "object"
-          },
-          "meta_weights": {
-            "additionalProperties": {
-              "type": "number"
-            },
-            "type": "object"
-          },
-          "model": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "reason": {
-            "default": "",
-            "type": "string"
-          },
-          "required_bars": {
-            "default": 0,
-            "type": "integer"
-          },
-          "schema_version": {
-            "default": "2.0.0",
-            "type": "string"
-          },
-          "score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "signal": {
-            "default": "unavailable",
-            "type": "string"
-          },
-          "ticker": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "ticker"
-        ],
-        "type": "object"
-      }
-    },
     "scan_market": {
-      "description": "Scan a market universe for accumulation patterns and rank by score.\n\nParallel scanning via ThreadPoolExecutor. 500 tickers in ~45s.",
+      "description": "Scan a market universe for accumulation patterns and rank by score (complete daily bars).\n\nCheck coverage_pct and degraded first: when tickers fail or the\ndeadline cuts the scan, failed_tickers lists them, degraded is true,\nresults are NOT a complete ranking, and the scan is not cached. Row\nprices come from the quote layer (price_as_of, price_source).\nLimits: at most 200 custom tickers, top_n 1-50, max_workers 1-16,\ndeadline_s 10-600 (default 240).",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "deadline_s": {
+            "default": 240.0,
+            "description": "Wall-clock budget in seconds; unfinished tickers count as failed.",
+            "type": "number"
+          },
           "fetch_news": {
-            "default": true,
-            "description": "If True, scrape Finviz/WSB for web sentiment.",
+            "default": false,
+            "description": "If True, scrape Finviz/WSB for web sentiment (slow; default False).",
             "type": "boolean"
           },
           "max_workers": {
             "default": 8,
-            "description": "Parallel workers (default 8).",
+            "description": "Parallel workers (1-16, default 8).",
             "type": "integer"
           },
           "min_score": {
@@ -2791,11 +4078,11 @@
               }
             ],
             "default": null,
-            "description": "Custom comma-separated list (overrides universe)."
+            "description": "Custom comma-separated list (overrides universe, max 200)."
           },
           "top_n": {
             "default": 15,
-            "description": "Max results.",
+            "description": "Max results (1-50).",
             "type": "integer"
           },
           "universe": {
@@ -2813,7 +4100,7 @@
       },
       "output_schema": {
         "additionalProperties": true,
-        "description": "Output of ``scan_market``.",
+        "description": "Output of ``scan_market``.\n\nScores use complete daily bars only. ``degraded`` is True when any ticker\nfailed or the deadline cut the scan: ``failed_tickers`` lists them and\n``coverage_pct`` is the share of tickers that were processed. A degraded\nscan is never cached. ``results`` is never a complete ranking when\n``coverage_pct`` < 100.",
         "properties": {
           "as_of": {
             "anyOf": [
@@ -2824,15 +4111,68 @@
                 "type": "null"
               }
             ],
+            "default": null,
+            "description": "Data time of the main numbers (ISO 8601 with offset); never a fetch time"
+          },
+          "cache_age_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Age of the cached answer in seconds"
+          },
+          "cached": {
+            "default": false,
+            "description": "True when served from the result cache",
+            "type": "boolean"
+          },
+          "computed_at": {
+            "description": "When the server built the answer (ISO 8601)",
+            "type": "string"
+          },
+          "coverage_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "default": null
           },
           "data_quality": {
-            "default": "eod",
+            "default": "daily_complete_bars",
             "type": "string"
           },
           "data_source": {
             "default": "yfinance",
             "type": "string"
+          },
+          "deadline_hit": {
+            "default": false,
+            "type": "boolean"
+          },
+          "deadline_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "degraded": {
+            "default": false,
+            "description": "True when any input is missing, stale or failed",
+            "type": "boolean"
           },
           "elapsed_seconds": {
             "anyOf": [
@@ -2865,7 +4205,8 @@
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "description": "blocking | degraded"
           },
           "error_retryable": {
             "anyOf": [
@@ -2877,6 +4218,13 @@
               }
             ],
             "default": null
+          },
+          "failed_tickers": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
           },
           "failures": {
             "default": 0,
@@ -2892,6 +4240,10 @@
               "type": "object"
             },
             "type": "array"
+          },
+          "limits": {
+            "additionalProperties": true,
+            "type": "object"
           },
           "min_score_threshold": {
             "default": 0.0,
@@ -2949,6 +4301,28 @@
                   ],
                   "default": null
                 },
+                "price_as_of": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "price_source": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
                 "sector": {
                   "default": "",
                   "type": "string"
@@ -2977,10 +4351,21 @@
             "type": "array"
           },
           "schema_version": {
-            "default": "2.0.0",
+            "default": "4.0.0",
             "type": "string"
           },
+          "sources": {
+            "description": "Data sources used",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "tickers_passed": {
+            "default": 0,
+            "type": "integer"
+          },
+          "tickers_processed": {
             "default": 0,
             "type": "integer"
           },
@@ -3005,6 +4390,12 @@
           "universe_metadata": {
             "additionalProperties": true,
             "type": "object"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "workers": {
             "default": 0,
@@ -3072,7 +4463,8 @@
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "description": "Data time of the main numbers (ISO 8601 with offset); never a fetch time"
           },
           "breakeven": {
             "anyOf": [
@@ -3085,6 +4477,27 @@
             ],
             "default": null
           },
+          "cache_age_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Age of the cached answer in seconds"
+          },
+          "cached": {
+            "default": false,
+            "description": "True when served from the result cache",
+            "type": "boolean"
+          },
+          "computed_at": {
+            "description": "When the server built the answer (ISO 8601)",
+            "type": "string"
+          },
           "data_quality": {
             "default": "derived",
             "type": "string"
@@ -3092,6 +4505,22 @@
           "data_source": {
             "default": "computed",
             "type": "string"
+          },
+          "degraded": {
+            "default": false,
+            "description": "True when any input is missing, stale or failed",
+            "type": "boolean"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "error_kind": {
             "anyOf": [
@@ -3102,7 +4531,8 @@
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "description": "blocking | degraded"
           },
           "error_retryable": {
             "anyOf": [
@@ -3166,8 +4596,15 @@
             "default": null
           },
           "schema_version": {
-            "default": "2.0.0",
+            "default": "4.0.0",
             "type": "string"
+          },
+          "sources": {
+            "description": "Data sources used",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "strategy_description": {
             "anyOf": [
@@ -3256,7 +4693,8 @@
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "description": "Data time of the main numbers (ISO 8601 with offset); never a fetch time"
           },
           "available": {
             "default": false,
@@ -3265,6 +4703,27 @@
           "available_bars": {
             "default": 0,
             "type": "integer"
+          },
+          "cache_age_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Age of the cached answer in seconds"
+          },
+          "cached": {
+            "default": false,
+            "description": "True when served from the result cache",
+            "type": "boolean"
+          },
+          "computed_at": {
+            "description": "When the server built the answer (ISO 8601)",
+            "type": "string"
           },
           "cum_return_lookback": {
             "anyOf": [
@@ -3284,6 +4743,11 @@
           "data_source": {
             "default": "yfinance",
             "type": "string"
+          },
+          "degraded": {
+            "default": false,
+            "description": "True when any input is missing, stale or failed",
+            "type": "boolean"
           },
           "direction": {
             "default": "unavailable",
@@ -3313,7 +4777,8 @@
                 "type": "null"
               }
             ],
-            "default": null
+            "default": null,
+            "description": "blocking | degraded"
           },
           "error_retryable": {
             "anyOf": [
@@ -3394,7 +4859,7 @@
             "type": "integer"
           },
           "schema_version": {
-            "default": "2.0.0",
+            "default": "4.0.0",
             "type": "string"
           },
           "sharpe_lookback": {
@@ -3409,8 +4874,22 @@
             "default": null
           },
           "signal": {
-            "default": 0,
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "sources": {
+            "description": "Data sources used",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "target_vol": {
             "default": 0.4,
@@ -3429,6 +4908,12 @@
               }
             ],
             "default": null
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [

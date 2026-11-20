@@ -2,8 +2,10 @@
 """
 Backtesting framework for stock-crypto-analysis scoring engine.
 
-Simulates the 6-dimensional scoring framework over historical dates
-to validate whether composite scores predict future returns.
+Simulates a Python approximation of the scoring over historical dates
+to check whether composite scores predict future returns. The dimension
+weights and the regime rules come from the trading MCP (weights_config.py).
+Sentiment and crypto APC are placeholders (50): no historical data.
 
 Usage:
     python3 backtest.py --ticker AAPL --lookback 252 --step 7
@@ -12,8 +14,8 @@ Usage:
     python3 backtest.py --universe-file data/us_tickers.csv --lookback 90 --step 14 --top 10
 
 Key design: avoids look-ahead bias by using ONLY data available at each
-simulation date. The scoring is a Python approximation of the LLM-driven
-analysis, using the same dimensions and weights.
+simulation date. The scores are an approximation: analyze_stock stays the
+reference for live verdicts.
 """
 from __future__ import annotations
 
@@ -314,7 +316,7 @@ def score_competitive(info: dict) -> float:
 def compute_composite(ticker: str, df: pd.DataFrame, idx: int,
                       info: dict, is_crypto: bool = False,
                       regime: Regime = Regime.UNKNOWN) -> dict:
-    """Compute composite score for a single backtest date."""
+    """Compute composite score for a single backtest date with the MCP weights."""
     weights = get_dynamic_weights(regime, is_crypto)
 
     wyckoff = score_wyckoff(df, idx)
@@ -322,20 +324,23 @@ def compute_composite(ticker: str, df: pd.DataFrame, idx: int,
     pa = score_price_action(df, idx)
     fundamentals = score_fundamentals(info) if not is_crypto else 50.0
     competitive = score_competitive(info) if not is_crypto else 50.0
-    crypto_layer = 50.0 if is_crypto else 0.0  # Placeholder
+    crypto_apc = 50.0  # Placeholder: no historical crypto APC data
 
     # Sentiment: placeholder 50 (no historical sentiment data available)
     sentiment = 50.0
 
-    composite = (
-        wyckoff * weights["wyckoff"]
-        + volprof * weights["volume_profile"]
-        + pa * weights["price_action"]
-        + sentiment * weights["sentiment"]
-        + fundamentals * weights.get("fundamentals", 0)
-        + competitive * weights.get("competitive", 0)
-        + crypto_layer * weights.get("crypto_layer", 0)
-    )
+    scores = {
+        "wyckoff": wyckoff,
+        "volume_profile": volprof,
+        "price_action": pa,
+        "sentiment": sentiment,
+        "fundamentals": fundamentals,
+        "crypto_apc": crypto_apc,
+    }
+    missing = [dim for dim in weights if dim not in scores]
+    if missing:
+        raise KeyError(f"MCP weight dimensions without a backtest score: {missing}")
+    composite = sum(scores[dim] * w for dim, w in weights.items())
 
     # Map to verdict
     direction = Direction.LONG if composite >= 50 else Direction.NEUTRAL
@@ -358,7 +363,8 @@ def compute_composite(ticker: str, df: pd.DataFrame, idx: int,
             "price_action": round(pa, 1),
             "sentiment": round(sentiment, 1),
             "fundamentals": round(fundamentals, 1),
-            "competitive": round(competitive, 1),
+            "crypto_apc": round(crypto_apc, 1),
+            "competitive_info": round(competitive, 1),
         },
     }
 

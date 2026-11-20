@@ -27,8 +27,6 @@ so a client knows the payload shape before the first call.
 | `bali_signals` | Quant | RVol–IVol and CVol–PVol spreads (Bali 2009) |
 | `tsmom_signals` | Quant | Time-series momentum (Moskowitz 2012) |
 | `bakshi_signals` | Quant | Variance risk premium (Bakshi 2003) |
-| `lgbm_predict` | Quant | LightGBM stacking ensemble score |
-| `lgbm_postprocess` | Quant | Skill-driven adjustment of the LGBM score |
 
 ## Quick Install
 
@@ -38,10 +36,12 @@ so a client knows the payload shape before the first call.
 
 This creates a venv at `~/.local/share/opencode/trading-mcp-venv/` and installs the package.
 
-Then add to your `opencode.json`. Use **absolute paths** (no `$HOME` in the
-shell string) plus an explicit `environment` block so the server never depends
-on the ambient `HOME` and behaves identically from any OpenCode conversation,
-even with multiple conversations in parallel:
+Then add to your `opencode.json` (the repository config already contains this
+entry). Use `{env:HOME}` placeholders plus an explicit `environment` block.
+opencode replaces each placeholder with an absolute path when it loads the
+config, so the server process gets absolute paths: it never depends on the
+ambient `HOME` and behaves identically from any OpenCode conversation, even
+with multiple conversations in parallel. The same file works on every machine:
 
 ```json
 {
@@ -49,15 +49,15 @@ even with multiple conversations in parallel:
     "trading": {
       "type": "local",
       "command": [
-        "/home/giuseppe/.local/share/opencode/trading-mcp-venv/bin/trading-mcp",
-        "--skills-dir", "/home/giuseppe/.config/opencode/skills",
-        "--tickers-dir", "/home/giuseppe/.config/opencode/skills/market-accumulation-scanner/data"
+        "{env:HOME}/.local/share/opencode/trading-mcp-venv/bin/trading-mcp",
+        "--skills-dir", "{env:HOME}/.config/opencode/skills",
+        "--tickers-dir", "{env:HOME}/.config/opencode/skills/market-accumulation-scanner/data"
       ],
       "environment": {
-        "TRADING_SKILLS_DIR": "/home/giuseppe/.config/opencode/skills",
-        "TRADING_TICKERS_DIR": "/home/giuseppe/.config/opencode/skills/market-accumulation-scanner/data",
+        "TRADING_SKILLS_DIR": "{env:HOME}/.config/opencode/skills",
+        "TRADING_TICKERS_DIR": "{env:HOME}/.config/opencode/skills/market-accumulation-scanner/data",
         "TRADING_CACHE_DIR": "/tmp/opencode/options_cache",
-        "TRADING_DATA_CACHE_DIR": "/home/giuseppe/.cache/trading_mcp/data"
+        "TRADING_DATA_CACHE_DIR": "{env:HOME}/.cache/trading_mcp/data"
       },
       "enabled": true
     }
@@ -67,10 +67,11 @@ even with multiple conversations in parallel:
 
 ### Robustness notes
 
-- **Launcher**: the command uses the venv's absolute executable with explicit
-  `--skills-dir` / `--tickers-dir` arguments, and an `environment` map that
-  pins every cache directory. There is no `bash -c` and no `$HOME` expansion,
-  so a missing/changed `HOME` cannot break startup.
+- **Launcher**: the command uses the venv's absolute executable (opencode
+  resolves `{env:HOME}` at load time) with explicit `--skills-dir` /
+  `--tickers-dir` arguments, and an `environment` map that pins every cache
+  directory. There is no `bash -c` and no `$HOME` expansion in the server
+  process, so a missing/changed `HOME` cannot break startup.
 - **Interpreter pin**: the venv's `bin/python3` points to the real
   `/usr/bin/python3.14` binary (not a symlink chain through `python3`) and
   `pyvenv.cfg` is kept in sync with the runtime version.
@@ -82,12 +83,12 @@ even with multiple conversations in parallel:
   `result_cache.py` resolve their directories via explicit env vars with a
   `Path.home()`-based fallback, so startup works even with `HOME` unset.
 
-Quick sanity check (starts clean with no `HOME`):
+Quick sanity check (starts clean with no `HOME`; run it from your shell):
 
 ```bash
-env -i HOME= /home/giuseppe/.local/share/opencode/trading-mcp-venv/bin/trading-mcp \
-  --skills-dir /home/giuseppe/.config/opencode/skills \
-  --tickers-dir /home/giuseppe/.config/opencode/skills/market-accumulation-scanner/data
+env -i HOME= "$HOME/.local/share/opencode/trading-mcp-venv/bin/trading-mcp" \
+  --skills-dir "$HOME/.config/opencode/skills" \
+  --tickers-dir "$HOME/.config/opencode/skills/market-accumulation-scanner/data"
 ```
 
 

@@ -37,6 +37,7 @@ def _run_config_probe(env: dict[str, str]) -> dict[str, str]:
 def test_config_explicit_env_wins() -> None:
     """TRADING_SKILLS_DIR/TICKERS_DIR espliciti sono usati così come sono."""
     env = dict(os.environ)
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
     env["TRADING_SKILLS_DIR"] = "/custom/skills"
     env["TRADING_TICKERS_DIR"] = "/custom/tickers"
     resolved = _run_config_probe(env)
@@ -50,6 +51,7 @@ def test_config_resolves_with_empty_home() -> None:
         "PATH": os.environ.get("PATH", "/usr/bin"),
         "HOME": "",
         "PYTHONPATH": str(SRC),
+        "PYTHONDONTWRITEBYTECODE": "1",
     }
     resolved = _run_config_probe(env)
     assert resolved["skills"].startswith("/")
@@ -62,6 +64,7 @@ def test_config_resolves_without_home_key() -> None:
     env = {
         "PATH": os.environ.get("PATH", "/usr/bin"),
         "PYTHONPATH": str(SRC),
+        "PYTHONDONTWRITEBYTECODE": "1",
     }
     resolved = _run_config_probe(env)
     assert resolved["skills"].startswith("/")
@@ -74,6 +77,7 @@ def test_tickers_dir_is_under_skills_dir_without_env() -> None:
         "PATH": os.environ.get("PATH", "/usr/bin"),
         "HOME": "",
         "PYTHONPATH": str(SRC),
+        "PYTHONDONTWRITEBYTECODE": "1",
     }
     resolved = _run_config_probe(env)
     assert resolved["tickers"].startswith(resolved["skills"].rstrip("/"))
@@ -85,6 +89,7 @@ def test_weights_config_resolves_without_home() -> None:
         "PATH": os.environ.get("PATH", "/usr/bin"),
         "HOME": "",
         "PYTHONPATH": str(SRC),
+        "PYTHONDONTWRITEBYTECODE": "1",
     }
     code = (
         "import json, sys;"

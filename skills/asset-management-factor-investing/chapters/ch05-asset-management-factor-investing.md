@@ -1,5 +1,7 @@
 # Chapter 5: Investing Over the Life Cycle
 
+> **Source note**: this chapter file is based on the table of contents and the structure of the book, not on the full text. Check the book before you quote a number or a claim.
+
 ## Core Idea
 Labor income is an asset, and for young investors the present value of labor income utterly dominates the rest of their financial holdings. The optimal asset mix therefore evolves as labor income evolves over the life cycle. Investors whose labor income is *bond-like* (safe, stable) should hold more equities when young and de-risk toward bonds as retirement approaches; investors with *stock-like* (volatile, equity-correlated) labor income should hold fewer equities and avoid their employer's stock. While economic theory says annuities are ideal for retirees, few actually hold them.
 

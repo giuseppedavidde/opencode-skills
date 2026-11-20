@@ -3,9 +3,9 @@
 ## Multi-Agent Architecture
 This OpenCode instance uses automatic model routing to save tokens:
 - **Router (agent router)**: deepseek-v4.1-flash — receives all requests, classifies, delegates
-- **@trade**: deepseek-v4.1-flash — trading, options, market analysis. Delega i task di codice e script personalizzati a @coder
-- **@coder**: deepseek-v4.1-flash esecutore guidato da @coder_planner (glm-5.3) per decomposizione atomica — complex coding, refactoring, multi-file changes
-- **@coder_planner**: glm-5.3 — definisce la lista di azioni atomiche per @coder (solo per task complessi: ≥2 file o >20 righe)
+- **@trade**: gemini-4-argon — trading, options, market analysis. Delega i task di codice e script personalizzati a @coder
+- **@coder**: deepseek-v4.1-flash — esecutore; per i task complessi segue il piano atomico di @coder_planner — complex coding, refactoring, multi-file changes
+- **@coder_planner**: gemini-4-argon — definisce la lista di azioni atomiche per @coder (solo per task complessi: ≥2 file o >20 righe)
 - **@graphify_helper**: deepseek-v4.1-flash — smart graphify orchestrator, builds/updates/queries knowledge graphs
 - **@skill_updater**: deepseek-v4.1-flash — updates skills that depend on -src submodules (graphify, book-to-skill, quant-mind, karpathy)
 - **@explore**: deepseek-v4.1-flash — code search
@@ -36,7 +36,7 @@ Code, tool output, tickers, paths, and quoted document text are exempt.
 
 ## Python Virtual Environment Mandatory
 CRITICAL: Before ANY Python operation (install, run, test), load @skills/python-venv. You MUST use a virtual environment. Never `pip install` on the system Python.
-- Use a SINGLE shared venv at `/tmp/opencode/.venv` for all temporary NON-trading work. For trading/market-data Python work, REUSE the existing MCP trading venv at `~/.local/share/opencode/trading-mcp-venv` (it already has pandas, yfinance, lightgbm, scikit-learn — never reinstall). Never create duplicate venvs.
+- Use a SINGLE shared venv at `/tmp/opencode/.venv` for all temporary NON-trading work. For trading/market-data Python work, REUSE the existing MCP trading venv at `~/.local/share/opencode/trading-mcp-venv` (`./setup-trading-mcp.sh` installs its locked dependencies: pandas, numpy, scipy, yfinance; rerun the script instead of `pip install`). Never create duplicate venvs.
 
 ## Python Development Standards
 CRITICAL: Whenever working with Python, you MUST load and strictly adhere to the instructions defined in @skills/python-pydantic.

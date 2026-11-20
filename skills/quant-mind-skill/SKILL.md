@@ -110,6 +110,25 @@ done
 
 Poi processa ogni `.prompt.txt` con un subagent.
 
+## Paper sui premi di volatilità: ambito corretto
+
+Lo script `bakshi_kapadia_signals.py` è stato rimosso. Lo script applicava ai singoli titoli un fit su pochi punti dell'indice S&P 500.
+Lo script stampava quote sbagliate del premio (per esempio "3500% del premio") e sceglieva la call più ITM come migliore vendita.
+
+| Paper | Cosa dimostra | Cosa non dimostra |
+|---|---|---|
+| Bakshi & Kapadia (2003), *Review of Financial Studies* | Le call **delta-hedged sull'indice S&P 500** (1988-1995, 14-60 giorni) perdono in media: il volatility risk premium dell'indice è negativo. La perdita in dollari è massima ATM; in % del premio è massima OTM. | Un profitto per opzioni short nude. Una regola di scelta dello strike. Un risultato per i singoli titoli. |
+| Bakshi & Kapadia (2003b), *Journal of Derivatives* | Sulle opzioni dei singoli titoli il premio è negativo ma **molto più piccolo** che sull'indice. | Una soglia di IV per vendere premio. |
+| Driessen, Maenhout & Vilkov (2009), *Journal of Finance* | Il premio di varianza dei singoli titoli è vicino a zero. Il premio dell'indice viene soprattutto dal rischio di correlazione. | — |
+
+Regole:
+1. Non usare il premio dell'indice come motivo per vendere opzioni su un titolo singolo.
+2. Sull'indice, il risultato riguarda posizioni delta-hedged, non opzioni short nude.
+3. Una posizione short premium segue il budget di rischio di `position-management-playbook` e usa strutture a rischio definito.
+
+`bali_signals.py` e `tsmom_signals.py` sono copie locali dei tool MCP. Seguono una variante dei paper: soglie assolute per titolo (Bali & Hovakimian 2009 è un ordinamento cross-sectional mensile) e, per TS-MOM, salto dell'ultimo mese e size 40%/σ (Moskowitz, Ooi & Pedersen 2012 non salta il mese e usa il 40% per strumento dentro un portafoglio di 58 futures).
+Non usare la size di `tsmom_signals.py` per un titolo singolo. L'uso corretto dei due segnali è in `stock-crypto-analysis`, Step 2b e 2c.
+
 ## Bridge con altri skill
 
 ### → Trading MCP
@@ -118,8 +137,9 @@ Dopo aver estratto un paper su una strategia (es. momentum factor):
 
 ```
 1. Leggi il paper JSON estratto → identifica strategia/fattore
-2. analyze_stock("SPY") → analisi mercato attuale
-3. Applica la logica del paper ai dati attuali
+2. Controlla l'ambito del paper: asset, periodo, cross-section o singolo strumento, costi
+3. analyze_stock("SPY") → analisi mercato attuale
+4. Applica la logica del paper solo dentro il suo ambito; fuori dall'ambito è un'ipotesi da testare
 ```
 
 ### → Graphify
@@ -176,7 +196,7 @@ Delega a `@skill_updater`:
 
 Oppure manualmente:
 ```bash
-cd ~/Progetti/Github/opencode-skills
+cd "$(readlink -f ~/.config/opencode/opencode-skills)"
 git submodule update --remote skills/quant-mind-src
 cd skills/quant-mind-src
 sed -i 's/pillow>=10.1.0,<11.0.0/pillow>=10.1.0/' pyproject.toml

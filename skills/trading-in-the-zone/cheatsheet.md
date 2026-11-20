@@ -24,23 +24,27 @@ while trading.
 
 ## The Five Fundamental Truths
 
-1. **Anything can happen.** One trader anywhere can negate your edge.
-2. **You don't need to know what's going to happen next to make money.**
-3. **There is a random distribution between wins and losses** for any set of variables that define an edge.
-4. **An edge is an indication of a higher probability** of one outcome over another — not a certainty.
-5. **Every moment in the market is unique.**
+Paraphrase; the exact wording is in the book.
+
+1. Any outcome is possible: one other participant can cancel your edge.
+2. You can make money without knowing what the market does next.
+3. For any set of conditions that defines an edge, wins and losses come in random order.
+4. An edge only moves the odds toward one outcome; it does not promise it.
+5. No market moment repeats exactly.
 
 ---
 
 ## The Seven Principles of Consistency
 
-1. I objectively identify my edges.
-2. I predefine the risk of every trade.
-3. I completely accept the risk, or I am willing to let go of the trade.
-4. I act on my edges without reservation or hesitation.
-5. I pay myself as the market makes money available to me.
-6. I continually monitor my susceptibility for making errors.
-7. I understand the absolute necessity of these principles and therefore never violate them.
+Paraphrase; the exact wording is in the book.
+
+1. Define each edge with objective criteria.
+2. Fix the risk of each trade before the entry.
+3. Accept that risk fully, or do not take the trade.
+4. Execute the edge without hesitation.
+5. Take profits when the market offers them, with an exit plan written in advance.
+6. Watch your own tendency to make errors.
+7. Treat these principles as rules you never break.
 
 ---
 

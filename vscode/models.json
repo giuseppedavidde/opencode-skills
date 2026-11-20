@@ -1,0 +1,10 @@
+{
+  "_comment": "Fallback models for the generated VS Code agents. Use only the model ids of the OpenCode Go API (https://opencode.ai/console/go#api). VS Code lists each id as <provider_prefix>/<id>. 'opencodego' is the vendor id of the VS Code extension OnesoftQwQ.opencode-go-copilot-provider. The runtime uses the first available model: the model of the agent (agents/*.md), then its fallbacks. To add a Copilot model, write 'Name (copilot)'. Rerun ./install.sh after an edit.",
+  "provider_prefix": "opencodego",
+  "fallbacks": {
+    "deepseek-v4.1-flash": ["mimo-v2.6-flash", "glm-5.3-flash"],
+    "gemini-4-argon": ["gpt-6-luna", "deepseek-v4-pro"],
+    "glm-5.3": ["deepseek-v4-pro", "gpt-6-luna"]
+  },
+  "default_fallback": ["deepseek-v4.1-flash", "mimo-v2.6-flash"]
+}

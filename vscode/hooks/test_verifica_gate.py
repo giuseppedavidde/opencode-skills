@@ -88,3 +88,70 @@ def test_stop_hook_active_fails_open(tmp_path: Path) -> None:
         env={"GATE_LOG_DIR": str(tmp_path), "PATH": "/usr/bin:/bin"},
     )
     assert json.loads(result.stdout or "{}") == {}
+
+
+# ── Copilot harness payloads (VS Code-compatible SubagentStop) ──────────────
+
+COMPLETE = "A" * 900 + "\n\n" + FOOTER
+
+
+def _tagged(text: str, agent_id: str) -> dict:
+    """A Copilot transcript entry: the parent transcript tags subagent messages."""
+    return {"type": "assistant.message", "agentId": agent_id, "data": {"content": text}}
+
+
+def _gate(tmp_path: Path, payload: dict, entries: list[dict], *args: str) -> dict:
+    transcript = tmp_path / "events.jsonl"
+    transcript.write_text("\n".join(json.dumps(e) for e in entries) + "\n", encoding="utf-8")
+    payload = {"transcript_path": str(transcript), **payload}
+    result = subprocess.run(
+        [sys.executable, str(HOOK), *args],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        check=True,
+        env={"GATE_LOG_DIR": str(tmp_path), "PATH": "/usr/bin:/bin"},
+    )
+    return json.loads(result.stdout or "{}")
+
+
+def _subagent_stop(**extra: str) -> dict:
+    return {"hook_event_name": "SubagentStop", "agent_id": "a1", "agent_type": "trade", **extra}
+
+
+def test_payload_answer_wins_over_parallel_agent_in_transcript(tmp_path: Path) -> None:
+    """A short message of a parallel agent is the last line, but trade's answer is complete."""
+    entries = [_tagged(COMPLETE, "a1"), _tagged("done", "a2")]
+    assert _gate(tmp_path, _subagent_stop(last_assistant_message=COMPLETE), entries) == {}
+
+
+def test_short_payload_answer_is_blocked_even_if_transcript_is_complete(tmp_path: Path) -> None:
+    entries = [_tagged("done", "a1"), _tagged(COMPLETE, "a2")]
+    decision = _gate(tmp_path, _subagent_stop(last_assistant_message="done"), entries)
+    assert decision.get("decision") == "block"
+
+
+def test_camelcase_response_field_is_read(tmp_path: Path) -> None:
+    payload = {"hookEventName": "subagentStop", "agentId": "a1", "agentType": "trade", "response": "done"}
+    assert _gate(tmp_path, payload, [_tagged(COMPLETE, "a2")]).get("decision") == "block"
+
+
+def test_transcript_fallback_keeps_only_the_same_agent(tmp_path: Path) -> None:
+    """Without an answer in the payload, the messages of other agents are ignored."""
+    entries = [_tagged(COMPLETE, "a1"), _tagged("done", "a2")]
+    assert _gate(tmp_path, _subagent_stop(), entries) == {}
+
+
+def test_top_level_agent_stop_is_allowed(tmp_path: Path) -> None:
+    assert _gate(tmp_path, {"hook_event_name": "Stop"}, [_message("done")]) == {}
+
+
+def test_agent_outside_the_gated_list_is_allowed(tmp_path: Path) -> None:
+    """Built-in agents (explore, task) and other bundles are never gated."""
+    payload = _subagent_stop(agent_type="explore", agent_name="explore", last_assistant_message="done")
+    assert _gate(tmp_path, payload, [], "--agents=trade,coder") == {}
+
+
+def test_gated_agent_name_matches_in_any_spelling(tmp_path: Path) -> None:
+    payload = _subagent_stop(agent_type="Coder_Planner", last_assistant_message="done")
+    assert _gate(tmp_path, payload, [], "--agents=coder-planner").get("decision") == "block"

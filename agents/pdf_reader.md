@@ -46,7 +46,7 @@ Your model does NOT support PDF input. Reading a `.pdf` with `read` wastes token
 
 ## Mandatory workflow
 1. Extract the text to a file:
-   `bash /home/giuseppe/Progetti/Github/opencode-skills/scripts/pdf_extract.sh "<path.pdf>" --out /tmp/opencode/<name>.txt`
+   `bash ~/.config/opencode/opencode-skills/scripts/pdf_extract.sh "<path.pdf>" --out /tmp/opencode/<name>.txt`
    - The script auto-falls back to OCR (`pdftoppm` + `tesseract`, languages `deu+eng`) when the embedded text is insufficient; a warning appears on stderr.
    - Options: `--pages A-B` to limit the page range, `--ocr` to force OCR, `--out FILE` to write to disk. ALWAYS pass `--out`.
 2. Read the resulting `.txt` in CHUNKS with `read` (use `offset`/`limit`, ~150-300 lines per call). NEVER paste the whole document into your reasoning: keep context small and quote only the relevant lines.

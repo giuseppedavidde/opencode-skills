@@ -119,7 +119,8 @@ export function parseAuthKey(authJsonText: string): string | null {
 }
 
 export function normalizeModelId(raw: string): string {
-  let value = (raw ?? '').trim();
+  // `opencode-go/gemini-4-argon#medium`: the `#medium` suffix is the opencode reasoning effort, not part of the id.
+  let value = (raw ?? '').split('#', 1)[0].trim();
   let stripped = true;
   while (stripped) {
     stripped = false;
@@ -132,6 +133,42 @@ export function normalizeModelId(raw: string): string {
     }
   }
   return value;
+}
+
+export const CHAT_COMPLETIONS_PROTOCOL = 'chat-completions';
+
+/**
+ * Read the protocols of each model from a `GET /models` payload.
+ *
+ * OpenCode Go lists them under `api` (for example `chat-completions`,
+ * `responses`, `messages`, `generate-content`). A model without an `api`
+ * object gets an empty list: the caller treats it as unknown.
+ */
+export function parseModelProtocols(payload: unknown): Map<string, string[]> {
+  const protocols = new Map<string, string[]>();
+  const data = payload && typeof payload === 'object' ? (payload as { data?: unknown }).data : undefined;
+  if (!Array.isArray(data)) {
+    return protocols;
+  }
+  for (const entry of data) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+    const id = (entry as { id?: unknown }).id;
+    if (typeof id !== 'string' || id.trim().length === 0) {
+      continue;
+    }
+    const api = (entry as { api?: unknown }).api;
+    const names = api && typeof api === 'object' && !Array.isArray(api) ? Object.keys(api as object) : [];
+    protocols.set(id.trim(), names);
+  }
+  return protocols;
+}
+
+/** True when the direct chat-completions client can talk to `model`; unknown models count as supported. */
+export function supportsChatCompletions(protocols: Map<string, string[]>, model: string): boolean {
+  const names = protocols.get(model);
+  return names === undefined || names.length === 0 || names.includes(CHAT_COMPLETIONS_PROTOCOL);
 }
 
 export function normalizeParameters(schema: unknown): Record<string, unknown> {

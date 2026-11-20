@@ -1,5 +1,7 @@
 # Chapter 1: Asset Owners
 
+> **Source note**: this chapter file is based on the table of contents and the structure of the book, not on the full text. Check the book before you quote a number or a claim.
+
 ## Core Idea
 All asset owners—from the largest sovereign wealth funds (SWFs) to the smallest individual investors—face the same three problems: (1) defining and meeting liabilities, (2) deciding where to invest and how much risk to take, and (3) overseeing the delegated intermediaries who actually manage the portfolios. The scale changes by orders of magnitude, but the canonical issues (liabilities, risk, governance) are universal. Understanding who owns the assets is the necessary preface to factor investing: optimal portfolios are shaped by the owner's liabilities and bad times, not by abstract market weights.
 

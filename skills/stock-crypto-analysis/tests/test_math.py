@@ -202,46 +202,30 @@ def test_iv_rank_formula() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 5. Sharpe-like ratio (from feedback_loop.py)
+# 5. Sharpe ratio of the daily equity curve (from feedback_loop.py)
 # ---------------------------------------------------------------------------
 
 def test_sharpe_like() -> None:
-    """Sharpe-like ratio should be positive for winning trades."""
-    from feedback_loop import compute_sharpe_like
+    """The Sharpe ratio uses daily equity returns; a short journal gives insufficient_data."""
+    from feedback_loop import compute_sharpe
 
-    # Winning trades
-    winners = [
-        {"is_open": False, "pnl_pct": 5.0, "entry_date": "2024-01-01", "exit_date": "2024-01-10"},
-        {"is_open": False, "pnl_pct": 3.0, "entry_date": "2024-02-01", "exit_date": "2024-02-10"},
-        {"is_open": False, "pnl_pct": 4.0, "entry_date": "2024-03-01", "exit_date": "2024-03-10"},
+    few = [
+        {"is_open": False, "position": "long", "pnl_pct": 5.0, "pnl_equity_pct": 0.1,
+         "entry_date": f"2024-01-0{d}", "exit_date": f"2024-01-0{d + 1}"}
+        for d in range(1, 6)
     ]
-    sharp = compute_sharpe_like(winners, annualize=False)
-    assert sharp is not None
-    assert sharp["raw_ratio"] > 0
+    assert compute_sharpe(few)["insufficient_data"] is True
 
-    # Mixed trades
-    mixed = [
-        {"is_open": False, "pnl_pct": 10.0, "entry_date": "2024-01-01", "exit_date": "2024-02-01"},
-        {"is_open": False, "pnl_pct": -5.0, "entry_date": "2024-02-15", "exit_date": "2024-03-15"},
-        {"is_open": False, "pnl_pct": 2.0, "entry_date": "2024-04-01", "exit_date": "2024-05-01"},
-    ]
-    sharp_mixed = compute_sharpe_like(mixed)
-    assert sharp_mixed is not None
-
-    # Too few trades
-    single = [{"is_open": False, "pnl_pct": 5.0}]
-    assert compute_sharpe_like(single) is None
-
-    # Open trades should be excluded
-    with_open = [
-        {"is_open": True, "pnl_pct": 100.0},
-        {"is_open": False, "pnl_pct": 2.0},
-        {"is_open": False, "pnl_pct": 3.0},
-    ]
-    sharp_open = compute_sharpe_like(with_open, annualize=False)
-    assert sharp_open is not None
-    # Only 2 closed trades should be used
-    assert sharp_open["raw_ratio"] > 0
+    rows = []
+    for i in range(40):
+        day = 1 + 3 * i
+        pnl = 1.0 if i % 3 else -0.8
+        rows.append({"is_open": False, "position": "long", "pnl_pct": pnl * 10, "pnl_equity_pct": pnl,
+                     "entry_date": f"2024-{1 + (day - 1) // 28:02d}-{1 + (day - 1) % 28:02d}",
+                     "exit_date": f"2024-{1 + (day - 1) // 28:02d}-{1 + (day - 1) % 28:02d}"})
+    res = compute_sharpe(rows)
+    assert res["insufficient_data"] is False
+    assert res["sharpe"] > 0
 
 
 # ---------------------------------------------------------------------------

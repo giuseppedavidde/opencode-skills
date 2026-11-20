@@ -1,3 +1,5 @@
+> Data note: VXO, NYSE public/specialist short sales and the odd-lot ratio are discontinued. Most thresholds are in-sample (1990s-2000s). See SKILL.md, Data Status.
+
 # Cheatsheet: Sentiment Thresholds, Position Sizing & Exit Rules
 
 ## Sentiment Indicator Thresholds
@@ -9,7 +11,7 @@
 | CBOE Total Put/Call (EMA10-250) | > +10% deviation | < -10% deviation |
 | Squeeze Play II Individual Stock (EMA50-100) | 10-day high > +5% | 10-day low < -5% |
 | TSW (EMA21-50) | > +10% | < -10% |
-| VIX/VXO (EMA21-50) | > +5% | < -5% |
+| VIX (EMA21-50; VXO discontinued) | > +5% | < -5% |
 | VIX Fast (EMA1-10) | > +5% | < -5% |
 | Public Short Sales NPSR (EMA4-8) | High extreme | Low extreme |
 | Advisory Opinion (EMA1-4W) | > +5% bears | < -5% bears |
@@ -60,7 +62,7 @@
 - Long signals are 2-3x more reliable than short signals. Consider long-only.
 - LEAPS eliminate stop-loss whipsaw — use time stops instead.
 - Equity-only put/call > CBOE total > OEX (for contrarian).
-- VIX > VXO > VXN.
+- VIX > VXO > VXN (book ranking; VXO is discontinued since 2021).
 - Public short sales > put/call ratios > implied volatility > advisory opinion.
 - Fear-based indicators (high put/call, high VIX, high shorting) outperform greed-based.
 - Bad data can't produce good signals. Verify put/call ratio source and smoothing.

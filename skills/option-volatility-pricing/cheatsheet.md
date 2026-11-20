@@ -36,10 +36,12 @@
 
 ## ATM Option Value Approximation ("40% Rule")
 ```
-Expected Value ≈ 0.004 × F × σ × √t
+Expected Value ≈ 0.4 × F × σ × √t        (σ as a decimal: 0.20; t in years)
+Expected Value ≈ 0.004 × F × σ% × √t     (σ in percent: 20; same result)
 Theoretical Value ≈ Expected Value / (1 + r×t)
 ```
-Example: F=100, σ=20%, t=0.25 (3mo): EV ≈ 0.004 × 100 × 20 × 0.5 = 4.00
+Example: F=100, σ=20%, t=0.25 (3mo): EV ≈ 0.4 × 100 × 0.20 × 0.5 = 0.004 × 100 × 20 × 0.5 = 4.00.
+Do not mix the forms: 0.004 with σ as a decimal gives a value 100× too small; 0.4 with σ in percent gives 100× too large.
 
 ## Early Exercise Decision Matrix
 | Option Type | Exercise When | Optimal Timing |

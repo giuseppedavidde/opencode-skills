@@ -22,7 +22,7 @@ CRITICAL: Before creating any venv, ALWAYS check if one exists and reuse it.
 
 ```bash
 # Questo venv esegue il server MCP "trading" e ha GIÀ tutte le dipendenze
-# (pandas, yfinance, lightgbm, scikit-learn, scipy, numpy, pydantic, requests...).
+# (pandas, numpy, scipy, yfinance, pydantic, requests...).
 VENV_TRADING="$HOME/.local/share/opencode/trading-mcp-venv"
 if [ -f "$VENV_TRADING/bin/activate" ]; then
   source "$VENV_TRADING/bin/activate"

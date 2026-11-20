@@ -29,7 +29,7 @@
 - **Cash Settlement**: Index options settle in cash, not stock.
 
 ## The Greeks
-- **Delta (Δ)**: Expected change in option price per $1 change in underlying. Calls: 0 to +1. Puts: 0 to -1. ATM ≈ 0.50. Also used as probability of finishing ITM.
+- **Delta (Δ)**: Expected change in option price per $1 change in underlying. Calls: 0 to +1. Puts: 0 to -1. ATM ≈ 0.50. Often misused as the probability of finishing ITM: the risk-neutral P(ITM) is N(d2) for a call and N(−d2) for a put, not |delta|.
 - **Gamma (Γ)**: Rate of change of delta per $1 move in underlying. Highest for ATM, near-term options. "Acceleration."
 - **Theta (Θ)**: Daily time decay — expected decrease in option price per day. Negative for long options, positive for short options.
 - **Vega (ν)**: Expected change in option price per 1-point change in implied volatility. Higher for longer-term options.

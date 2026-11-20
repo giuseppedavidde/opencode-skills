@@ -1,5 +1,7 @@
 # Chapter 15: Delegated Investing
 
+> **Source note**: this chapter file is based on the table of contents and the structure of the book, not on the full text. Check the book before you quote a number or a claim.
+
 ## Core Idea
 What is best for the asset owner (principal) is usually not best for the delegated fund manager (agent). Principal-agent conflicts can be *mitigated* by appropriate governance structures and contracts. Effective boards advocate for principals' interests and — critically — should build *processes* for investment decisions rather than making those decisions directly. Standard linear contracts paired with static market benchmarks fail badly; smarter (especially factor-based) benchmarks, option-like compensation, and strong disclosure materially reduce agency costs.
 

@@ -1,5 +1,7 @@
 # Chapter 9: Bonds
 
+> **Source note**: this chapter file is based on the table of contents and the structure of the book, not on the full text. Check the book before you quote a number or a claim.
+
 ## Core Idea
 The **level factor** — the parallel shift in all bond yields — is the dominant driver of fixed-income returns. The level factor is shaped by risks associated with economic growth, inflation, and monetary policy. Corporate bonds do not just reflect credit risk; as theory predicts, **volatility risk** is an important factor and corporate bond returns correlate highly with equity returns. **Illiquidity risk** is also an important factor in bond returns. The chapter reframes fixed income from asset labels (government, IG, HY) into the level, term-spread, credit-spread, volatility, and liquidity factors underlying them.
 

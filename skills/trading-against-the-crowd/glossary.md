@@ -20,12 +20,12 @@
 - **Investors Intelligence**: Survey of investment newsletter advisors' bullish/bearish sentiment. Published weekly.
 - **LEAPS**: Long-term Equity AnticiPation Securities — options with expirations up to 3 years. ITM LEAPS serve as stock surrogates with defined risk.
 - **NPSR (Normalized Public Short Sales Ratio)**: Public short sales / total NYSE short sales, detrended via EMA4-8. Among the strongest contrarian indicators.
-- **OEX Put/Call Ratio**: S&P 100 index options. Smart money indicator — trade WITH OEX sentiment, not against it.
-- **Odd-Lot Short Sales Ratio (OLSR)**: Historically tracked small trader shorting. Lost predictive power with listed put options in late 1970s.
+- **OEX Put/Call Ratio**: S&P 100 index options. Smart money indicator in the book's in-sample tests — trade WITH OEX sentiment, not against it. OEX volume is now small; no current test.
+- **Odd-Lot Short Sales Ratio (OLSR)**: Historically tracked small trader shorting. Lost predictive power with listed put options in late 1970s. The series is discontinued.
 - **Price Trigger**: Entry confirmation requiring close > prior day high (longs) or close < prior day low (shorts). Solves the premature-entry problem of sentiment-only systems.
 - **Sentiment Technician**: Technical analyst who incorporates non-price data (put/call ratios, volatility, surveys) into market timing.
 - **Squeeze Play**: Sentiment + price trigger framework. Squeeze Play I = equity indices (EMA5-21). Squeeze Play II = individual stocks (EMA50-100).
 - **Time Stop**: Exit at fixed interval after entry (T+30, T+60, T+90 days). Alternative to price-based stops, preferred with LEAPS.
 - **Tsunami Sentiment Wave (TSW)**: System trading only extreme EMA21-50 readings (+10%/-10%) with LEAPS and time stops.
 - **VIX**: CBOE S&P 500 implied volatility index. The most widely watched fear gauge.
-- **VXO**: CBOE S&P 100 implied volatility index. Precursor to VIX with longer history.
+- **VXO**: CBOE S&P 100 implied volatility index. Precursor to VIX with longer history. Discontinued in 2021: use VIX, and re-estimate any threshold.

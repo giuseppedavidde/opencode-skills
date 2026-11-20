@@ -1,17 +1,22 @@
-"""FMP (FinancialModelingPrep) fundamentals enrichment for the MCP server.
+"""FMP (FinancialModelingPrep) fundamentals for the MCP server.
 
-Loads FMP API key from:
+Loads the FMP API key from:
 1. TRADING_FMP_API_KEY environment variable
 2. FMP_API_KEY environment variable
 3. ~/.config/opencode/fmp_api_key.txt (text file)
 
-Falls back to None (yfinance-only) when no key is available.
+Without a key every function returns an empty result (yfinance only).
 
-Field names below are verified against the live FMP /stable/ API:
-  - ``ratios``           → valuation (P/E, P/B, P/S, D/E, margins, revenue/share)
-  - ``key-metrics``      → profitability/quality (ROE, ROA, graham, FCF yield, mcap)
-  - ``financial-growth`` → revenueGrowth, epsgrowth
-  - ``profile``          → sector, industry, employees, description, exchange
+The key travels in the query string (``apikey=``), so no URL or raw
+exception text is ever logged or returned: messages go through
+:func:`trading_mcp.data.redact.redact` and only the exception type is
+logged (DATA-14).
+
+Endpoints (``/stable``): ``ratios`` (fiscal-year valuation, leverage and
+margins), ``key-metrics`` (ROE, ROA, FCF yield, market cap),
+``financial-growth`` and ``profile``. :func:`fetch_fmp_normalized` returns
+the typed :class:`~trading_mcp.data.fundamentals_schema.Fundamentals`;
+:func:`fetch_fmp_fundamentals` renders it in yfinance keys and units.
 """
 
 from __future__ import annotations
@@ -23,145 +28,89 @@ from typing import Any
 
 import requests
 
+from trading_mcp.data.fundamentals_schema import Fundamentals, from_fmp
+from trading_mcp.data.redact import install_log_redaction, redact
+
 logger = logging.getLogger(__name__)
+install_log_redaction()
 
 FMP_BASE = "https://financialmodelingprep.com/stable"
-FMP_TIMEOUT = 10  # seconds — keep it fast for real-time analysis
+FMP_TIMEOUT = 10  # seconds
 
 
 def _load_api_key() -> str | None:
-    """Load FMP API key from standard locations."""
-    # 1. Explicit trading env var
-    key = os.environ.get("TRADING_FMP_API_KEY")
-    if key:
-        return key
-
-    # 2. Generic env var
-    key = os.environ.get("FMP_API_KEY")
-    if key:
-        return key
-
-    # 3. Text file
+    """Load the FMP API key from the standard locations."""
+    for name in ("TRADING_FMP_API_KEY", "FMP_API_KEY"):
+        key = os.environ.get(name)
+        if key:
+            return key
     key_file = Path.home() / ".config" / "opencode" / "fmp_api_key.txt"
     if key_file.exists():
         for line in key_file.read_text().splitlines():
             line = line.strip()
             if line and not line.startswith("#") and line != "YOUR_FMP_API_KEY_HERE":
                 return line
-
     return None
 
 
 def _fmp_get(endpoint: str, symbol: str) -> list[dict[str, Any]]:
-    """Call FMP API endpoint, return list of dicts or empty list on failure."""
+    """Call one FMP endpoint; an empty list on any failure (never raises)."""
     key = _load_api_key()
     if not key:
         return []
     try:
-        r = requests.get(
+        response = requests.get(
             f"{FMP_BASE}/{endpoint}",
             params={"symbol": symbol, "apikey": key},
             timeout=FMP_TIMEOUT,
         )
-        data = r.json()
-        if isinstance(data, dict) and "Error Message" in str(data):
-            logger.warning("FMP API error for %s: %s", symbol, data)
-            return []
-        if isinstance(data, dict) and "Limit Reach" in str(data):
-            logger.warning("FMP rate limit reached for %s — fundamentals fallback to yfinance", symbol)
-            return []
-        return data if isinstance(data, list) else []
-    except Exception as e:
-        logger.warning("FMP request failed for %s: %s", symbol, e)
+    except requests.RequestException as exc:
+        logger.warning("FMP %s request failed for %s: %s", endpoint, symbol, type(exc).__name__)
         return []
+    status = response.status_code
+    if status == 429:
+        logger.warning("FMP rate limit (HTTP 429) for %s %s", endpoint, symbol)
+        return []
+    if status >= 400:
+        logger.warning("FMP %s HTTP %s for %s", endpoint, status, symbol)
+        return []
+    try:
+        data = response.json()
+    except ValueError:
+        logger.warning("FMP %s returned invalid JSON for %s", endpoint, symbol)
+        return []
+    if isinstance(data, dict):
+        message = redact(str(data.get("Error Message") or data.get("message") or data))[:160]
+        logger.warning("FMP %s error for %s: %s", endpoint, symbol, message)
+        return []
+    return [row for row in data if isinstance(row, dict)] if isinstance(data, list) else []
 
 
-def _merge_mapping(source: dict[str, Any], mapping: dict[str, str],
-                   result: dict[str, Any]) -> int:
-    """Copy mapped fields from a single FMP record into ``result``.
-
-    Only non-None values are copied. Returns the number of fields added.
-    """
-    added = 0
-    for fmp_key, yf_key in mapping.items():
-        val = source.get(fmp_key)
-        if val is not None:
-            result[yf_key] = val
-            added += 1
-    return added
-
-
-def fetch_fmp_fundamentals(symbol: str) -> dict[str, Any]:
-    """Fetch key fundamentals from FMP for a single ticker.
-
-    Returns a dict of key metrics (P/E, P/B, ROE, etc.) that can be
-    merged into the yfinance info dict. Returns empty dict if FMP is
-    unavailable.
-    """
+def fetch_fmp_normalized(symbol: str) -> Fundamentals | None:
+    """Typed FMP fundamentals (fiscal-year periods), or ``None`` without data."""
     ratios = _fmp_get("ratios", symbol)
     key_metrics = _fmp_get("key-metrics", symbol)
     growth = _fmp_get("financial-growth", symbol)
     profile = _fmp_get("profile", symbol)
-
-    result: dict[str, Any] = {}
-
-    # Valuation + per-share + margins (from /stable/ratios)
-    ratios_map = {
-        "priceToEarningsRatio": "trailingPE",
-        "priceToBookRatio": "priceToBook",
-        "priceToSalesRatio": "priceToSalesTrailing12Months",
-        "debtToEquityRatio": "debtToEquity",
-        "revenuePerShare": "revenuePerShare",
-        "netProfitMargin": "profitMargins",
-        "operatingProfitMargin": "operatingMargins",
-        "grossProfitMargin": "grossMargins",
-        "enterpriseValueMultiple": "enterpriseToEbitda",
-        "dividendYield": "dividendYield",
-        "payoutRatio": "payoutRatio",
-        "currentRatio": "currentRatio",
-    }
-    if ratios:
-        _merge_mapping(ratios[0], ratios_map, result)
-
-    # Profitability + quality (from /stable/key-metrics)
-    key_metrics_map = {
-        "returnOnEquity": "returnOnEquity",
-        "returnOnAssets": "returnOnAssets",
-        "currentRatio": "currentRatio",
-        "freeCashFlowYield": "freeCashflow",
-        "grahamNumber": "grahamNumber",
-        "evToEBITDA": "enterpriseToEbitda",
-        "earningsYield": "earningsYield",
-    }
-    if key_metrics:
-        _merge_mapping(key_metrics[0], key_metrics_map, result)
-        mcap = key_metrics[0].get("marketCap")
-        if mcap is not None:
-            result["marketCap"] = mcap
-
-    # Growth (from /stable/financial-growth)
-    growth_map = {
-        "revenueGrowth": "revenueGrowth",
-        "epsgrowth": "earningsGrowth",
-    }
-    if growth:
-        _merge_mapping(growth[0], growth_map, result)
-
-    # Profile (from /stable/profile)
-    profile_map = {
-        "sector": "sector",
-        "industry": "industry",
-        "fullTimeEmployees": "fullTimeEmployees",
-        "description": "longBusinessSummary",
-        "exchangeShortName": "exchange",
-    }
-    if profile:
-        _merge_mapping(profile[0], profile_map, result)
-
-    if result:
-        result["_fundamentals_source"] = "fmp"
-        logger.info("FMP enriched %s with %d fields", symbol, len(result))
-    else:
-        logger.debug("FMP returned no data for %s", symbol)
-
+    if not (ratios or key_metrics or growth or profile):
+        return None
+    result = from_fmp(symbol, ratios, key_metrics, growth, profile)
+    if not result.fields and not result.profile:
+        return None
+    logger.info("FMP fundamentals for %s: %d fields", symbol, len(result.fields))
     return result
+
+
+def fetch_fmp_fundamentals(symbol: str) -> dict[str, Any]:
+    """FMP fundamentals in yfinance keys AND yfinance units (``{}`` without data).
+
+    ``debtToEquity`` is a percent, ``dividendYield`` a percent and
+    ``trailingAnnualDividendYield`` a fraction, as in yfinance 1.5.1. The
+    fiscal-year P/E is ``_peFiscalYear`` and the FCF yield ``_fcfYield``.
+    """
+    normalized = fetch_fmp_normalized(symbol)
+    if normalized is None:
+        return {}
+    legacy = normalized.to_legacy_info()
+    legacy["_fundamentals_source"] = "fmp"
+    return legacy

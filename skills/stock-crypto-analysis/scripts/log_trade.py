@@ -2,21 +2,24 @@
 """
 Trade logger for the feedback loop.
 
-Records trade entries and exits in the trade_log.jsonl file,
-using the structured schemas from stock-crypto-analysis.
+Records trade entries and exits in trade_log.jsonl with the schemas of
+stock-crypto-analysis. Every entry needs the fill price and the size, so
+the exit can compute the P&L.
 
 Usage:
-    # Log a new trade entry (after stock-crypto-analysis produces a verdict)
-    python3 log_trade.py --ticker AAPL --verdict-file /tmp/verdict.json
+    # Log a new trade (after stock-crypto-analysis produces a verdict)
+    python3 log_trade.py new --ticker AAPL --verdict-file verdict.json --entry-price 151.20 --size-pct 2.5
 
-    # Mark an exit
-    python3 log_trade.py --trade-id abc123 --exit 165.00 --reason target_1
+    # Log an Avoid verdict as a signal with no position (size 0, side flat)
+    python3 log_trade.py new --ticker AAPL --verdict-file verdict.json --entry-price 151.20 --size-pct 0
 
-    # List open positions
-    python3 log_trade.py --list-open
+    # Close a trade (the id prefix from "list" is enough when it is unique)
+    python3 log_trade.py exit --trade-id 1a2b3c4d --exit-price 165.00 --reason target_1
 
-    # Show trade history for a ticker
-    python3 log_trade.py --history AAPL
+    # List open positions, show the history of a ticker, show a summary
+    python3 log_trade.py list
+    python3 log_trade.py history AAPL
+    python3 log_trade.py summary
 """
 from __future__ import annotations
 
@@ -36,10 +39,26 @@ sys.path.insert(0, str(_SKILL_DIR))
 
 # We use the Pydantic schemas from our own skill
 # pylint: disable=import-error,wrong-import-position
-from schemas import TradeLogEntry, UnifiedVerdict  # noqa: E402
+from schemas import PositionSide, TradeLogEntry, UnifiedVerdict, Verdict  # noqa: E402
 
 
-DEFAULT_LOG_PATH = Path.home() / "Progetti" / "Github" / "Data_for_Analysis" / "trade_log.jsonl"
+def _default_data_file(name: str) -> Path:
+    """Return the data file: $OPENCODE_SKILLS_DATA_DIR, the legacy data repo, then the XDG data folder."""
+    override = os.environ.get("OPENCODE_SKILLS_DATA_DIR")
+    if override:
+        return Path(override).expanduser() / name
+    legacy = Path.home() / "Progetti" / "Github" / "Data_for_Analysis"
+    if legacy.is_dir():
+        return legacy / name
+    base = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
+    return base / "opencode-skills" / name
+
+
+DEFAULT_LOG_PATH = _default_data_file("trade_log.jsonl")
+
+
+class TradeLogError(Exception):
+    """Invalid input for the trade log."""
 
 
 def _load_lines(path: Path) -> list[dict]:
@@ -58,244 +77,273 @@ def _load_lines(path: Path) -> list[dict]:
     return entries
 
 
-def _find_open(entries: list[dict], trade_id: str) -> Optional[tuple[int, dict]]:
-    """Find an open trade entry by trade_id. Returns (index, entry)."""
-    for i, entry in enumerate(entries):
-        if entry.get("trade_id") == trade_id and entry.get("is_open", True):
-            return i, entry
-    return None
+def _parse_when(text: Optional[str]) -> datetime:
+    """Parse an ISO date or datetime (UTC when no zone); default now."""
+    if not text:
+        return datetime.now(timezone.utc)
+    try:
+        when = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise TradeLogError(f"Invalid date {text!r}: use YYYY-MM-DD or an ISO datetime") from exc
+    return when if when.tzinfo else when.replace(tzinfo=timezone.utc)
 
 
-def cmd_new(ticker: str, verdict_file: str, log_path: Path, notes: str = "") -> None:
-    """Create a new trade log entry from a verdict JSON file."""
-    if not os.path.exists(verdict_file):
-        print(f"Error: Verdict file not found: {verdict_file}", file=sys.stderr)
-        sys.exit(1)
+def position_side(entry: dict) -> str:
+    """Side of a log entry. Old entries without 'position': Avoid = flat, Short = short, else long."""
+    side = entry.get("position")
+    if side in ("long", "short", "flat"):
+        return side
+    verdict = entry.get("verdict_snapshot", {})
+    if verdict.get("verdict") == Verdict.AVOID.value or entry.get("position_size_pct") == 0:
+        return "flat"
+    return "short" if verdict.get("direction") == "Short" else "long"
 
-    with open(verdict_file, encoding="utf-8") as f:
-        verdict_data = json.load(f)
 
-    verdict = UnifiedVerdict.model_validate(verdict_data)
+def default_side(verdict: UnifiedVerdict) -> PositionSide:
+    """Side implied by the verdict: Avoid and Neutral are flat."""
+    if verdict.verdict == Verdict.AVOID or verdict.direction.value == "Neutral":
+        return PositionSide.FLAT
+    return PositionSide.SHORT if verdict.direction.value == "Short" else PositionSide.LONG
 
+
+def build_entry(
+    ticker: str,
+    verdict: UnifiedVerdict,
+    entry_price: float,
+    size_pct: float,
+    side: Optional[str] = None,
+    quantity: Optional[float] = None,
+    fees_pct: float = 0.0,
+    entry_date: Optional[datetime] = None,
+    notes: str = "",
+) -> tuple[TradeLogEntry, list[str]]:
+    """Validate the inputs and build a new open entry. Returns (entry, warnings)."""
+    warnings: list[str] = []
+    if entry_price is None or not entry_price > 0:
+        raise TradeLogError("--entry-price is required and must be > 0")
+    if size_pct is None or not 0 <= size_pct <= 100:
+        raise TradeLogError("--size-pct is required: position value in % of equity, 0 to 100")
+    if fees_pct < 0:
+        raise TradeLogError("--fees-pct must be >= 0")
+    pos = PositionSide(side) if side else default_side(verdict)
+    if pos == PositionSide.FLAT and size_pct != 0:
+        raise TradeLogError("A flat entry (Avoid or Neutral verdict) has --size-pct 0: no position")
+    if pos != PositionSide.FLAT and size_pct == 0:
+        raise TradeLogError(f"A {pos.value} position needs --size-pct > 0")
+    if verdict.verdict == Verdict.AVOID and pos != PositionSide.FLAT:
+        warnings.append("The verdict is Avoid / Wait but the position is not flat")
+    if verdict.risk and pos != PositionSide.FLAT and size_pct > verdict.risk.max_position_pct:
+        warnings.append(f"Size {size_pct:.2f}% is above the verdict limit {verdict.risk.max_position_pct:.2f}%")
     entry = TradeLogEntry(
         trade_id=str(uuid.uuid4()),
-        ticker=ticker,
+        ticker=ticker.upper(),
         verdict_snapshot=verdict,
-        entry_date=datetime.now(timezone.utc),
-        entry_price=None,
-        position_size_pct=verdict.risk.max_position_pct if verdict.risk else None,
+        entry_date=entry_date or datetime.now(timezone.utc),
+        entry_price=entry_price,
+        position_size_pct=size_pct,
+        position=pos,
+        quantity=quantity,
+        fees_pct=fees_pct,
         is_open=True,
         notes=notes,
     )
-
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(log_path, "a", encoding="utf-8") as f:
-        f.write(entry.model_dump_json() + "\n")
-
-    print(f"Trade logged: {entry.trade_id} ({ticker})")
-    print(f"  Verdict: {verdict.verdict.value}")
-    print(f"  Direction: {verdict.direction.value}")
-    print(f"  Max position: {verdict.risk.max_position_pct:.1f}%")
+    return entry, warnings
 
 
-def _compute_pnl(entry_price: float, exit_price: float, direction: str) -> float:
-    """Compute PnL percentage given entry, exit and direction."""
-    if direction == "Short":
-        return ((entry_price - exit_price) / entry_price) * 100
-    return ((exit_price - entry_price) / entry_price) * 100
+def compute_pnl(entry_price: float, exit_price: float, side: str, fees_pct: float = 0.0) -> tuple[float, float]:
+    """Return (underlying move %, position P&L % after fees). A flat entry has P&L 0."""
+    if not entry_price or entry_price <= 0 or not exit_price or exit_price <= 0:
+        raise TradeLogError("Entry and exit prices must be > 0")
+    move = (exit_price / entry_price - 1.0) * 100.0
+    if side == "flat":
+        return move, 0.0
+    gross = -move if side == "short" else move
+    return move, gross - fees_pct
+
+
+def close_entry(old: dict, exit_price: float, reason: str, exit_date: Optional[datetime] = None,
+                entry_price: Optional[float] = None) -> dict:
+    """Return the closed version of an open entry with move, P&L and P&L in % of equity."""
+    new = dict(old)
+    if entry_price is not None:
+        new["entry_price"] = entry_price
+    if new.get("entry_price") is None:
+        raise TradeLogError(f"Trade {old.get('trade_id')} has no entry_price: give --entry-price with the exit")
+    side = position_side(new)
+    size = new.get("position_size_pct")
+    if side != "flat" and not size:
+        raise TradeLogError(f"Trade {old.get('trade_id')} has no position_size_pct: the P&L in % of equity is unknown")
+    when = exit_date or datetime.now(timezone.utc)
+    entry_when = new.get("entry_date")
+    if entry_when and when < _parse_when(str(entry_when)):
+        raise TradeLogError("The exit date is before the entry date")
+    move, pnl = compute_pnl(float(new["entry_price"]), exit_price, side, float(new.get("fees_pct") or 0.0))
+    new.update({
+        "position": side,
+        "exit_date": when.isoformat(),
+        "exit_price": exit_price,
+        "exit_reason": reason,
+        "underlying_move_pct": round(move, 4),
+        "pnl_pct": round(pnl, 4),
+        "pnl_equity_pct": round(pnl * (size or 0.0) / 100.0, 6),
+        "is_open": False,
+    })
+    TradeLogEntry.model_validate(new)
+    return new
+
+
+def _find_open(entries: list[dict], trade_id: str) -> tuple[int, dict]:
+    """Find one open trade by id or by a unique id prefix."""
+    hits = [(i, e) for i, e in enumerate(entries)
+            if str(e.get("trade_id", "")).startswith(trade_id) and e.get("is_open", True)]
+    if not hits:
+        raise TradeLogError(f"No open trade found with ID {trade_id}")
+    if len(hits) > 1:
+        raise TradeLogError(f"ID prefix {trade_id} is not unique: give more characters")
+    return hits[0]
 
 
 def _rewrite_log(entries: list[dict], log_path: Path) -> None:
-    """Rewrite the entire trade log file."""
-    with open(log_path, "w", encoding="utf-8") as f:
+    """Rewrite the trade log atomically."""
+    tmp = log_path.with_suffix(log_path.suffix + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
         for e in entries:
             f.write(json.dumps(e, ensure_ascii=False) + "\n")
+    os.replace(tmp, log_path)
 
 
-def _build_closed_entry(old_entry: dict, exit_price: float, reason: str) -> dict:
-    """Build a closed trade entry from an open one."""
-    new_entry = dict(old_entry)
-    new_entry["exit_date"] = datetime.now(timezone.utc).isoformat()
-    new_entry["exit_price"] = exit_price
-    new_entry["exit_reason"] = reason
-    new_entry["is_open"] = False
-    return new_entry
+def cmd_new(args: argparse.Namespace, log_path: Path) -> None:
+    """Create a new trade log entry from a verdict JSON file."""
+    if not os.path.exists(args.verdict_file):
+        raise TradeLogError(f"Verdict file not found: {args.verdict_file}")
+    with open(args.verdict_file, encoding="utf-8") as f:
+        verdict = UnifiedVerdict.model_validate(json.load(f))
+    entry, warnings = build_entry(
+        args.ticker, verdict, args.entry_price, args.size_pct, args.side, args.quantity,
+        args.fees_pct, _parse_when(args.entry_date) if args.entry_date else None, args.notes,
+    )
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(log_path, "a", encoding="utf-8") as f:
+        f.write(entry.model_dump_json() + "\n")
+    print(f"Trade logged: {entry.trade_id} ({entry.ticker})")
+    print(f"  Verdict: {verdict.verdict.value} | Position: {entry.position.value} "
+          f"| Entry: {entry.entry_price} | Size: {entry.position_size_pct:.2f}% of equity")
+    for w in warnings:
+        print(f"  Warning: {w}")
 
 
-def cmd_exit(
-    trade_id: str,
-    exit_price: float,
-    reason: str,
-    log_path: Path,
-    notes: str = "",
-) -> None:
-    """Mark a trade as closed."""
+def cmd_exit(args: argparse.Namespace, log_path: Path) -> None:
+    """Mark a trade as closed and compute its P&L."""
     entries = _load_lines(log_path)
-
-    result = _find_open(entries, trade_id)
-    if result is None:
-        print(f"Error: No open trade found with ID {trade_id}", file=sys.stderr)
-        sys.exit(1)
-
-    idx, old_entry = result
-    entry_price = old_entry.get("entry_price")
-
-    # Calculate PnL
-    pnl_pct = None
-    if entry_price is None:
-        print(f"Warning: No entry price for {trade_id}. Cannot calculate PnL.")
-    else:
-        direction = old_entry.get("verdict_snapshot", {}).get("direction", "Long")
-        pnl_pct = _compute_pnl(entry_price, exit_price, direction)
-
-    new_entry = _build_closed_entry(old_entry, exit_price, reason)
-    new_entry["pnl_pct"] = round(pnl_pct, 2) if pnl_pct is not None else None
-
-    if notes:
-        existing_notes = new_entry.get("notes", "")
-        new_entry["notes"] = f"{existing_notes}; {notes}".strip("; ")
-
-    entries[idx] = new_entry
+    idx, old = _find_open(entries, args.trade_id)
+    new = close_entry(old, args.exit_price, args.reason,
+                      _parse_when(args.exit_date) if args.exit_date else None, args.entry_price)
+    if args.notes:
+        new["notes"] = f"{new.get('notes') or ''}; {args.notes}".strip("; ")
+    entries[idx] = new
     _rewrite_log(entries, log_path)
-
-    pnl_str = f"{pnl_pct:+.2f}%" if pnl_pct is not None else "N/A"
-    print(f"Trade closed: {trade_id} ({old_entry['ticker']})")
-    print(f"  Exit: {exit_price} | Reason: {reason} | PnL: {pnl_str}")
+    print(f"Trade closed: {new['trade_id']} ({new['ticker']})")
+    print(f"  Exit: {args.exit_price} | Reason: {args.reason} | Move: {new['underlying_move_pct']:+.2f}% "
+          f"| P&L: {new['pnl_pct']:+.2f}% of position, {new['pnl_equity_pct']:+.3f}% of equity")
 
 
 def cmd_list_open(log_path: Path) -> None:
     """List all open trades."""
-    entries = _load_lines(log_path)
-    open_entries = [e for e in entries if e.get("is_open", True)]
-
+    open_entries = [e for e in _load_lines(log_path) if e.get("is_open", True)]
     if not open_entries:
         print("No open trades.")
         return
-
     print(f"Open trades: {len(open_entries)}\n")
     for e in open_entries:
-        ticker = e["ticker"]
-        trade_id = e["trade_id"]
         verdict = e.get("verdict_snapshot", {})
-        direction = verdict.get("direction", "?")
-        score = verdict.get("composite_score", "?")
-        est_size = e.get("position_size_pct", "?")
-        entry_dt = e.get("entry_date", "?")
-        print(f"  [{trade_id[:8]}] {ticker} {direction} score={score} "
-              f"size={est_size}% entered={entry_dt}")
+        print(f"  [{e['trade_id'][:8]}] {e['ticker']} {position_side(e)} score={verdict.get('composite_score', '?')} "
+              f"entry={e.get('entry_price', '?')} size={e.get('position_size_pct', '?')}% entered={e.get('entry_date', '?')}")
 
 
 def cmd_history(ticker: str, log_path: Path) -> None:
     """Show trade history for a ticker."""
-    entries = _load_lines(log_path)
-    ticker_entries = [e for e in entries if e["ticker"].upper() == ticker.upper()]
-
-    if not ticker_entries:
+    rows = [e for e in _load_lines(log_path) if e["ticker"].upper() == ticker.upper()]
+    if not rows:
         print(f"No trade history for {ticker}")
         return
-
-    print(f"Trade history for {ticker}: {len(ticker_entries)} trade(s)\n")
-    for e in ticker_entries:
-        trade_id = e["trade_id"]
-        verdict = e.get("verdict_snapshot", {})
-        direction = verdict.get("direction", "?")
-        is_open = e.get("is_open", True)
-        pnl = e.get("pnl_pct", None)
-        exit_reason = e.get("exit_reason", "-")
-
-        status = "OPEN" if is_open else f"CLOSED ({exit_reason})"
-        pnl_str = f"PnL={pnl:+.2f}%" if pnl is not None else "PnL=N/A"
-
-        print(f"  [{trade_id[:8]}] {direction} | {status} | {pnl_str}")
+    print(f"Trade history for {ticker}: {len(rows)} trade(s)\n")
+    for e in rows:
+        status = "OPEN" if e.get("is_open", True) else f"CLOSED ({e.get('exit_reason', '-')})"
+        pnl = e.get("pnl_pct")
+        pnl_str = f"P&L={pnl:+.2f}%" if pnl is not None else "P&L=N/A"
+        print(f"  [{e['trade_id'][:8]}] {position_side(e)} | {status} | {pnl_str}")
 
 
 def cmd_summary(log_path: Path) -> None:
-    """Show a summary of all trading activity."""
+    """Show a short summary. The full statistics are in feedback_loop.py."""
     entries = _load_lines(log_path)
-
     closed = [e for e in entries if not e.get("is_open", True)]
-    open_ = [e for e in entries if e.get("is_open", True)]
-
+    traded = [e for e in closed if position_side(e) != "flat" and e.get("pnl_pct") is not None]
     print("Trade Log Summary")
-    print(f"  Total trades: {len(entries)}")
-    print(f"  Open: {len(open_)}")
-    print(f"  Closed: {len(closed)}")
-
-    if closed:
-        wins = [e for e in closed if e.get("pnl_pct", 0) and e["pnl_pct"] > 0]
-        losses = [e for e in closed if e.get("pnl_pct", 0) and e["pnl_pct"] <= 0]
-        win_rate = len(wins) / len(closed) * 100 if closed else 0
-
-        pnls = [e["pnl_pct"] for e in closed if e.get("pnl_pct") is not None]
-        if pnls:
-            avg_pnl = sum(pnls) / len(pnls)
-            print(f"\n  Win rate: {win_rate:.1f}% ({len(wins)}W / {len(losses)}L)")
-            print(f"  Avg PnL: {avg_pnl:+.2f}%")
-            print(f"  Best: {max(pnls):+.2f}%")
-            print(f"  Worst: {min(pnls):+.2f}%")
-
-            # By verdict type
-            print("\n  By Verdict:")
-            by_verdict = {}
-            for e in closed:
-                v = e.get("verdict_snapshot", {}).get("verdict", "Unknown")
-                by_verdict.setdefault(v, []).append(e)
-            for v, trades in sorted(by_verdict.items()):
-                v_pnls = [t["pnl_pct"] for t in trades if t.get("pnl_pct") is not None]
-                if v_pnls:
-                    avg = sum(v_pnls) / len(v_pnls)
-                    print(f"    {v}: {len(trades)} trades, avg PnL {avg:+.2f}%")
+    print(f"  Total entries: {len(entries)} | Open: {len(entries) - len(closed)} | Closed: {len(closed)}")
+    print(f"  Closed positions with P&L: {len(traded)} | Flat signals: {len([e for e in closed if position_side(e) == 'flat'])}")
+    if traded:
+        pnls = [e["pnl_pct"] for e in traded]
+        wins = [p for p in pnls if p > 0]
+        print(f"  Win rate: {len(wins) / len(pnls) * 100:.1f}% ({len(wins)}W / {len(pnls) - len(wins)}L)")
+        print(f"  Avg P&L: {sum(pnls) / len(pnls):+.2f}% of position")
+        eq = [e.get("pnl_equity_pct") for e in traded if e.get("pnl_equity_pct") is not None]
+        if eq:
+            print(f"  Sum of P&L: {sum(eq):+.3f}% of equity")
+    print("  Run feedback_loop.py for the equity curve, the daily Sharpe and the drawdown.")
 
 
-def main() -> None:
+def main(argv: Optional[list[str]] = None) -> int:
     """Entry point."""
     parser = argparse.ArgumentParser(description="Trade log manager")
-    parser.add_argument("--log-path", default=str(DEFAULT_LOG_PATH),
-                        help="Path to trade_log.jsonl")
-
+    parser.add_argument("--log-path", default=str(DEFAULT_LOG_PATH), help="Path to trade_log.jsonl")
     sub = parser.add_subparsers(dest="command")
 
-    # New trade
     p_new = sub.add_parser("new", help="Log a new trade entry")
     p_new.add_argument("--ticker", required=True)
     p_new.add_argument("--verdict-file", required=True)
+    p_new.add_argument("--entry-price", type=float, required=True, help="Fill price of the underlying")
+    p_new.add_argument("--size-pct", type=float, required=True, help="Position value in %% of equity (0 = flat)")
+    p_new.add_argument("--side", choices=[s.value for s in PositionSide], help="Default: from the verdict")
+    p_new.add_argument("--quantity", type=float, help="Shares or units, for the record")
+    p_new.add_argument("--fees-pct", type=float, default=0.0, help="Round-trip costs in %% of the position")
+    p_new.add_argument("--entry-date", help="ISO date of the fill (default: now)")
     p_new.add_argument("--notes", default="")
 
-    # Exit trade
     p_exit = sub.add_parser("exit", help="Close a trade")
-    p_exit.add_argument("--trade-id", required=True)
+    p_exit.add_argument("--trade-id", required=True, help="Trade id or a unique prefix")
     p_exit.add_argument("--exit-price", type=float, required=True)
     p_exit.add_argument("--reason", required=True,
-                        choices=["target_1", "target_2", "stop_loss",
-                                 "invalidation", "time", "manual"])
+                        choices=["target_1", "target_2", "stop_loss", "invalidation", "time", "manual"])
+    p_exit.add_argument("--exit-date", help="ISO date of the exit (default: now)")
+    p_exit.add_argument("--entry-price", type=float, help="Fill price, only for old entries without it")
     p_exit.add_argument("--notes", default="")
 
-    # List open
     sub.add_parser("list", help="List open trades")
-
-    # History
     p_hist = sub.add_parser("history", help="Show trade history for a ticker")
     p_hist.add_argument("ticker")
+    sub.add_parser("summary", help="Show a short performance summary")
 
-    # Summary
-    sub.add_parser("summary", help="Show trade performance summary")
-
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     log_path = Path(args.log_path)
-
-    if args.command == "new":
-        cmd_new(args.ticker, args.verdict_file, log_path, args.notes)
-    elif args.command == "exit":
-        cmd_exit(args.trade_id, args.exit_price, args.reason, log_path, args.notes)
-    elif args.command == "list":
-        cmd_list_open(log_path)
-    elif args.command == "history":
-        cmd_history(args.ticker, log_path)
-    elif args.command == "summary":
-        cmd_summary(log_path)
-    else:
-        parser.print_help()
+    try:
+        if args.command == "new":
+            cmd_new(args, log_path)
+        elif args.command == "exit":
+            cmd_exit(args, log_path)
+        elif args.command == "list":
+            cmd_list_open(log_path)
+        elif args.command == "history":
+            cmd_history(args.ticker, log_path)
+        elif args.command == "summary":
+            cmd_summary(log_path)
+        else:
+            parser.print_help()
+    except TradeLogError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

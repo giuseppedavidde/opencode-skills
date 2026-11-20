@@ -21,7 +21,7 @@ A **bad** factor loses money precisely when the marginal investor is worst off �
 Returns come only from absorbing losses when other investors suffer most. The equity premium is disaster insurance you collect for bearing disaster risk; the value premium is compensation for owning cheap stocks precisely when they are under duress; the credit premium is premium for absorbing default risk in recessions. Identifying your *bad times* relative to the marginal investor is the foundation of every allocation call.
 
 ### 4. Diversification is the Only Free Lunch
-Markowitz mean-variance optimizers are notorious for noisy, unstable weight estimates. The book's prescription is **robust portfolio construction**: shrink expected return estimates, use risk-budgeting rather than return-forecasts, and lean on diversification (across factors, vintages, vehicles, geographies) as the irreducible source of risk-adjusted improvement. Rebalancing to constant weights *is* a free lunch — the only systematic way to extract the rebalancing premium ≈ ½σ² × (1−ρ) × weights × frequency.
+Markowitz mean-variance optimizers are notorious for noisy, unstable weight estimates. The book's prescription is **robust portfolio construction**: shrink expected return estimates, use risk-budgeting rather than return-forecasts, and lean on diversification (across factors, vintages, vehicles, geographies) as the irreducible source of risk-adjusted improvement. Rebalancing to constant weights earns the rebalancing (diversification) premium ≈ ½ × (Σ wᵢσᵢ² − σₚ²) per year, with annualized σ as decimals; for two assets ≈ ½ × w₁w₂ × (σ₁² + σ₂² − 2ρσ₁σ₂). The premium does not grow with the rebalancing frequency, and every trade has a cost. Rebalancing is a contrarian, short-volatility strategy: it gains in mean-reverting markets and loses in strong trends (Ang, ch. 4). Diversification is the free lunch.
 
 ### 5. Long Run ≠ Time Diversification (Samuelson's Fallacy)
 Horizon alone does not make risky assets safer — terminal wealth variance scales with horizon under i.i.d. returns. The genuine long-run edge is **rebalancing to constant weights** (countercyclical buying when assets fall) plus **volatility timing** (forecast σ, not μ — vol is far more predictable than returns). Use the Gordon formula (r ≈ D/P + g) and Shiller-PE as valuation sanity checks, not as primary timing alpha.
@@ -72,7 +72,7 @@ Private equity returns after public market equivalent (PME) and factor adjustmen
 | 17 | Hedge Funds | Hedge fund index biases, factor decomposition (value, momentum, carry, volatility), tail risk, capacity and liquidity gating, fee-and-waterfall economics, hedge fund replication |
 | 18 | **Private Equity** (deep) | IRR vs MOIC vs TVPI vs PME (Kaplan-Schoar), PE as leveraged small-value beta, J-curve & vintage effects, GP/LP structure and fees, alpha persistence, top-quartile deception |
 
-Deep (full chapter file) = even-numbered chapters covered in detail; odd-numbered chapters listed with standard reference content based on TOC and book structure.
+Deep (full chapter file) = even-numbered chapters covered in detail. Odd-numbered chapter files are **based on the table of contents and the book structure, not on the full text**; each file says so at the top. Check the book before you quote a number from them.
 
 ---
 

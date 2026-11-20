@@ -1,301 +1,327 @@
 #!/usr/bin/env bash
-# Quick-install opencode skills into ~/.config/opencode/
-# Full portable installation — agents, commands, config, MCP, plugins, skills.
+# One-command installer for the opencode-skills workflow (opencode + VS Code).
+#
+#   git clone --recursive https://github.com/giuseppedavidde/opencode-skills.git
+#   cd opencode-skills && ./install.sh
+#
+# The installer is idempotent: run it again after a `git pull` or after you move
+# the repository. It never deletes a real file. With --force, a file that is in
+# the way goes to ~/.cache/opencode-skills/backup/<timestamp>/ first.
 set -euo pipefail
 
-REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
-CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_REAL="$(cd "$REPO_DIR" && pwd -P)"
+CONFIG_DIR="${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}"
+# config/opencode.json reaches the repository through this fixed link.
+ANCHOR="$HOME/.config/opencode/opencode-skills"
+BACKUP_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/opencode-skills/backup/$(date +%Y%m%d-%H%M%S)"
+PYTHON="${PYTHON:-$(command -v python3 || true)}"
+
 FORCE=false
 DRY_RUN=false
+WITH_VSCODE=true
+WITH_MCP=true
+WITH_REA=false
+WITH_SYSTEMD=false
+ASSUME_YES=false
+WARNINGS=()
 
 usage() {
     cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
 
-Install opencode skills, agents, commands, plugins, config and alphavantage
-bootstrap into ~/.config/opencode/ for a complete portable setup.
+Install the opencode-skills workflow for opencode and for VS Code (Copilot):
+  1. initialize the git submodules
+  2. link skills, agents, commands, config, scripts into $CONFIG_DIR
+  3. set up the Python MCP runtimes (headroom, trading)
+  4. generate the VS Code layer in ~/.copilot (install-vscode.py --target user)
 
 Options:
-  -f, --force       Overwrite existing files
-  -n, --dry-run     Show the symlink plan without changing anything
-  -h, --help        Show this help
+  -f, --force        Replace real files that are in the way (backup first)
+  -n, --dry-run      Print the plan; change nothing
+      --no-vscode    Do not generate the VS Code layer
+      --no-mcp       Do not set up the MCP runtimes (headroom, trading)
+      --with-rea     Also set up the rea MCP (Node.js >= 22, separate repo)
+      --with-systemd Regenerate the VS Code layer automatically after edits
+  -y, --yes          Do not ask questions (CI, scripts)
+  -h, --help         Show this help
 EOF
-    exit 0
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        -f|--force) FORCE=true; shift ;;
-        -n|--dry-run) DRY_RUN=true; shift ;;
-        -h|--help)  usage ;;
-        *)          echo "Unknown option: $1"; usage ;;
+        -f|--force) FORCE=true ;;
+        -n|--dry-run) DRY_RUN=true ;;
+        --no-vscode) WITH_VSCODE=false ;;
+        --no-mcp) WITH_MCP=false ;;
+        --with-rea) WITH_REA=true ;;
+        --with-systemd) WITH_SYSTEMD=true ;;
+        -y|--yes) ASSUME_YES=true ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "install.sh: unknown option: $1" >&2; usage >&2; exit 2 ;;
     esac
+    shift
 done
 
-# Dry-run: shadow the mutating commands so every mapping is printed but nothing
-# is created or rewritten (the plugins rewrite is guarded separately).
-if $DRY_RUN; then
-    echo "[dry-run] no changes will be made"
-    ln()    { echo "  DRY   ln $*"; }
-    mkdir() { echo "  DRY   mkdir $*"; }
-fi
+say() { printf '%s\n' "$*"; }
+warn() { WARNINGS+=("$*"); printf '  WARN  %s\n' "$*" >&2; }
+run() { if $DRY_RUN; then say "  DRY   $*"; else "$@"; fi; }
+ask() {
+    # ask <question>: true only on an interactive "y" answer
+    if $ASSUME_YES || $DRY_RUN || [[ ! -t 0 ]]; then return 1; fi
+    local answer
+    read -r -p "$1 [y/N] " answer
+    [[ "$answer" =~ ^[Yy]$ ]]
+}
 
-# Interactive opt-in prompts only on a tty (CI/dry-run must not block or fail).
-INTERACTIVE=false
-if [[ -t 0 ]] && ! $DRY_RUN; then INTERACTIVE=true; fi
+backup_path() {
+    local target="$1" dest="$BACKUP_DIR$1"
+    run mkdir -p "$(dirname "$dest")"
+    run mv "$target" "$dest"
+    say "  BACKUP $target -> $dest"
+}
 
-# ─── Submodule check ───
-check_submodules() {
-    local dirs=(
-        "skills/graphify-src"
-        "skills/karpathy-llm-wiki-src"
-        "src/book-to-skill-src"
-        "skills/quant-mind-src"
-    )
-    local missing=false
-    for d in "${dirs[@]}"; do
-        # Dir exists but is empty, or doesn't exist
-        if [[ -d "$REPO_DIR/$d" ]]; then
-            if [[ -z "$(ls -A "$REPO_DIR/$d" 2>/dev/null)" ]]; then
-                echo "  VUOTO: $d" >&2
-                missing=true
-            fi
+# inside_repo <path>: true when the path resolves to the repository or into it.
+inside_repo() {
+    local real
+    real="$(readlink -f -- "$1" 2>/dev/null || true)"
+    [[ -n "$real" && ( "$real" == "$REPO_REAL" || "$real" == "$REPO_REAL"/* ) ]]
+}
+
+# link <source> <target>: create or repair a symlink; never delete a real file,
+# and never move a file of the repository itself.
+link() {
+    local src="$1" target="$2"
+    if [[ -L "$target" ]]; then
+        if [[ "$(readlink "$target")" == "$src" ]]; then
+            say "  OK    $target"
+            return
+        fi
+        run ln -sfn "$src" "$target"
+        say "  LINK  $target -> $src"
+        return
+    fi
+    if [[ -e "$target" ]]; then
+        if [[ "$target" -ef "$src" ]]; then
+            say "  OK    $target (resolves to the same file)"
+            return
+        fi
+        if inside_repo "$target"; then
+            warn "$target resolves into the repository; kept (the installer never moves repository files)"
+            return
+        fi
+        if ! $FORCE; then
+            warn "$target exists and is not a symlink; kept (use --force to back it up and link)"
+            return
+        fi
+        backup_path "$target"
+    fi
+    run mkdir -p "$(dirname "$target")"
+    run ln -s "$src" "$target"
+    say "  LINK  $target -> $src"
+}
+
+# prune <dir>: remove dangling links that point into this repository.
+prune() {
+    local dir="$1" entry dest
+    [[ -d "$dir" ]] || return 0
+    inside_repo "$dir" && return 0
+    while IFS= read -r -d '' entry; do
+        dest="$(readlink "$entry")"
+        if [[ "$dest" == "$REPO_DIR"/* && ! -e "$entry" ]]; then
+            run rm "$entry"
+            say "  PRUNE $entry (target removed from the repository)"
+        fi
+    done < <(find "$dir" -type l -print0)
+}
+
+check_prerequisites() {
+    say "Prerequisites:"
+    local tool
+    for tool in git python3 node opencode code; do
+        if command -v "$tool" >/dev/null 2>&1; then
+            say "  OK    $tool"
         else
-            echo "  ASSENTE: $d" >&2
-            missing=true
+            case "$tool" in
+                git|python3) warn "$tool not found: it is necessary for this installer" ;;
+                node) say "  --    node (only for the rea MCP server)" ;;
+                opencode) say "  --    opencode CLI not found (install it from https://opencode.ai)" ;;
+                code) say "  --    VS Code CLI not found (only necessary for VS Code)" ;;
+            esac
         fi
     done
-    if $missing; then
-        echo "" >&2
-        echo "ATTENZIONE: Submodule git non inizializzati!" >&2
-        echo "Esegui: git submodule update --init --recursive" >&2
-        echo "" >&2
+    if [[ -n "${XDG_CONFIG_HOME:-}" && "${XDG_CONFIG_HOME%/}" != "$HOME/.config" ]]; then
+        warn "XDG_CONFIG_HOME is $XDG_CONFIG_HOME; config/opencode.json expects the anchor at $ANCHOR"
     fi
 }
 
-check_submodules
-
-mkdir -p "$CONFIG_DIR"
-
-# ─── Link helper ───
-# link_item <src> <target>
-#   - target assente        → crea symlink
-#   - target è symlink      → ripara/relinka (anche rotto)
-#   - target file/dir reale → SKIP (mai cancellare, anche con --force)
-link_item() {
-    local src="$1"
-    local target="$2"
-    local name
-    name="$(basename "$target")"
-
-    if [[ -L "$target" ]]; then
-        ln -sfn "$src" "$target"
-        echo "  LINK  $name"
-    elif [[ -e "$target" ]]; then
-        echo "  SKIP  $name  (già presente, non symlink)"
-    else
-        ln -s "$src" "$target"
-        echo "  LINK  $name"
+init_submodules() {
+    say "Submodules:"
+    if [[ ! -e "$REPO_DIR/.git" ]]; then
+        warn "not a git checkout: submodules not initialized (clone with git clone --recursive)"
+        return
+    fi
+    local missing
+    missing="$(git -C "$REPO_DIR" submodule status 2>/dev/null | grep -c '^-' || true)"
+    if [[ "${missing:-0}" == "0" ]]; then
+        say "  OK    all submodules initialized"
+        return
+    fi
+    say "  INIT  $missing submodule(s)"
+    if ! run git -C "$REPO_DIR" submodule update --init --recursive; then
+        warn "git submodule update failed: the skills that link into submodules stay empty"
     fi
 }
 
-# ─── Skills (whole-dir symlink, come routing-eval) ───
-SKILLS_SRC="$REPO_DIR/skills"
-if [[ -d "$SKILLS_SRC" ]]; then
-    echo "Installing skills..."
-    target="$CONFIG_DIR/skills"
-    if [[ -L "$target" ]]; then
-        ln -sfn "$SKILLS_SRC" "$target"
-        echo "  LINK  skills (whole-dir)"
-    elif [[ -e "$target" ]]; then
-        echo "  SKIP  skills  (directory reale: non la cancello)"
-    else
-        ln -s "$SKILLS_SRC" "$target"
-        echo "  LINK  skills (whole-dir)"
+install_opencode_layer() {
+    say "opencode layer ($CONFIG_DIR):"
+    if inside_repo "$CONFIG_DIR"; then
+        warn "$CONFIG_DIR is inside the repository: clone opencode-skills into another folder (opencode layer skipped)"
+        return
     fi
-fi
-
-# ─── Agents ───
-AGENTS_SRC="$REPO_DIR/agents"
-if [[ -d "$AGENTS_SRC" ]]; then
-    echo "Installing agents..."
-    mkdir -p "$CONFIG_DIR/agents"
-    for item in "$AGENTS_SRC"/*; do
-        link_item "$item" "$CONFIG_DIR/agents/$(basename "$item")"
+    run mkdir -p "$CONFIG_DIR"
+    if [[ ! -L "$ANCHOR" && "$REPO_DIR" -ef "$ANCHOR" ]]; then
+        say "  OK    $ANCHOR (the repository itself)"
+    else
+        link "$REPO_DIR" "$ANCHOR"
+    fi
+    link "$REPO_DIR/skills" "$CONFIG_DIR/skills"
+    local file rel
+    for file in "$REPO_DIR"/agents/*.md; do
+        link "$file" "$CONFIG_DIR/agents/$(basename "$file")"
     done
-fi
-
-# ─── Commands ───
-COMMANDS_SRC="$REPO_DIR/command"
-if [[ -d "$COMMANDS_SRC" ]]; then
-    echo "Installing commands..."
-    mkdir -p "$CONFIG_DIR/command"
-    for item in "$COMMANDS_SRC"/*; do
-        link_item "$item" "$CONFIG_DIR/command/$(basename "$item")"
+    for file in "$REPO_DIR"/command/*.md; do
+        link "$file" "$CONFIG_DIR/command/$(basename "$file")"
     done
-fi
-
-# ─── Config (AGENTS.md, opencode.json) ───
-CONFIG_SRC="$REPO_DIR/config"
-if [[ -d "$CONFIG_SRC" ]]; then
-    echo "Installing config files..."
-    mkdir -p "$CONFIG_DIR"
-    for item in "$CONFIG_SRC"/*; do
-        name=$(basename "$item")
-        # Skip encrypted secrets file, installer backups and dirs linked separately
-        [[ "$name" == "secrets.env.enc" ]] && continue
-        [[ "$name" == *.bak-portable ]] && continue
-        [[ "$name" == "bin" ]] && continue
-        link_item "$item" "$CONFIG_DIR/$name"
+    link "$REPO_DIR/config/AGENTS.md" "$CONFIG_DIR/AGENTS.md"
+    link "$REPO_DIR/config/opencode.json" "$CONFIG_DIR/opencode.json"
+    for file in "$REPO_DIR"/config/bin/*; do
+        link "$file" "$CONFIG_DIR/bin/$(basename "$file")"
     done
-fi
+    while IFS= read -r -d '' file; do
+        rel="${file#"$REPO_DIR"/scripts/}"
+        link "$file" "$CONFIG_DIR/scripts/$rel"
+    done < <(find "$REPO_DIR/scripts" -type f ! -name '*.pyc' ! -path '*/__pycache__/*' -print0 | sort -z)
+    link "$REPO_DIR/routing-eval" "$CONFIG_DIR/routing-eval"
+    link "$REPO_DIR/scripts/alphavantage-mcp.sh" "$HOME/.local/bin/alphavantage-mcp.sh"
+    prune "$CONFIG_DIR/agents"
+    prune "$CONFIG_DIR/command"
+    prune "$CONFIG_DIR/scripts"
+}
 
-# ─── Bin wrappers (rea-mcp.sh, ...) ───
-# ~/.config/opencode/bin/ è una directory reale: si linkano i file al suo interno,
-# mai la directory (che può contenere wrapper utente non versionati).
-BIN_SRC="$REPO_DIR/config/bin"
-if [[ -d "$BIN_SRC" ]]; then
-    echo "Installing bin wrappers..."
-    mkdir -p "$CONFIG_DIR/bin"
-    for item in "$BIN_SRC"/*; do
-        link_item "$item" "$CONFIG_DIR/bin/$(basename "$item")"
+run_setup() {
+    local script="$1"
+    if $DRY_RUN; then
+        say "  DRY   ./$script"
+        return
+    fi
+    if ! "$REPO_DIR/$script"; then
+        warn "./$script failed: fix the error above, then run it again"
+    fi
+}
+
+setup_mcp_runtimes() {
+    say "MCP runtimes:"
+    if $WITH_MCP; then
+        run_setup setup-headroom.sh
+        run_setup setup-trading-mcp.sh
+    else
+        say "  SKIP  headroom, trading (--no-mcp)"
+    fi
+    if $WITH_REA || ask "Set up the rea MCP (reverse engineering, Node.js >= 22)?"; then
+        run_setup setup-rea-mcp.sh
+    else
+        say "  SKIP  rea (use --with-rea)"
+    fi
+}
+
+# check_trading_server: start the trading MCP server once; a missing package stops it at import time.
+check_trading_server() {
+    local python="$HOME/.local/share/opencode/trading-mcp-venv/bin/python"
+    [[ -x "$python" ]] || return 0
+    if $DRY_RUN; then
+        say "  DRY   start check of the trading MCP server"
+        return 0
+    fi
+    local output
+    if output="$(cd /tmp && timeout 180 "$python" -c 'from trading_mcp.mcp import initialize_mcp; initialize_mcp()' 2>&1)"; then
+        say "  OK    trading MCP server starts"
+    else
+        warn "the trading MCP server does not start: ${output##*$'\n'} (rerun ./setup-trading-mcp.sh)"
+    fi
+}
+
+install_vscode_layer() {
+    say "VS Code layer (~/.copilot):"
+    if ! $WITH_VSCODE; then
+        say "  SKIP  VS Code layer (--no-vscode)"
+        return
+    fi
+    if [[ -z "$PYTHON" ]]; then
+        warn "python3 not found: VS Code layer not installed"
+        return
+    fi
+    local args=(--target user)
+    $FORCE && args+=(--force)
+    $DRY_RUN && args+=(--dry-run)
+    if ! "$PYTHON" "$REPO_DIR/install-vscode.py" "${args[@]}"; then
+        warn "install-vscode.py failed"
+    fi
+}
+
+install_systemd_sync() {
+    $WITH_SYSTEMD || return 0
+    say "Automatic VS Code sync (systemd user units):"
+    if ! command -v systemctl >/dev/null 2>&1; then
+        warn "systemctl not found: run scripts/sync-vscode.sh after each change"
+        return
+    fi
+    local unit_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user" unit
+    for unit in opencode-skills-vscode-sync.service opencode-skills-vscode-sync.path; do
+        link "$REPO_DIR/vscode/systemd/$unit" "$unit_dir/$unit"
     done
-fi
+    run systemctl --user daemon-reload || warn "systemctl --user daemon-reload failed"
+    run systemctl --user enable --now opencode-skills-vscode-sync.path \
+        || warn "could not enable opencode-skills-vscode-sync.path"
+}
 
-# ─── Plugins (API V2: dichiarati in opencode.json → "plugins") ───
-# In V2 l'auto-discovery globale di .opencode/plugins non esiste più (è riservata
-# al progetto): i plugin globali vanno elencati in opencode.json con path assoluti.
-PLUGINS_SRC="$REPO_DIR/plugins"
-CONFIG_JSON="$CONFIG_DIR/opencode.json"
-if [[ -d "$PLUGINS_SRC" && -f "$CONFIG_JSON" ]] && ! $DRY_RUN; then
-    if command -v node >/dev/null 2>&1; then
-        echo "Configuring plugins (opencode.json → plugins)..."
-        node - "$CONFIG_JSON" "$PLUGINS_SRC" <<'NODE'
-const fs = require("fs");
-const [cfg, src] = process.argv.slice(2);
-const names = fs
-  .readdirSync(src)
-  .filter((n) => fs.statSync(`${src}/${n}`).isDirectory())
-  .sort();
-const json = JSON.parse(fs.readFileSync(cfg, "utf8"));
-delete json.plugin;
-json.plugins = names.map((n) => ({ package: `${src}/${n}` }));
-fs.writeFileSync(cfg, `${JSON.stringify(json, null, 2)}\n`);
-console.log(`  OK    plugins → ${names.length} entries`);
-NODE
-    else
-        echo "  SKIP  plugins  (node non trovato: aggiorna 'plugins' in opencode.json)"
+print_summary() {
+    say ""
+    if (( ${#WARNINGS[@]} )); then
+        say "Warnings (${#WARNINGS[@]}):"
+        local item
+        for item in "${WARNINGS[@]}"; do say "  ! $item"; done
+        say ""
     fi
-fi
+    cat <<EOF
+Done$($DRY_RUN && printf ' (dry run: nothing changed)').
 
-# ─── Routing Eval ───
-ROUTING_EVAL_SRC="$REPO_DIR/routing-eval"
-if [[ -d "$ROUTING_EVAL_SRC" ]]; then
-    echo "Installing routing-eval..."
-    target="$CONFIG_DIR/routing-eval"
-    if $FORCE; then
-        rm -rf "$target" 2>/dev/null || true
-        ln -sfn "$ROUTING_EVAL_SRC" "$target"
-        echo "  LINK  routing-eval"
-    elif [[ -e "$target" || -L "$target" ]]; then
-        echo "  SKIP  routing-eval  (already exists)"
-    else
-        ln -sfn "$ROUTING_EVAL_SRC" "$target"
-        echo "  LINK  routing-eval"
-    fi
-fi
+Steps that the installer cannot do for you:
+  1. opencode provider login (once per machine):   opencode auth login
+  2. API keys (only for the skills that use them):
+       echo 'YOUR_KEY' > ~/.config/opencode/alpha_vantage_key.txt
+       ./scripts/decrypt_secrets.sh        # FMP and other keys (passphrase)
+  3. Restart opencode. In VS Code, start a NEW chat session (Copilot harness).
+     For the OpenCode Go models in VS Code, install the extension
+     OnesoftQwQ.opencode-go-copilot-provider and set its API key.
+  4. Optional MCP servers, then rerun ./install.sh:
+       rea:     ./install.sh --with-rea
+       browse:  curl -fsSL https://opencode.ai/browse/install | bash
+  5. Optional check:  python3 install-vscode.py --verify --target user
 
-# ─── Alphavantage bootstrap ───
-ALPHA_SRC="$REPO_DIR/scripts/alphavantage-mcp.sh"
-if [[ -f "$ALPHA_SRC" ]]; then
-    echo "Installing alphavantage bootstrap..."
-    ALPHA_DEST="$HOME/.local/bin/alphavantage-mcp.sh"
-    mkdir -p "$HOME/.local/bin"
-    if $FORCE; then
-        rm -rf "$ALPHA_DEST" 2>/dev/null || true
-        ln -sf "$ALPHA_SRC" "$ALPHA_DEST"
-        chmod +x "$ALPHA_SRC"
-        echo "  LINK  alphavantage-mcp.sh  →  $ALPHA_DEST"
-    elif [[ -e "$ALPHA_DEST" ]]; then
-        echo "  SKIP  alphavantage-mcp.sh  (already exists)"
-    else
-        ln -s "$ALPHA_SRC" "$ALPHA_DEST"
-        chmod +x "$ALPHA_SRC"
-        echo "  LINK  alphavantage-mcp.sh  →  $ALPHA_DEST"
-    fi
-fi
+Rerun ./install.sh after a git pull or after you move this repository.
+EOF
+}
 
-echo "Done."
-echo ""
-
-# ─── Next steps ───
-cat <<NEXT
-PROSSIMI PASSI:
-1. Headroom (compressione token):
-   ./setup-headroom.sh
-
-2. Trading MCP (analisi mercati):
-   ./setup-trading-mcp.sh
-
-3. rea MCP (reverse engineering, richiede Node >= 22):
-   ./setup-rea-mcp.sh   # clona+builda il repo rea separato
-
-4. Bladebro MCP (browser stealth, richiede Chrome/Chromium):
-   ./setup-bladebro.sh
-
-5. Alphavantage API key:
-   echo 'YOUR_KEY' > ~/.config/opencode/alpha_vantage_key.txt
-   oppure: export ALPHA_VANTAGE_API_KEY='YOUR_KEY'
-
-6. Segreti (FMP, altre chiavi):
-   ./scripts/decrypt_secrets.sh
-   oppure crea: ~/.config/opencode/fmp_api_key.txt
-
-7. Riavvia opencode per applicare la configurazione
-
-NOTA: routing-stats usa routing-eval incluso nella repo (symlink
-  ~/.config/opencode/routing-eval). Dipendenze:
-  pip install -r "$REPO_DIR/routing-eval/requirements.txt" nel venv del comando
-  (es. /tmp/opencode/.venv).
-
-Se sposti la repo, rilancia: python3 install.py (ripara i symlink rotti senza --force)
-NEXT
-echo ""
-
-# ─── Offer headroom ───
-HEADROOM_SH="$REPO_DIR/setup-headroom.sh"
-if [[ -x "$HEADROOM_SH" ]] && $INTERACTIVE; then
-    echo "Vuoi installare anche headroom (compressione token 60-95%)?"
-    read -r -p "  [y/N] " answer
-    if [[ "$answer" =~ ^[Yy]$ ]]; then
-        "$HEADROOM_SH"
-    else
-        echo "  Salta headroom. Puoi installarlo dopo con: ./setup-headroom.sh"
-    fi
-fi
-
-# ─── Offer trading-mcp ───
-TRADING_MCP_SH="$REPO_DIR/setup-trading-mcp.sh"
-if [[ -x "$TRADING_MCP_SH" ]] && $INTERACTIVE; then
-    echo ""
-    echo "Vuoi installare anche trading-mcp (analisi mercati via MCP)?"
-    read -r -p "  [y/N] " answer
-    if [[ "$answer" =~ ^[Yy]$ ]]; then
-        "$TRADING_MCP_SH"
-    else
-        echo "  Salta trading-mcp. Puoi installarlo dopo con: ./setup-trading-mcp.sh"
-    fi
-fi
-
-# ─── Offer bladebro ───
-BLADEBRO_SH="$REPO_DIR/setup-bladebro.sh"
-if [[ -x "$BLADEBRO_SH" ]] && $INTERACTIVE; then
-    echo ""
-    echo "Vuoi installare anche bladebro (browser stealth via MCP)?"
-    read -r -p "  [y/N] " answer
-    if [[ "$answer" =~ ^[Yy]$ ]]; then
-        "$BLADEBRO_SH"
-    else
-        echo "  Salta bladebro. Puoi installarlo dopo con: ./setup-bladebro.sh"
-    fi
-fi
+say "opencode-skills installer"
+say "  repository: $REPO_DIR"
+$DRY_RUN && say "  dry run: nothing changes"
+say ""
+check_prerequisites
+init_submodules
+install_opencode_layer
+setup_mcp_runtimes
+check_trading_server
+install_vscode_layer
+install_systemd_sync
+print_summary

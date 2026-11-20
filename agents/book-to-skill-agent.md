@@ -100,7 +100,7 @@ Genera: capitoli + glossary.md
 Formato capitolo (800-1200 token): # Chapter N, ## Core Idea, ## Frameworks Introduced, ## Key Concepts, ## Anti-patterns, ## Key Takeaways
 Glossary: ~1500 token, ALFABETICO, tutti i termini CHIAVE dell'INTERO libro.
 
-CRITICAL: Questo task usa deepseek-v4.1-flash (modello economico). Non hai bisogno di glm-5.3 per questo lavoro. Basta deepseek-v4.1-flash.
+CRITICAL: Questo task usa il tuo modello (deepseek-v4.1-flash, economico). Non serve un modello più grande per questo lavoro.
 
 STILE: scrivi in ASD-STE100. Massimo 20 parole per frase. Voce attiva. Tempi semplici. Un'idea per frase. Un termine per concetto.
 
@@ -120,7 +120,7 @@ Genera: capitoli + patterns.md (~2000 token, When/How/Trade-offs) + cheatsheet.m
 
 NON creare glossary.md (lo fa Agent A).
 
-CRITICAL: Questo task usa deepseek-v4.1-flash (modello economico). Non hai bisogno di glm-5.3 per questo lavoro. Basta deepseek-v4.1-flash.
+CRITICAL: Questo task usa il tuo modello (deepseek-v4.1-flash, economico). Non serve un modello più grande per questo lavoro.
 
 STILE: scrivi in ASD-STE100. Massimo 20 parole per frase. Voce attiva. Tempi semplici. Un'idea per frase. Un termine per concetto.
 
@@ -138,7 +138,7 @@ Riepiloga: slug, N capitoli, N file, tempo totale.
 
 ## Regole
 1. Usa SEMPRE subagenti in parallelo per la generazione capitoli (mai sequenziale).
-2. deepseek-v4.1-flash è SUFFICIENTE per tutto — non serve glm-5.3 per generare capitoli.
+2. deepseek-v4.1-flash è SUFFICIENTE per tutto — non serve un modello più grande per generare capitoli.
 3. Se l'utente passa più libri, processali in batch con `--batch` mode.
 4. Slug auto-generato dal nome file: lowercase, solo [a-z0-9-].
 5. Headroom compression sui tool output grandi (>800 char).

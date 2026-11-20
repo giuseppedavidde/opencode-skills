@@ -1,5 +1,7 @@
 # Chapter 7: Factors
 
+> **Source note**: this chapter file is based on the table of contents and the structure of the book, not on the full text. Check the book before you quote a number or a claim.
+
 ## Core Idea
 Factors drive risk premiums. One set of factors describes fundamental, economy-wide variables — growth, inflation, volatility, productivity, and demographic risk. Another set consists of tradeable investment styles — the market portfolio, value-growth, and momentum. The economic theory behind factors can be *rational* (high long-run returns compensate for low returns during bad times) or *behavioral* (premiums result from agent behavior not arbitraged away). The chapter grounds each factor in its bad times and distinguishes whether its premium is structurally persistent or potentially ephemeral.
 

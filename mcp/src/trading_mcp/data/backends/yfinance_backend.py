@@ -1,14 +1,16 @@
 """yfinance options backend — last-resort / emergency fallback.
 
-Wraps the previous default behaviour (``yf.Ticker(...).option_chain``). Yahoo
-does not expose greeks, so ``greeks_are_native`` stays ``False`` and the local
-Black-Scholes path computes them downstream.
+Wraps ``yf.Ticker(...).option_chain``. Yahoo does not expose greeks, so
+``greeks_are_native`` stays ``False`` and :mod:`trading_mcp.analysis.pricing`
+computes them downstream. Yahoo gives no bid/ask time: the chain ``as_of`` is
+the latest trade time (``as_of_basis = "last_trade"``). The spot is never read
+here; the options tools take it from the DataProvider quote layer.
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from math import isfinite
 
 import yfinance as yf
@@ -18,6 +20,7 @@ from trading_mcp.data.backends.base import (
     OptionsChain,
     OptionQuote,
     OptionRight,
+    data_time,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,13 +40,32 @@ def _finite(value: object) -> float | None:
     return number if isfinite(number) else None
 
 
+def _trade_time(value: object) -> datetime | None:
+    """Aware datetime of yfinance ``lastTradeDate`` (a UTC Timestamp), or ``None``."""
+    if value is None:
+        return None
+    if hasattr(value, "to_pydatetime"):
+        try:
+            value = value.to_pydatetime()
+        except (TypeError, ValueError):
+            return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+    return None
+
+
 def _row_to_quote(row: object, right: OptionRight, expiry: date) -> OptionQuote | None:
-    """Map a yfinance chain row to a normalised quote."""
+    """Map a yfinance chain row to a normalised quote.
+
+    Yahoo gives no bid/ask time, so ``quote_time`` stays ``None``; the last
+    trade time is kept. An implied volatility of 0 is a missing value.
+    """
     strike = _finite(row.get("strike"))  # type: ignore[attr-defined]
     if strike is None or strike <= 0:
         return None
     volume = _finite(row.get("volume"))  # type: ignore[attr-defined]
     open_interest = _finite(row.get("openInterest"))  # type: ignore[attr-defined]
+    vendor_iv = _finite(row.get("impliedVolatility"))  # type: ignore[attr-defined]
     return OptionQuote(
         strike=strike,
         right=right,
@@ -53,7 +75,8 @@ def _row_to_quote(row: object, right: OptionRight, expiry: date) -> OptionQuote 
         last=_finite(row.get("lastPrice")),  # type: ignore[attr-defined]
         volume=int(volume) if volume and volume > 0 else 0,
         open_interest=int(open_interest) if open_interest and open_interest > 0 else 0,
-        implied_volatility=_finite(row.get("impliedVolatility")),  # type: ignore[attr-defined]
+        implied_volatility=vendor_iv if vendor_iv is not None and vendor_iv > 0 else None,
+        last_trade_time=_trade_time(row.get("lastTradeDate")),  # type: ignore[attr-defined]
     )
 
 
@@ -103,22 +126,16 @@ class YFinanceBackend:
                     quotes.append(quote)
         if not quotes:
             return None
+        as_of, basis = data_time(quotes)
         return OptionsChain(
             ticker=ticker,
-            spot=self._spot(ticker),
+            spot=0.0,
             expiry=expiry_date,
             quotes=quotes,
-            as_of=datetime.now(),
+            as_of=as_of,
+            as_of_basis=basis,
+            fetched_at=datetime.now(timezone.utc),
             source=self.name,
             greeks_are_native=False,
             iv_is_native=True,
         )
-
-    @staticmethod
-    def _spot(ticker: str) -> float:
-        """Best-effort spot price (informational; the provider sets the real one)."""
-        try:
-            price = yf.Ticker(ticker).fast_info.get("lastPrice")
-            return float(price) if price else 0.0
-        except Exception:  # pylint: disable=broad-exception-caught
-            return 0.0

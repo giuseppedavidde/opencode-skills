@@ -2,15 +2,13 @@
 
 ## Weights Quick Reference
 
-| Dimensione | Stock | Crypto |
-|-----------|-------|--------|
-| Wyckoff Phase | 25% | 15% |
-| Volume Profile | 20% | 15% |
-| Price Action | 20% | 15% |
-| Sentiment | 15% | 10% |
-| Fondamentali | 20% | 10% |
-| Crypto Layer | — | 35% |
-| **Totale** | **100%** | **100%** |
+I pesi delle dimensioni non sono in questo file. La fonte unica è il server MCP:
+
+- pesi base: `mcp/src/trading_mcp/weights_config.py` (`get_weights()`); il file utente `~/.config/opencode/weights.json` li può cambiare;
+- aggiustamento per regime: `mcp/src/trading_mcp/analysis/macro.py` (`get_dynamic_weights`).
+
+Stampa i pesi attuali con `python scripts/dynamic_weights.py --regime unknown --json` (aggiungi `--crypto` per le crypto).
+Il `composite_score` di `analyze_stock` usa questi pesi. Non ricalcolarlo a mano.
 
 ## Phase Scoring Summary
 

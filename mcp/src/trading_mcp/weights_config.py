@@ -1,4 +1,27 @@
-"""Configurable scoring weights for the trading engine."""
+"""Scoring weights of the trading engine: PRIORS, NOT FITTED.
+
+No weight in this module was estimated from data. Every value is a
+hand-set prior that states how much a dimension counts in the composite
+score. No out-of-sample test supports them (see SIG-08 in the audit);
+``analysis/composite.py`` labels every payload ``weights_kind="priors,
+not fitted"``.
+
+Structure of the composite (all scores on one 0-100 scale, 50 = neutral):
+
+- :class:`StockWeights` / :class:`CryptoWeights`: weight of each dimension
+  in the composite. A dimension without data is left out and the other
+  weights are renormalized; the payload reports the covered weight.
+- :class:`ComponentWeights`: weight of each component inside its
+  dimension (Wyckoff: structure, 6-clue, Weis/SOT, VSA; Price Action: core,
+  multi-timeframe, market structure, technical indicators).
+- :class:`IndicatorWeights`: weight of each technical indicator inside the
+  "technical indicators" component of Price Action.
+
+The user file is ``$TRADING_WEIGHTS_FILE``, else
+``$XDG_CONFIG_HOME/opencode/weights.json``, else
+``<home>/.config/opencode/weights.json`` where ``<home>`` is ``$HOME`` or,
+when ``$HOME`` is unset or empty, the home directory of the user account.
+"""
 
 from __future__ import annotations
 
@@ -12,32 +35,64 @@ from pydantic import BaseModel, Field, model_validator
 
 logger = logging.getLogger(__name__)
 
+WEIGHTS_KIND = "priors, not fitted"
+
+
+def _account_home() -> Path | None:
+    """Home directory of the user account, read without ``$HOME``."""
+    try:
+        import pwd  # pylint: disable=import-outside-toplevel
+
+        home = pwd.getpwuid(os.getuid()).pw_dir
+    except (ImportError, KeyError, AttributeError, OSError):
+        return None
+    return Path(home) if home and os.path.isabs(home) else None
+
+
+def config_home() -> Path:
+    """Base config directory (``$XDG_CONFIG_HOME``, else ``<home>/.config``); never relative."""
+    xdg = os.environ.get("XDG_CONFIG_HOME", "").strip()
+    if xdg and os.path.isabs(xdg):
+        return Path(xdg)
+    home_env = os.environ.get("HOME", "").strip()
+    if home_env and os.path.isabs(home_env):
+        return Path(home_env) / ".config"
+    account = _account_home()
+    if account is not None:
+        return account / ".config"
+    return Path("/") / ".config"
+
+
 def _default_weights_path() -> Path:
     """Resolve the weights file path without depending on ``$HOME``."""
-    env_file = os.environ.get("TRADING_WEIGHTS_FILE")
+    env_file = os.environ.get("TRADING_WEIGHTS_FILE", "").strip()
     if env_file:
         return Path(env_file)
-    candidates: list[Path] = []
-    home_env = os.environ.get("HOME")
-    if home_env:
-        candidates.append(Path(home_env) / ".config" / "opencode" / "weights.json")
-    try:
-        candidates.append(Path.home() / ".config" / "opencode" / "weights.json")
-    except (RuntimeError, OSError):
-        pass
-    candidates.append(Path("/home/giuseppe/.config/opencode/weights.json"))
+    candidates = [config_home() / "opencode" / "weights.json"]
+    account = _account_home()
+    if account is not None:
+        candidates.append(account / ".config" / "opencode" / "weights.json")
     for candidate in candidates:
         if candidate.exists():
             return candidate
-    return candidates[0] if candidates else Path(".config/opencode/weights.json")
+    return candidates[0]
 
 
 # Default weights file path
 DEFAULT_WEIGHTS_PATH = _default_weights_path()
 
 
+def _normalize(model: BaseModel, names: tuple[str, ...], label: str) -> None:
+    total = sum(getattr(model, name) for name in names)
+    if total > 0 and abs(total - 1.0) > 0.01:
+        logger.warning("%s weights sum to %.4f (expected 1.0), normalizing", label, total)
+        for name in names:
+            setattr(model, name, getattr(model, name) / total)
+
+
 class StockWeights(BaseModel):
-    """Weights for stock analysis dimensions. Must sum to 1.0."""
+    """Prior weight of each stock dimension in the composite. Must sum to 1.0."""
+
     wyckoff: float = Field(default=0.20, ge=0.0, le=1.0)
     volume_profile: float = Field(default=0.20, ge=0.0, le=1.0)
     price_action: float = Field(default=0.15, ge=0.0, le=1.0)
@@ -46,21 +101,7 @@ class StockWeights(BaseModel):
 
     @model_validator(mode="after")
     def validate_sum(self) -> "StockWeights":
-        total = (
-            self.wyckoff
-            + self.volume_profile
-            + self.price_action
-            + self.sentiment
-            + self.fundamentals
-        )
-        if abs(total - 1.0) > 0.01:
-            logger.warning("Stock weights sum to %.4f (expected 1.0), normalizing", total)
-            if total > 0:
-                self.wyckoff /= total
-                self.volume_profile /= total
-                self.price_action /= total
-                self.sentiment /= total
-                self.fundamentals /= total
+        _normalize(self, ("wyckoff", "volume_profile", "price_action", "sentiment", "fundamentals"), "Stock")
         return self
 
     def to_dict(self) -> dict[str, float]:
@@ -74,7 +115,8 @@ class StockWeights(BaseModel):
 
 
 class CryptoWeights(BaseModel):
-    """Weights for crypto analysis dimensions. Must sum to 1.0."""
+    """Prior weight of each crypto dimension in the composite. Must sum to 1.0."""
+
     wyckoff: float = Field(default=0.25, ge=0.0, le=1.0)
     volume_profile: float = Field(default=0.25, ge=0.0, le=1.0)
     price_action: float = Field(default=0.20, ge=0.0, le=1.0)
@@ -82,14 +124,7 @@ class CryptoWeights(BaseModel):
 
     @model_validator(mode="after")
     def validate_sum(self) -> "CryptoWeights":
-        total = self.wyckoff + self.volume_profile + self.price_action + self.crypto_apc
-        if abs(total - 1.0) > 0.01:
-            logger.warning("Crypto weights sum to %.4f (expected 1.0), normalizing", total)
-            if total > 0:
-                self.wyckoff /= total
-                self.volume_profile /= total
-                self.price_action /= total
-                self.crypto_apc /= total
+        _normalize(self, ("wyckoff", "volume_profile", "price_action", "crypto_apc"), "Crypto")
         return self
 
     def to_dict(self) -> dict[str, float]:
@@ -102,7 +137,12 @@ class CryptoWeights(BaseModel):
 
 
 class IndicatorWeights(BaseModel):
-    """Weights for 11 technical indicators. Each applied as (score-50)×weight."""
+    """Prior weight of each indicator inside the technical-indicator component.
+
+    The weights are renormalized over the indicators with data. ``risk_reward``
+    is 0: the trade plan computes reward/risk, so a score would count it twice.
+    """
+
     candlestick: float = Field(default=0.10, ge=0.0, le=0.5)
     fibonacci: float = Field(default=0.10, ge=0.0, le=0.5)
     bollinger: float = Field(default=0.10, ge=0.0, le=0.5)
@@ -111,100 +151,46 @@ class IndicatorWeights(BaseModel):
     psychology: float = Field(default=0.10, ge=0.0, le=0.5)
     ichimoku: float = Field(default=0.06, ge=0.0, le=0.5)
     candlestick_advanced: float = Field(default=0.06, ge=0.0, le=0.5)
-    risk_reward: float = Field(default=0.06, ge=0.0, le=0.5)
+    risk_reward: float = Field(default=0.0, ge=0.0, le=0.5)
     psychology_advanced: float = Field(default=0.06, ge=0.0, le=0.5)
     point_figure: float = Field(default=0.06, ge=0.0, le=0.5)
-
-
-class ModifierScale(BaseModel):
-    """Scale factors for modifier adjustments.
-
-    Covers: multi_timeframe, sot_weis_wave, squeeze_play,
-    earnings_surprise, clue6_test, market_structure.
-    """
-    multi_timeframe: float = Field(default=0.2, ge=0.0, le=1.0)
-    sot_weis_wave: float = Field(default=0.2, ge=0.0, le=1.0)
-    squeeze_play: float = Field(default=0.2, ge=0.0, le=1.0)
-    earnings_surprise: float = Field(default=0.2, ge=0.0, le=1.0)
-    clue6_test: float = Field(default=0.2, ge=0.0, le=1.0)
-    market_structure: float = Field(default=0.10, ge=0.0, le=1.0)
-
-
-class GateComponents(BaseModel):
-    """Component weights for the composite train-gate confidence (0-100 scale)."""
-
-    bali: float = Field(default=0.30, ge=0.0, le=1.0)
-    tsmom: float = Field(default=0.30, ge=0.0, le=1.0)
-    bakshi: float = Field(default=0.20, ge=0.0, le=1.0)
-    factor_scan: float = Field(default=0.20, ge=0.0, le=1.0)
-    lgbm: float = Field(default=0.0, ge=0.0, le=1.0)
-
-    @model_validator(mode="after")
-    def normalize_sum(self) -> "GateComponents":
-        """Normalize the component weights to sum to 1.0."""
-        total = (
-            self.bali
-            + self.tsmom
-            + self.bakshi
-            + self.factor_scan
-            + self.lgbm
-        )
-        if abs(total - 1.0) > 0.01:
-            logger.warning("Gate weights sum to %.4f (expected 1.0), normalizing", total)
-            if total > 0:
-                self.bali /= total
-                self.tsmom /= total
-                self.bakshi /= total
-                self.factor_scan /= total
-                self.lgbm /= total
-        return self
+    taa_patterns: float = Field(default=0.10, ge=0.0, le=0.5)
 
     def to_dict(self) -> dict[str, float]:
-        """Return the component weights as a plain dict."""
-        return {
-            "bali": self.bali,
-            "tsmom": self.tsmom,
-            "bakshi": self.bakshi,
-            "factor_scan": self.factor_scan,
-            "lgbm": self.lgbm,
-        }
+        return dict(self.model_dump())
 
 
-class LgbmGateWeights(BaseModel):
-    """Gate train-vs-skip for on-demand LGBM training.
+class ComponentWeights(BaseModel):
+    """Prior weight of each component inside its dimension (renormalized over known ones)."""
 
-    Training of the slow path is authorized only when the estimated composite
-    confidence uplift (with-LGBM vs. fallback baseline without-LGBM) reaches
-    ``uplift_threshold`` (inclusive). Single source of the threshold.
-    """
+    wyckoff_structure: float = Field(default=0.40, ge=0.0, le=1.0)
+    wyckoff_six_clue: float = Field(default=0.20, ge=0.0, le=1.0)
+    wyckoff_weis_sot: float = Field(default=0.20, ge=0.0, le=1.0)
+    wyckoff_vsa: float = Field(default=0.20, ge=0.0, le=1.0)
+    pa_core: float = Field(default=0.25, ge=0.0, le=1.0)
+    pa_multi_timeframe: float = Field(default=0.20, ge=0.0, le=1.0)
+    pa_market_structure: float = Field(default=0.20, ge=0.0, le=1.0)
+    pa_technical: float = Field(default=0.35, ge=0.0, le=1.0)
 
-    uplift_threshold: float = Field(
-        default=5.0,
-        ge=0.0,
-        le=100.0,
-        description=(
-            "Minimum composite-confidence points (0-100, inclusive) required "
-            "to authorize on-demand LGBM training. Default 5.0: cross-signal "
-            "confidence noise is ~+/-5 pts, so a smaller uplift is "
-            "indistinguishable from noise and does not justify the 30-60s "
-            "training cost or the overfitting risk of a fresh model."
-        ),
-    )
-    without_lgbm: GateComponents = Field(default_factory=GateComponents)
-    with_lgbm: GateComponents = Field(
-        default_factory=lambda: GateComponents(
-            bali=0.25, tsmom=0.25, bakshi=0.15, factor_scan=0.15, lgbm=0.20
-        )
-    )
+    def wyckoff(self) -> dict[str, float]:
+        """Component priors of the Wyckoff dimension."""
+        return {"structure": self.wyckoff_structure, "six_clue": self.wyckoff_six_clue,
+                "weis_sot": self.wyckoff_weis_sot, "vsa": self.wyckoff_vsa}
+
+    def price_action(self) -> dict[str, float]:
+        """Component priors of the Price Action dimension."""
+        return {"core": self.pa_core, "multi_timeframe": self.pa_multi_timeframe,
+                "market_structure": self.pa_market_structure, "technical": self.pa_technical}
 
 
 class WeightsConfig(BaseModel):
-    """Complete scoring weights configuration."""
+    """Complete scoring weights configuration (priors, not fitted)."""
+
     stocks: StockWeights = Field(default_factory=StockWeights)
     crypto: CryptoWeights = Field(default_factory=CryptoWeights)
     indicators: IndicatorWeights = Field(default_factory=IndicatorWeights)
-    modifier_scale: ModifierScale = Field(default_factory=ModifierScale)
-    lgbm_gate: LgbmGateWeights = Field(default_factory=LgbmGateWeights)
+    components: ComponentWeights = Field(default_factory=ComponentWeights)
+    kind: str = WEIGHTS_KIND
 
 
 def load_weights(path: Optional[Path] = None) -> WeightsConfig:
@@ -215,6 +201,7 @@ def load_weights(path: Optional[Path] = None) -> WeightsConfig:
 
     Returns:
         WeightsConfig loaded from file, or defaults if file not found/invalid.
+        Unknown keys (for example the retired ``modifier_scale``) are ignored.
     """
     filepath = path or DEFAULT_WEIGHTS_PATH
     if not filepath.exists():
@@ -224,10 +211,11 @@ def load_weights(path: Optional[Path] = None) -> WeightsConfig:
     try:
         with open(filepath, "r", encoding="utf-8") as f:
             data = json.load(f)
+        data.pop("kind", None)
         config = WeightsConfig(**data)
         logger.info("Loaded custom weights from %s", filepath)
         return config
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         logger.warning("Failed to load weights from %s: %s, using defaults", filepath, e)
         return WeightsConfig()
 
@@ -238,7 +226,7 @@ _weights_singleton: Optional[WeightsConfig] = None
 
 def get_weights() -> WeightsConfig:
     """Get the singleton WeightsConfig, loading on first call."""
-    global _weights_singleton
+    global _weights_singleton  # pylint: disable=global-statement
     if _weights_singleton is None:
         _weights_singleton = load_weights()
     return _weights_singleton

@@ -2,7 +2,11 @@
 
 ## Weight Table (5 Dimensions)
 
-| # | Dimension | Weight | Source |
+The source of the weights is the trading MCP only: `mcp/src/trading_mcp/weights_config.py`
+(defaults, or the user file `~/.config/opencode/weights.json`) and the regime rules in
+`mcp/src/trading_mcp/analysis/macro.py`. The table shows the MCP defaults. If a value differs, the MCP wins.
+
+| # | Dimension | Default weight | Source |
 |---|-----------|:------:|--------|
 | 1 | Wyckoff Structure | 20% | yfinance 1y daily + Vol-Price Divergence |
 | 2 | Volume Profile | 20% | yfinance 3mo daily |
@@ -22,7 +26,8 @@ final = wyckoff * 0.20 + vp_bullish * 0.20 + pa * 0.15 + sentiment * 0.20 + fund
 
 `volprof` is an extension score: low means price sits below the value area
 (discount), high means price is extended above it. The scanner inverts it
-before weighting because the signal is mean-reversion (IC rank −0.068 OOS).
+before weighting because the signal is treated as mean-reversion. The IC figure
+that the repository quotes for this choice uses overlapping labels: it is not a validation.
 The reported `Volume Profile` dimension is already inverted, so higher always
 means more bullish.
 
@@ -208,14 +213,16 @@ else:
 | Base | +5 | 5 |
 | **Total cap** | | **100** |
 
-## Verdict Thresholds
+## Score Ranges (ranking only, not a verdict)
 
-| Final Score | Recommendation |
+| Final Score | Meaning |
 |:-----------:|---------------|
-| 70-100 | Strong candidate → stock-crypto-analysis highly recommended |
-| 50-69 | Moderate candidate → review, selective deep dive |
-| 30-49 | Weak — skip unless specific pattern match |
-| 0-29 | Avoid |
+| 70-100 | Top of the ranking. Not a buy signal |
+| 50-69 | Middle of the ranking |
+| 30-49 | Weak |
+| 0-29 | Bottom of the ranking |
+
+The scan gives no verdict, stop or target. The agent prompt decides when a ticker needs `analyze_stock`.
 
 ## Filtro Anomalie Critiche
 
@@ -231,11 +238,13 @@ Escludi automaticamente se:
 | `--min-score` | 50 | Minimum score to include |
 | `--top` | 15 | Number of top candidates to show |
 | `--output-dir` | `.` | Directory for CSV/HTML reports |
-| `--batch-size` | 20 | Tickers per API batch |
-| `--batch-sleep` | 1.0 | Seconds between batches |
 | `--regime` | `NORMAL` | Macro regime: FULL, NORMAL, SELECTIVE, DEFENSIVE |
 | `--fetch-news` | false | Fetch Finviz/Yahoo news for web news sentiment (slower) |
-| `--wsb-hotlist` | None | Path to WSB hotlist JSON from wallstreetbets-pump-detect |
+| `--list-tickers` | false | Print the symbols of the universe as JSON and exit |
+| `--json-output` | false | Print the rows as JSON, write no file |
+
+`scripts/scanner.py` is a thin wrapper of the MCP scanner. The old flags `--batch-size`,
+`--batch-sleep` and `--wsb-hotlist` are accepted and ignored.
 
 ## CLI Examples
 
@@ -258,12 +267,13 @@ python3 scripts/scanner.py --universe us_tech --min-score 0 --top 50
 | Universe | File | Count |
 |----------|------|:-----:|
 | us_large | data/us_tickers.csv (all) | ~600 |
-| us_tech | data/us_tickers.csv (NASDAQ 100 filter) | ~100 |
-| italy | data/europe_tickers.csv (Italy filter) | 40 |
-| germany | data/europe_tickers.csv (Germany filter) | 40 |
-| france | data/europe_tickers.csv (France filter) | 40 |
-| uk | data/europe_tickers.csv (UK filter) | 100 |
-| spain | data/europe_tickers.csv (Spain filter) | 35 |
+| us_tech | data/us_tech_tickers.csv (else the Information Technology rows of us_tickers.csv) | ~100 |
+| italy | data/italy_tickers.csv (else the Italy rows of europe_tickers.csv) | 40 |
+| germany | data/germany_tickers.csv (else the Germany rows of europe_tickers.csv) | 40 |
+| france | data/france_tickers.csv (else the France rows of europe_tickers.csv) | 40 |
+| uk | data/uk_tickers.csv (else the UK rows of europe_tickers.csv) | 100 |
+| spain | data/spain_tickers.csv (else the Spain rows of europe_tickers.csv) | 35 |
+| crypto | data/crypto_tickers.csv | ~50 |
 | all | Combined | ~900 |
 
 ## CSV Data Format

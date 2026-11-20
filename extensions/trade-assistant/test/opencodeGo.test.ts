@@ -9,9 +9,11 @@ import {
   normalizeModelId,
   parseAuthKey,
   parseCompletionJson,
+  parseModelProtocols,
   parseSseLine,
   readOpencodeUsage,
   splitSseLines,
+  supportsChatCompletions,
   toOpenAiTools,
   type ToolCallDelta,
 } from '../src/core/opencodeGo';
@@ -39,6 +41,27 @@ test('normalizeModelId strips the provider prefix', () => {
   assert.equal(normalizeModelId('deepseek-v4.1-flash'), 'deepseek-v4.1-flash');
   assert.equal(normalizeModelId('opencode-go/opencode-go/x'), 'x');
   assert.equal(normalizeModelId(''), '');
+});
+
+test('normalizeModelId drops the opencode reasoning-effort suffix', () => {
+  assert.equal(normalizeModelId('opencode-go/gemini-4-argon#medium'), 'gemini-4-argon');
+  assert.equal(normalizeModelId('deepseek-v4.1-flash#low'), 'deepseek-v4.1-flash');
+});
+
+test('parseModelProtocols and supportsChatCompletions follow the api object of /models', () => {
+  const protocols = parseModelProtocols({
+    data: [
+      { id: 'deepseek-v4.1-flash', api: { 'chat-completions': { base_url: 'https://x/openai/v1' } } },
+      { id: 'gemini-4-argon', api: { 'generate-content': {}, interactions: {} } },
+      { id: 'legacy-model' },
+    ],
+  });
+  assert.deepEqual(protocols.get('gemini-4-argon'), ['generate-content', 'interactions']);
+  assert.equal(supportsChatCompletions(protocols, 'deepseek-v4.1-flash'), true);
+  assert.equal(supportsChatCompletions(protocols, 'gemini-4-argon'), false);
+  assert.equal(supportsChatCompletions(protocols, 'legacy-model'), true);
+  assert.equal(supportsChatCompletions(protocols, 'not-listed'), true);
+  assert.equal(parseModelProtocols('not json').size, 0);
 });
 
 test('buildChatRequest sends auth, session and user agent headers', () => {

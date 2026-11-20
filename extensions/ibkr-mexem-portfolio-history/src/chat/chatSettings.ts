@@ -17,7 +17,7 @@ export const DEFAULT_CHAT_MARKET_DATA = true;
  * `marketDataService.ts` appends `fetch options <TICKER> --expiry <DATE>`.
  */
 export const DEFAULT_CHAT_MARKET_DATA_COMMAND =
-  '/home/giuseppe/.local/share/opencode/trading-mcp-venv/bin/python -m trading_mcp.trading_cli';
+  '~/.local/share/opencode/trading-mcp-venv/bin/python -m trading_mcp.trading_cli';
 
 export interface ChatSettings {
   readonly backend: ChatBackend;

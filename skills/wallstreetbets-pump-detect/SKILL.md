@@ -4,8 +4,8 @@ description: >
   Fetches r/wallstreetbets through the Reddit public JSON endpoint to find
   stocks/ETFs being pumped, scores hype level and squeeze
   potential, detects FOMO phase, then feeds into stock-crypto-analysis and
-  options-strategy-suggestions for full entry evaluation (buy underlying or
-  options strategy).
+  options-strategy-suggestions for full entry evaluation (defined-risk options,
+  or a small stock position inside the risk rules).
 metadata:
   argument-hint: '[scan, "cosa pompano su WSB", "wsb radar", "meme stock scan", "pump detect"]'
 ---
@@ -18,7 +18,7 @@ Detects stocks and ETFs being pumped on r/wallstreetbets by fetching the subredd
 
 This skill loads and integrates:
 - `stock-crypto-analysis` — Unified verdict (Long-Term Invest / Short-Term Spec / Avoid), per-dimension scores, direction
-- `options-strategy-suggestions` — Options strategies including Synthetic Long 2:1
+- `options-strategy-suggestions` — Options strategies: only the defined-risk structures are allowed here
 - `market-data-fetch` — Current prices, volumes, short interest, borrow fee, fundamentals
 
 ## Triggers
@@ -139,10 +139,10 @@ Use hype score + price action + time context to determine pump phase:
 
 | Fase | Hype Score | Post Count | Price Change | Media Coverage | Segnali Linguistici | Azione |
 |:----:|:----------:|:----------:|:------------:|:--------------:|-------------------|--------|
-| 🔵 **Early** | < 20 | 1-5 | +5-15% dal minimo 7gg | Nessuna | "DD inside", "sotto prezzo", "deep value" | **ENTRY** — migliore R/R |
+| 🔵 **Early** | < 20 | 1-5 | +5-15% dal minimo 7gg | Nessuna | "DD inside", "sotto prezzo", "deep value" | **ENTRY** solo con le regole di rischio |
 | 🟡 **Mid** | 20-60 | 5-20 | +15-50% | Citazioni su r/all | "squeeze", "🚀", "calls", "moon" | **ENTRY CAUTO** — sizing 50% |
 | 🟠 **Late** | 60-85 | 20-50 | +50-150% | Notizie mainstream | "diamond hands", "holding", "non vendo" | **NO ENTRY** — you are exit liquidity |
-| 🔴 **Exit** | > 85 | > 50 | > +150% | TG1, Bloomberg | "hodl forever", "shorties r fuk", "soldi facili" | **EXIT / SHORT** |
+| 🔴 **Exit** | > 85 | > 50 | > +150% | TG1, Bloomberg | "hodl forever", "shorties r fuk", "soldi facili" | **EXIT** — chiudi. Nessuno short del titolo |
 
 Determinare la fase:
 1. Calcolare hype score (da Phase 3) → mappare alla tabella
@@ -160,7 +160,7 @@ Caricare `stock-crypto-analysis` e raccogliere:
 - Per-dimension rationales
 - Direzione
 
-Se lo score finale del unified verdict è ≥ 50 e la FOMO Phase non è Late/Exit, procedere.
+Procedi alla Phase 6 solo se il verdetto non è Avoid e la FOMO Phase non è Late/Exit. Un hype alto non sostituisce il verdetto.
 
 ### Phase 6 — Options Strategy (se applicabile)
 
@@ -168,18 +168,29 @@ Se **tutte** queste condizioni sono vere:
 1. Unified verdict score ≥ 70
 2. FOMO Phase = Early o Mid
 3. IV non al 1° decile (non estremamente bassa)
-4. Ci sono opzioni liquide (OI > 100 allo strike target)
+4. Opzioni liquide: OI ≥ 500 per gamba e spread bid/ask ≤ 10% del mid
 
-→ Caricare `options-strategy-suggestions` e produrre raccomandazione.
+→ Caricare `options-strategy-suggestions` e tenere solo le strutture a rischio definito.
+Rifiuta ogni proposta con gambe short nude, short stock o più gambe short che long.
 
-Priorità suggerimenti Synthetic Long 2:1:
-- Per ticker WSB, l'alta IV tipica rende il premio delle put vendute molto ricco
-- La struttura 2:1 (sell 2 put + buy 1 call) sfrutta l'alto IV per incassare premium
-- DTE minimo 45, ideale 60-90
+Strutture ammesse, in ordine:
+- **Bull call spread** (debito): compra 1 call ATM-10% OTM, vendi 1 call più alta. Max loss = debito.
+- **Bull put spread** (credito): vendi 1 put OTM, compra 1 put più bassa. Max loss = ampiezza − credito.
+- **Long call**: max loss = premio.
+- DTE minimo 45, ideale 60-90.
 
-Se unified verdict < 70 ma hype_score ≥ 50:
-→ Raccomandare acquisto sottostante con sizing ridotto (1-3% del portafoglio)
-→ Stop loss su violazione del minimo del range pre-pump
+Se il verdetto è < 70, o è Avoid, anche con hype_score ≥ 50:
+→ Nessuna posizione. Metti il ticker in watchlist.
+
+### Regole di rischio (obbligatorie)
+
+1. **Solo rischio definito**: il max loss è noto all'apertura. Vietati: put o call short nude, short stock, "Synthetic Long 2:1" (vendi 2 put + compra 1 call) e ogni ratio con più gambe short.
+2. **Size**: max loss per trade su un ticker WSB ≤ 0.5% dell'equity, la metà del rischio standard. Rischio totale su tutti i ticker WSB ≤ 2% dell'equity.
+3. **Gap risk**: uno stop non protegge da un gap o da un halt (LULD). Per le azioni, la posizione deve reggere un gap del 50%: valore della posizione × 0.5 ≤ 0.5% dell'equity, quindi valore ≤ 1% dell'equity.
+4. **Eventi**: nessuna posizione attraverso earnings o un catalyst binario, salvo rischio definito e già dentro il max loss.
+5. **Late ed Exit**: nessuna entrata. Nessuno short del titolo: squeeze, borrow fee e recall possono dare perdite senza limite.
+6. **Liquidità**: senza OI ≥ 500 e spread ≤ 10% del mid, nessun trade in opzioni.
+7. Applica anche il budget di rischio di `position-management-playbook` (rischio per trade, heat del portafoglio).
 
 ## Output Template
 
@@ -224,17 +235,20 @@ Score: XX%
 | Aspetto | Valore |
 |---------|--------|
 | Azione | **[Entry / Wait / Avoid]** |
-| Sizing | XX% del portafoglio |
+| Sizing | XX% del portafoglio (valore) |
+| Max loss | $XX.XX = X.XX% dell'equity (≤ 0.5%) |
+| Gap stress −50% | $XX.XX = X.XX% dell'equity |
 | Entry | $XX.XX – $XX.XX |
-| Stop Loss | $XX.XX |
+| Stop Loss | $XX.XX (non protegge da un gap) |
 | Target | $XX.XX |
 | Orizzonte | 1-4 settimane |
 
 ### Strategia Opzioni
 [Se applicabile]
-- **Structure**: Synthetic Long 2:1 / Bear Call Spread / Bull Put Spread
-- **Put Strike A** (entry desiderato): $XX
-- **Call Strike B** (upside): $XX
+- **Structure**: Bull Call Spread / Bull Put Spread / Long Call / Bear Call Spread (solo rischio definito)
+- **Strike long**: $XX
+- **Strike short**: $XX
+- **Max loss**: $XX (debito, oppure ampiezza − credito)
 - **Expiration**: [DTE]gg (data)
 - **Netto**: €XX credito/debito
 - **Rischio**: [Basso / Medio / Alto]
@@ -252,7 +266,8 @@ Score: XX%
 - **Non** confondere hype con squeeze potential. Un ticker molto citato non è necessariamente in short squeeze
 - **Non** entrare con sizing pieno in Mid Phase — usare sizing ridotto (50% del normale)
 - **Non** ignorare lo short interest. Se è calato rapidamente, lo squeeze è già avvenuto
-- **Non** fare Synthetic Long 2:1 su ticker WSB se IV è al 90° percentile — il downside risk è 2x
+- **Non** vendere put o call nude e **non** andare short sul titolo — un gap o uno squeeze supera ogni stop
+- **Non** comprare il titolo con un verdetto debole solo perché l'hype è alto
 - **Non** eseguire l'analisi su più di 5 ticker per scan — qualità > quantità
 - **Non** fidarsi di DD posts su WSB come analisi fondamentale — sono tesi, non research
-- **Non** dimenticare lo stop loss — i pump finiscono sempre, spesso violentemente
+- **Non** dimenticare lo stop loss — i pump finiscono sempre, spesso violentemente. Lo stop non basta: la size deve reggere il gap

@@ -36,10 +36,12 @@ metadata:
 
 ### Key Volume Profile Levels
 - **VPOC**: Most traded price. Above = buyer control. Below = seller control. Avoid trading near it.
-- **VAH/VAL**: Value Area boundaries. Reversal zones at extremes. Re-entry after breakout → 80% rule.
+- **VAH/VAL**: Value Area boundaries. Reversal zones at extremes. Re-entry after a breakout: the "80% rule" is an untested heuristic, not a fact.
 - **HVN**: High Volume Nodes = targets. Price is magnetically attracted.
-- **LVN**: Low Volume Nodes = support/resistance. Place stops beyond them.
-- **VWAP**: Institutional benchmark. Price above = cheap; below = expensive.
+- **LVN**: Low Volume Nodes = rejection zones. Price turns fast (V-turn) or crosses them fast; it does not consolidate inside. Place stops beyond them, not inside.
+- **VWAP**: Institutional benchmark. Price above VWAP = buyers in control (the average buyer has a profit); below = sellers in control. A buy below VWAP is a better-than-average fill.
+
+Terminology (SC, BC, VWAP, LVN, 80% rule): the Canonical Terminology table in `volume-price-analysis/SKILL.md` is the reference.
 
 ### Wyckoff 2.0 Operating Scheme
 1. **Context**: Range (at extremes? inside?) or Trend (interacting with value zone? away?)

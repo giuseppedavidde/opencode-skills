@@ -36,7 +36,7 @@
 
 **HVN (High Volume Node)** — Wide profile area with heavy volume. Strong S/R. Institutional accumulation.
 
-**LVN (Low Volume Node)** — Thin profile area with minimal volume. Weak S/R, price moves through quickly.
+**LVN (Low Volume Node)** — Thin profile area with minimal volume. Rejection zone: price moves through quickly or turns fast. A reaction level, not a strong S/R; stops go beyond it.
 
 **Market Order** — Order executed immediately at best available price. Used by aggressive participants.
 

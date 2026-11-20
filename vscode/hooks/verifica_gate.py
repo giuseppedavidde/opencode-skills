@@ -1,13 +1,23 @@
 #!/usr/bin/env python3
-"""VS Code SubagentStop hook: enforce the opencode `## VERIFICA` contract.
+"""SubagentStop hook: enforce the opencode `## VERIFICA` contract in VS Code.
 
-Reads the hook payload from stdin, finds the last assistant message in the
-session transcript, and blocks the subagent when the block is missing. The
-hook is intentionally fail-open: any parsing/runtime error returns `{}` so a
-broken transcript can never trap the chat.
+opencode-skills: managed file. install-vscode.py copies it; edit vscode/hooks/.
 
-Audit events are appended to the same file used by the opencode verifica-gate
-plugin: ~/.config/opencode/stats/gate_events.jsonl
+install-vscode.py registers this script for `SubagentStop` with
+`--agents <list>`. Only the listed opencode subagents are gated. Built-in
+agents (`explore`, `task`, ...) and agents of other bundles pass unchanged.
+
+The final answer comes from the payload (`last_assistant_message` in the
+VS Code-compatible format, `response` in camelCase). When the payload has no
+answer, the script reads the transcript and keeps only the messages of the
+same agent (`agent_id`). The parent transcript also contains the messages of
+other, parallel subagents.
+
+A stop of a top-level agent is always allowed. The hook is fail-open: any
+parse or runtime error returns `{}`, so a broken transcript cannot stop chat.
+
+Audit events go to the file of the opencode verifica-gate plugin:
+~/.config/opencode/stats/gate_events.jsonl
 """
 
 from __future__ import annotations
@@ -69,11 +79,23 @@ def content_to_text(content: object) -> str:
     return ""
 
 
-def transcript_assistant_texts(transcript_path: str) -> list[str]:
-    """Return the content of the last assistant message in the transcript.
+def entry_agent_id(entry: dict) -> str:
+    """Return the agent id that a transcript entry carries, or an empty string."""
+    for container in (entry, entry.get("data") if isinstance(entry.get("data"), dict) else {}):
+        value = container.get("agentId") or container.get("agent_id")
+        if isinstance(value, str) and value:
+            return value
+    return ""
 
-    Supports the VS Code Copilot transcript (`assistant.message` + `data.content`)
-    and the Claude-style (`assistant` / `role: assistant` + `message.content`).
+
+def transcript_assistant_texts(transcript_path: str, agent_id: str = "") -> list[str]:
+    """Return the assistant message texts of the transcript, oldest first.
+
+    Supports the Copilot transcript (`assistant.message` + `data.content`) and
+    the Claude-style (`assistant` / `role: assistant` + `message.content`).
+
+    With `agent_id`, a transcript that tags entries with agent ids keeps only
+    the entries of that agent. A transcript without agent ids keeps all entries.
     """
     if not transcript_path:
         return []
@@ -82,6 +104,8 @@ def transcript_assistant_texts(transcript_path: str) -> list[str]:
         if not path.is_file():
             return []
         texts: list[str] = []
+        own: list[str] = []
+        tagged = False
         with path.open(encoding="utf-8", errors="replace") as handle:
             for line in handle:
                 line = line.strip()
@@ -103,11 +127,52 @@ def transcript_assistant_texts(transcript_path: str) -> list[str]:
                     candidate = candidate or content_to_text(entry.get("content"))
                 elif entry.get("role") == "assistant":
                     candidate = content_to_text(entry.get("content"))
-                if candidate:
-                    texts.append(candidate)
+                if not candidate:
+                    continue
+                texts.append(candidate)
+                owner = entry_agent_id(entry)
+                if owner:
+                    tagged = True
+                if agent_id and owner == agent_id:
+                    own.append(candidate)
+        if agent_id and tagged:
+            return own
         return texts
     except Exception:
         return []
+
+
+def is_subagent_stop(payload: dict) -> bool:
+    """True when the payload belongs to a subagent, not to the top-level agent."""
+    if payload_value(payload, "hook_event_name", "hookEventName") in ("SubagentStop", "subagentStop"):
+        return True
+    return bool(
+        payload_value(
+            payload,
+            "agent_id",
+            "agentId",
+            "agent_type",
+            "agentType",
+            "parent_agent_id",
+            "parentAgentId",
+            "last_assistant_message",
+            "response",
+        )
+    )
+
+
+def final_and_previous(payload: dict) -> tuple[str, str]:
+    """Return (final answer, previous answer of the same agent)."""
+    agent_id = payload_value(payload, "agent_id", "agentId")
+    transcript_path = payload_value(payload, "transcript_path", "transcriptPath")
+    texts = transcript_assistant_texts(transcript_path, agent_id)
+    direct = payload_value(payload, "last_assistant_message", "response")
+    if direct:
+        earlier = [text for text in texts if text.strip() != direct.strip()]
+        return direct, earlier[-1] if earlier else ""
+    text = texts[-1] if texts else ""
+    previous = texts[-2] if len(texts) > 1 else ""
+    return text, previous
 
 
 def log_event(payload: dict, case: str, confidence: int | None) -> None:
@@ -118,7 +183,9 @@ def log_event(payload: dict, case: str, confidence: int | None) -> None:
         event = {
             "ts": datetime.now(timezone.utc).isoformat(),
             "source": "vscode-verifica-gate",
-            "subagent_type": payload_value(payload, "agent_type", "agentType") or "unknown",
+            "subagent_type": payload_value(payload, "agent_type", "agentType", "agent_name", "agentName")
+            or "unknown",
+            "event": payload_value(payload, "hook_event_name", "hookEventName") or "unknown",
             "case": case,
             "confidenza": confidence,
             "prompt_snippet": "",
@@ -130,18 +197,51 @@ def log_event(payload: dict, case: str, confidence: int | None) -> None:
         pass
 
 
-def main() -> int:
+def normalize_agent(name: str) -> str:
+    """Normalize an agent name for comparison (`Coder_Planner` == `coder-planner`)."""
+    return name.strip().lower().replace("_", "-")
+
+
+def gated_agents(argv: list[str]) -> set[str]:
+    """Return the agent names from `--agents a,b,c` (empty set = gate every subagent)."""
+    names: set[str] = set()
+    for index, arg in enumerate(argv):
+        value = ""
+        if arg == "--agents" and index + 1 < len(argv):
+            value = argv[index + 1]
+        elif arg.startswith("--agents="):
+            value = arg.split("=", 1)[1]
+        names.update(normalize_agent(item) for item in value.split(",") if item.strip())
+    return names
+
+
+def agent_in_scope(payload: dict, agents: set[str]) -> bool:
+    """True when the subagent is one of the gated agents (or when no list is set)."""
+    if not agents:
+        return True
+    for key in ("agent_name", "agentName", "agent_type", "agentType", "agent_display_name", "agentDisplayName"):
+        value = payload.get(key)
+        if isinstance(value, str) and normalize_agent(value) in agents:
+            return True
+    return False
+
+
+def main(argv: list[str] | None = None) -> int:
     payload = read_payload()
+    agents = gated_agents(sys.argv[1:] if argv is None else argv)
 
     # The harness sets this after a block to prevent infinite stop loops.
     if payload.get("stop_hook_active") or payload.get("stopHookActive"):
         print("{}")
         return 0
 
-    transcript_path = payload_value(payload, "transcript_path", "transcriptPath")
-    texts = transcript_assistant_texts(transcript_path)
-    text = texts[-1] if texts else ""
-    previous = texts[-2] if len(texts) > 1 else ""
+    # The contract applies to opencode subagents only: never to the top-level
+    # agent, to built-in agents, or to agents of other customization bundles.
+    if not is_subagent_stop(payload) or not agent_in_scope(payload, agents):
+        print("{}")
+        return 0
+
+    text, previous = final_and_previous(payload)
     present = bool(VERIFICA_RE.search(text))
 
     confidence = None
@@ -184,8 +284,8 @@ def main() -> int:
         "- non_verificato: <what was not checked>\n"
         "- escalation_consigliata: <sì/no>"
     )
-    # Emit both shapes: the VS Code extension reads hookSpecificOutput, while
-    # the shared Copilot runtime accepts the top-level decision/reason.
+    # Emit both shapes: the Copilot harness reads the top-level decision/reason,
+    # the deprecated Local harness reads hookSpecificOutput.
     print(json.dumps({"decision": "block", "reason": reason, "hookSpecificOutput": {"decision": "block", "reason": reason}}))
     return 0
 

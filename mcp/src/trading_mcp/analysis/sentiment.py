@@ -1,48 +1,29 @@
-"""Sentiment analysis: Short Interest, Institutional, DTC scoring."""
+"""Legacy sentiment score (not used by the composite; see :mod:`trading_mcp.analysis.sentiment_6d`).
+
+Signs follow the evidence: HIGH short interest and long days-to-cover are
+BEARISH (Desai et al. 2002; Asquith, Pathak & Ritter 2005; Boehmer, Huszar &
+Jordan 2010). The score is 50 = neutral; a missing input adds nothing.
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
+from trading_mcp.analysis.sentiment_6d import institutional_score, short_interest_score
 
-def compute_sentiment(info: dict[str, Any]) -> tuple[int, str]:
-    """Compute sentiment score (0-100) from short interest, institutional, and DTC.
 
-    Args:
-        info: yfinance info dictionary.
-    """
-    score = 25
-    details = []
-
-    si = info.get("shortPercentOfFloat")
-    if si is not None:
-        si_val = float(si)
-        if si_val > 0.20:
-            score += 35
-            details.append(f"SI {si_val*100:.1f}% > 20% (+35)")
-        elif si_val > 0.10:
-            score += 20
-            details.append(f"SI {si_val*100:.1f}% 10-20% (+20)")
-        else:
-            details.append(f"SI {si_val*100:.1f}% < 10% (+0)")
-    else:
-        details.append("SI N/A (+0)")
-
-    inst = info.get("heldPercentInstitutions")
-    if inst is not None:
-        inst_val = float(inst)
-        if inst_val > 0.50:
-            score += 15
-            details.append(f"Inst {inst_val*100:.0f}% > 50% (+15)")
-
-    dtc = info.get("shortRatio")
-    if dtc is not None:
-        dtc_val = float(dtc)
-        if dtc_val > 7:
-            score += 25
-            details.append(f"DTC {dtc_val:.1f} > 7 (+25)")
-        elif dtc_val > 3:
-            score += 15
-            details.append(f"DTC {dtc_val:.1f} > 3 (+15)")
-
-    return min(score, 100), " | ".join(details)
+def compute_sentiment(info: dict[str, Any]) -> tuple[int | None, str]:
+    """Short interest and institutional ownership score (``None`` without inputs)."""
+    parts: list[float] = []
+    details: list[str] = []
+    si_score = short_interest_score(info.get("shortPercentOfFloat"), info.get("shortRatio"))
+    if si_score is not None:
+        parts.append(si_score)
+        details.append(f"SI {float(info['shortPercentOfFloat']) * 100:.1f}% ({si_score:.0f})")
+    inst_score = institutional_score(info.get("heldPercentInstitutions"))
+    if inst_score is not None:
+        parts.append(inst_score)
+        details.append(f"Inst {float(info['heldPercentInstitutions']) * 100:.0f}% ({inst_score:.0f})")
+    if not parts:
+        return None, "No sentiment inputs"
+    return int(round(sum(parts) / len(parts))), " | ".join(details)

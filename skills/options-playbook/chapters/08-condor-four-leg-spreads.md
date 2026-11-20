@@ -16,7 +16,7 @@ Neutral with a wider "don't care" zone than butterfly. Lower precision required.
 - **Delta**: Near zero when range-bound.
 - **Gamma**: Negative between B and C (short gamma), positive in wings.
 - **Theta**: Slightly positive or neutral.
-- **Vega**: Very low. IV-insensitive.
+- **Vega**: Negative when the stock is between B and C (the short strikes). Falling IV helps.
 
 ### Time Decay Effect
 Low. Less theta impact than butterfly due to wider spread.

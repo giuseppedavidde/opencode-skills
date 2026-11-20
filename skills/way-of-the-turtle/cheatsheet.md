@@ -25,8 +25,9 @@
 ## Turtle Position Sizing (N Factor)
 
 ```
-N = ATR(20) in dollar terms
-Unit = (1% × Account Equity) ÷ N
+N = ATR(20) in price points
+Dollar N = N × dollars per point (heating oil: 1 point = $42,000)
+Unit = (1% × Account Equity) ÷ Dollar N
 Max: 4 units/market, 6/correlated group, 10-12/direction
 ```
 

@@ -35,6 +35,6 @@ The Black-Scholes model is the foundational option pricing framework that values
 ## Key Takeaways
 1. The Black-Scholes model answers two questions: average stock value above strike, and probability of paying the strike — their difference is the expected option value
 2. All Black-Scholes variants differ only in forward price calculation and settlement procedure — the core probability framework is identical
-3. Delta = N(d1) is always greater than the probability of finishing ITM = N(d2); this reflects the fact that when the option is ITM, it's "more ITM" on average
-4. The 40% rule provides a powerful mental approximation: ATM option value ≈ 0.4 × F × σ × √t (undiscounted)
+3. Without dividends, call delta = N(d1) is always greater than the risk-neutral probability of finishing ITM = N(d2); this reflects the fact that when the option is ITM, it's "more ITM" on average. Do not read delta as a probability
+4. The 40% rule provides a powerful mental approximation: ATM option value ≈ 0.4 × F × σ × √t (undiscounted; σ as a decimal, t in years; with σ in percent use 0.004)
 5. A model is a candle in a dark room — it reveals general layout but distorts details. Use models for insight, but never confuse them with reality

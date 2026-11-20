@@ -83,7 +83,7 @@ transferred, not annihilated. Desire focused on an objective is the tool that
 moves the energy; intensity (not elapsed time) sets the speed of transfer.
 
 ### 6. The now-moment and the association mechanism
-Every moment in the market is unique — the traders generating the pricestics
+Every moment in the market is unique — the traders generating the price ticks
 are different every time. But the mind's **association mechanism** links
 similar exterior information to existing interior memories in a blink,
 triggering a state of mind (fear, euphoria, betrayal) as if the past were
@@ -102,27 +102,24 @@ Availability is the precondition for objectivity.
 
 ### 8. The five fundamental truths
 The operating belief set of the consistent trader — installed, not merely
-understood:
+understood (paraphrase; the exact wording is in the book):
 
-1. Anything can happen.
-2. You don't need to know what's going to happen next in order to make money.
-3. There is a random distribution between wins and losses for any given set of
-   variables that define an edge.
-4. An edge is nothing more than an indication of a higher probability of one
-   thing happening over another.
-5. Every moment in the market is unique.
+1. Any outcome is possible: one other participant can cancel your edge.
+2. You can make money without knowing what the market does next.
+3. For any set of conditions that defines an edge, wins and losses come in random order.
+4. An edge only moves the odds toward one outcome; it does not promise it.
+5. No market moment repeats exactly.
 
 ### 9. The seven principles of consistency
-The operational creed that translates the truths into action:
+The operational creed that translates the truths into action (paraphrase; the exact wording is in the book):
 
-1. I objectively identify my edges.
-2. I predefine the risk of every trade.
-3. I completely accept the risk, or I am willing to let go of the trade.
-4. I act on my edges without reservation or hesitation.
-5. I pay myself as the market makes money available to me.
-6. I continually monitor my susceptibility for making errors.
-7. I understand the absolute necessity of these principles of consistent
-   success and, therefore, I never violate them.
+1. Define each edge with objective criteria.
+2. Fix the risk of each trade before the entry.
+3. Accept that risk fully, or do not take the trade.
+4. Execute the edge without hesitation.
+5. Take profits when the market offers them, with an exit plan written in advance.
+6. Watch your own tendency to make errors.
+7. Treat these principles as rules you never break.
 
 ### 10. The self-valuation ceiling
 Subconscious beliefs about how much success or money one *deserves*, acquired

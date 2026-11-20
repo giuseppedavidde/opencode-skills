@@ -33,6 +33,7 @@ import pandas as pd
 from pydantic import BaseModel, Field
 
 from trading_mcp.calibration import evidence_block, load_artifact
+from trading_mcp.data.prices import total_return
 
 logger = logging.getLogger(__name__)
 
@@ -270,15 +271,16 @@ def compute_momentum_block(
     block.rsi14 = rsi
 
     lookback = int(thresholds.get("breakout_lookback_days", _BREAKOUT_LOOKBACK_DAYS))
+    # Total return (Adj Close, dividends included); levels below use raw Close.
     if price is not None and len(close) > lookback:
-        past = _safe_float(close.iloc[-(lookback + 1)])
-        if past and past > 0:
-            block.ret_12m = round(price / past - 1.0, 4)
+        ret = total_return(hist, lookback)
+        if ret is not None:
+            block.ret_12m = round(ret, 4)
     elif price is not None and len(close) >= lookback:
         # Exactly lookback bars: approximate 12m from the earliest available bar.
-        past = _safe_float(close.iloc[0])
-        if past and past > 0:
-            block.ret_12m = round(price / past - 1.0, 4)
+        ret = total_return(hist)
+        if ret is not None:
+            block.ret_12m = round(ret, 4)
 
     sma50 = _safe_float(close.rolling(50).mean().iloc[-1]) if len(close) >= 50 else None
     sma200 = (
