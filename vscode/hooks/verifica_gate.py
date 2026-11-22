@@ -16,22 +16,36 @@ other, parallel subagents.
 A stop of a top-level agent is always allowed. The hook is fail-open: any
 parse or runtime error returns `{}`, so a broken transcript cannot stop chat.
 
+The same answer is evaluated one time only: a sha1 key of session, agent and
+text under `<state>/verifica_dedupe/` skips a repeat within 120 seconds and
+writes no audit line.
+
+A `## VERIFICA` block with confidenza below 60 blocks one time per session and
+agent, and asks for the corrected COMPLETE answer. The counter of the block
+expires after LOW_CONFIDENCE_TTL_SECONDS (600 s): the retry arrives within
+seconds and passes, a later answer is gated again.
+
 Audit events go to the file of the opencode verifica-gate plugin:
 ~/.config/opencode/stats/gate_events.jsonl
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 DEFAULT_LOG_DIR = Path.home() / ".config" / "opencode" / "stats"
 VERIFICA_RE = re.compile(r"##\s*VERIFICA\b", re.IGNORECASE)
 CONFIDENCE_RE = re.compile(r"confidenza\s*[:：]\s*(\d{1,3})", re.IGNORECASE)
+DEDUPE_SECONDS = 120
+LOW_CONFIDENCE_LIMIT = 60
+LOW_CONFIDENCE_TTL_SECONDS = 600
 
 # Blocking a long, complete answer is worse than a missing footer: the retry
 # usually replaces the whole analysis with a bare VERIFICA block, and the user
@@ -175,6 +189,76 @@ def final_and_previous(payload: dict) -> tuple[str, str]:
     return text, previous
 
 
+def state_dir() -> Path:
+    """Return the hook state folder, never the home cache when HOOK_STATE_DIR is set."""
+    override = os.environ.get("HOOK_STATE_DIR")
+    if override:
+        return Path(override).expanduser()
+    base = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache")))
+    return base / "opencode-vscode-hooks"
+
+
+def safe_name(value: str) -> str:
+    """Return a file-system-safe name for a session or agent id."""
+    cleaned = re.sub(r"[^A-Za-z0-9_.-]", "_", value)[:120]
+    return cleaned or "default"
+
+
+def agent_of(payload: dict) -> str:
+    """Return the agent name of the payload, normalized for the state file names."""
+    return normalize_agent(
+        payload_value(payload, "agent_type", "agentType", "agent_name", "agentName") or "unknown"
+    )
+
+
+def dedupe_seen(payload: dict, text: str) -> bool:
+    """True when the same answer was evaluated within 120 seconds."""
+    session = payload_value(payload, "session_id", "sessionId") or "default"
+    key = hashlib.sha1((session + "\x00" + agent_of(payload) + "\x00" + text).encode("utf-8")).hexdigest()
+    marker = state_dir() / "verifica_dedupe" / key
+    try:
+        if marker.exists() and time.time() - marker.stat().st_mtime < DEDUPE_SECONDS:
+            return True
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text("1", encoding="utf-8")
+    except OSError:
+        pass
+    return False
+
+
+def low_confidence_used(payload: dict) -> bool:
+    """True when this session and agent got a low-confidence block within the TTL.
+
+    The counter is unused when its file is older than LOW_CONFIDENCE_TTL_SECONDS.
+    A retry arrives within seconds, so the fresh counter lets it pass; a later
+    low-confidence answer of a long session blocks again.
+    """
+    session = payload_value(payload, "session_id", "sessionId") or "default"
+    path = state_dir() / "verifica_conf" / f"{safe_name(session)}__{safe_name(agent_of(payload))}"
+    try:
+        if time.time() - path.stat().st_mtime >= LOW_CONFIDENCE_TTL_SECONDS:
+            return False
+        return int(path.read_text(encoding="utf-8").strip() or "0") > 0
+    except (OSError, ValueError):
+        return False
+
+
+def mark_low_confidence(payload: dict) -> None:
+    """Increment the low-confidence counter of the session and agent."""
+    session = payload_value(payload, "session_id", "sessionId") or "default"
+    path = state_dir() / "verifica_conf" / f"{safe_name(session)}__{safe_name(agent_of(payload))}"
+    count = 0
+    try:
+        count = int(path.read_text(encoding="utf-8").strip() or "0")
+    except (OSError, ValueError):
+        count = 0
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(str(count + 1), encoding="utf-8")
+    except OSError:
+        pass
+
+
 def log_event(payload: dict, case: str, confidence: int | None) -> None:
     """Append an audit event, mirroring the opencode verifica-gate format."""
     try:
@@ -252,6 +336,11 @@ def main(argv: list[str] | None = None) -> int:
         except Exception:
             confidence = None
 
+    # One evaluation per answer: a repeated stop is a no-op and is not logged.
+    if dedupe_seen(payload, text):
+        print("{}")
+        return 0
+
     # Diagnostic: the answer was split and only the footer survived the retry.
     if present and len(text) < FOOTER_LIMIT_CHARS and len(previous) >= SOFT_LIMIT_CHARS:
         log_event(payload, "verifica_only_followup", confidence)
@@ -259,6 +348,19 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if present or not text:
+        # A low confidence asks for one corrected, complete answer. The cap is
+        # one block per session and agent within 600 s, so a retry always passes
+        # and a later answer of a long session is gated again.
+        if present and confidence is not None and confidence < LOW_CONFIDENCE_LIMIT and not low_confidence_used(payload):
+            mark_low_confidence(payload)
+            log_event(payload, "low_confidence", confidence)
+            reason = (
+                f"Confidenza {confidence} sotto {LOW_CONFIDENCE_LIMIT}. "
+                "Controlla i punti in non_verificato. Correggi. "
+                "Rimanda la risposta COMPLETA con ## VERIFICA. Non inviare solo il footer."
+            )
+            print(json.dumps({"decision": "block", "reason": reason, "hookSpecificOutput": {"hookEventName": "SubagentStop", "decision": "block", "reason": reason}}))
+            return 0
         # No transcript or no assistant message: fail open.
         log_event(payload, "ok" if present else "no_text", confidence)
         print("{}")

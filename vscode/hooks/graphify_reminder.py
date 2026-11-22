@@ -11,16 +11,23 @@ Copilot harness, and `hookSpecificOutput.additionalContext` in the Local one.
 A legacy `PreToolUse` configuration still works: the reminder then appears
 once per session, before the first shell command.
 
+When a `.manifest.json` sits next to this script, the hook checks the sha256 of
+every installed file. A mismatch adds a drift line to the context. The drift
+line is emitted even when the project has no graph.
+
 Fail-open: any error returns `{}` and never blocks the session or a tool.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import sys
 from pathlib import Path
+
+DRIFT_TEXT = "opencode-skills: gli hook installati differiscono dal manifest. Rerun ./install.sh."
 
 SHELL_TOOL_NAMES = {
     "runInTerminal",
@@ -75,11 +82,40 @@ def command_of(payload: dict) -> str:
     return ""
 
 
+def state_dir() -> Path:
+    """Return the hook state folder, never the home cache when HOOK_STATE_DIR is set."""
+    override = os.environ.get("HOOK_STATE_DIR")
+    if override:
+        return Path(override).expanduser()
+    base = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache")))
+    return base / "opencode-vscode-hooks"
+
+
 def session_marker(payload: dict) -> Path | None:
     session = payload_value(payload, "session_id", "sessionId") or "default"
     safe = re.sub(r"[^A-Za-z0-9_.-]", "_", session)[:120]
-    cache_root = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache")))
-    return cache_root / "opencode-vscode-graphify" / f"{safe}.seen"
+    return state_dir() / "graphify" / f"{safe}.seen"
+
+
+def check_manifest_drift(script_dir: Path) -> str | None:
+    """Return the drift message when an installed file does not match the manifest."""
+    try:
+        manifest_path = script_dir / ".manifest.json"
+        if not manifest_path.is_file():
+            return None
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        hooks = data.get("hooks") if isinstance(data, dict) else None
+        if not isinstance(hooks, dict):
+            return None
+        for name, expected in hooks.items():
+            path = script_dir / name
+            if not path.is_file():
+                return DRIFT_TEXT
+            if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+                return DRIFT_TEXT
+        return None
+    except Exception:
+        return None
 
 
 def find_graph_root(start: Path) -> Path | None:
@@ -110,13 +146,14 @@ def resolve_workspace_root(payload: dict) -> Path:
     return find_graph_root(cwd) or cwd
 
 
-def emit_reminder(event: str) -> None:
-    """Print the reminder in the Copilot shape and in the Local shape."""
+def emit_reminder(event: str, drift: str | None = None, reminder: str | None = REMINDER) -> None:
+    """Print the reminder and/or the drift line in the Copilot shape and in the Local shape."""
+    context = "\n".join(part for part in (reminder, drift) if part)
     print(
         json.dumps(
             {
-                "additionalContext": REMINDER,
-                "hookSpecificOutput": {"hookEventName": event, "additionalContext": REMINDER},
+                "additionalContext": context,
+                "hookSpecificOutput": {"hookEventName": event, "additionalContext": context},
             }
         )
     )
@@ -145,8 +182,13 @@ def legacy_pre_tool_use(payload: dict) -> int:
             # If the marker cannot be written, still emit the reminder once per call.
             pass
 
-    emit_reminder("PreToolUse")
+    emit_reminder("PreToolUse", check_manifest_drift(script_dir()))
     return 0
+
+
+def script_dir() -> Path:
+    """Return the folder of this installed script."""
+    return Path(__file__).resolve().parent
 
 
 def main() -> int:
@@ -155,11 +197,29 @@ def main() -> int:
         return legacy_pre_tool_use(payload)
 
     root = resolve_workspace_root(payload)
-    if not (root / "graphify-out" / "graph.json").is_file():
+    has_graph = (root / "graphify-out" / "graph.json").is_file()
+    drift = check_manifest_drift(script_dir())
+    if not has_graph and not drift:
         print("{}")
         return 0
 
-    emit_reminder(payload_value(payload, "hook_event_name", "hookEventName") or "SessionStart")
+    marker = session_marker(payload)
+    if marker is not None:
+        try:
+            if marker.exists():
+                print("{}")
+                return 0
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text("1", encoding="utf-8")
+        except Exception:
+            # If the marker cannot be written, still emit the context once per call.
+            pass
+
+    emit_reminder(
+        payload_value(payload, "hook_event_name", "hookEventName") or "SessionStart",
+        drift,
+        REMINDER if has_graph else None,
+    )
     return 0
 
 

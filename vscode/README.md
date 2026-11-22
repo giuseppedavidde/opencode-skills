@@ -47,12 +47,22 @@ in place and the run prints a warning. With `--force`, your file goes to
 | `config/opencode.json` → `mcp` | `~/.copilot/mcp-config.json` | Portable `mcpServers` format |
 | `plugins/verifica-gate` | `~/.copilot/hooks/verifica-gate.json` | `SubagentStop`, [`hooks/verifica_gate.py`](hooks/verifica_gate.py) |
 | `plugins/graphify` | `~/.copilot/hooks/graphify-reminder.json` | `SessionStart`, [`hooks/graphify_reminder.py`](hooks/graphify_reminder.py) |
+| — | `~/.copilot/hooks/agent-bootstrap.json` | `SubagentStart`, [`hooks/agent_bootstrap.py`](hooks/agent_bootstrap.py) |
+| — | `~/.copilot/hooks/handoff-digest.json` | `PostToolUse`, [`hooks/handoff_digest.py`](hooks/handoff_digest.py) |
+| — | `~/.copilot/hooks/routing-guard.json` | `UserPromptSubmit` + `PreToolUse`, [`hooks/routing_guard.py`](hooks/routing_guard.py) |
+| — | `trade.agent.md`, `coder.agent.md` frontmatter | `PreToolUse` per agent, [`hooks/agent_guard.py`](hooks/agent_guard.py) |
+| — | `~/.copilot/hooks/.manifest.json` | sha256 of every installed hook file |
 | `plugins/auto-headroom` | — | No equivalent: use the `headroom` MCP server and `/read-chunk` |
 | `plugins/routing-stats`, `tokens-per-second` | — | Telemetry covers opencode sessions only |
 
 The workspace scope writes the same files under `.github/` (`skills`,
 `agents`, `hooks`, `instructions`, `copilot-instructions.md`), the MCP servers
 to `.mcp.json`, and two Local-only settings to `.vscode/settings.json`.
+
+VS Code reads the `~/.copilot` layer natively. The workflow does not create a
+`.github` symlink to `~/.copilot`: that link loads every customization two
+times. The installer refuses to write through such a link, and `--verify`
+reports it.
 
 ## Agents
 
@@ -140,9 +150,32 @@ the picker shows the router only.
 
 ## Hooks
 
-Both hook files use the Copilot format (`"version": 1`). The PascalCase event
-names select the VS Code-compatible payload. The commands use the absolute
-`python3` path of the machine that ran the installer.
+The installer writes 5 hook configuration files, 6 hook scripts and 1 manifest
+file to the hooks folder. Every configuration file uses the Copilot format
+(`"version": 1`). The PascalCase event names select the VS Code-compatible
+payload. The commands use the absolute `python3` path of the machine that ran
+the installer.
+
+| Event | Configuration | Script | Purpose |
+|---|---|---|---|
+| `SessionStart` | `graphify-reminder.json` | `graphify_reminder.py` | One graphify reminder per session |
+| `UserPromptSubmit` | `routing-guard.json` | `routing_guard.py --event=prompt` | Classify the prompt |
+| `PreToolUse` | `routing-guard.json` | `routing_guard.py --event=tool` | Keep the agent spawn on the category |
+| `PreToolUse` | `trade` and `coder` frontmatter | `agent_guard.py --agent=<name>` | Deny a system pip install |
+| `SubagentStart` | `agent-bootstrap.json` | `agent_bootstrap.py` | Add the contract and the agent snippet |
+| `PostToolUse` | `handoff-digest.json` | `handoff_digest.py` | Add one handoff line after an agent spawn |
+| `SubagentStop` | `verifica-gate.json` | `verifica_gate.py` | Check `## VERIFICA` and the confidenza |
+
+Each invocation costs about 18 ms. `PreToolUse` fires for every tool call, so
+the routing guard and the agent guard add this cost to each call. Both scripts
+exit at once when the tool is not an agent spawn or a shell.
+
+### State folder
+
+The hooks keep small state files. `HOOK_STATE_DIR` sets the folder. Without
+it, the folder is `$XDG_CACHE_HOME/opencode-vscode-hooks`, or
+`~/.cache/opencode-vscode-hooks`. The tests set `HOOK_STATE_DIR` to a
+temporary folder, so a test never writes to the home cache.
 
 ### verifica-gate (`SubagentStop`)
 
@@ -155,23 +188,127 @@ cannot change the result.
 
 | Final answer | Hook action |
 |---|---|
-| Contains `## VERIFICA` | allow |
+| Contains `## VERIFICA`, confidenza 60 or more | allow |
+| Contains `## VERIFICA`, confidenza below 60 | block once per 600 s, log `low_confidence` |
 | Long (>= 600 chars), no block | allow, log `missing_verifica_soft` |
 | Short (< 600 chars), no block | block: ask for the COMPLETE answer |
 | Footer only (< 300 chars) after a long answer | allow, log `verifica_only_followup` |
 | Top-level agent, or agent not in `--agents` | allow |
 
+The confidence threshold is 60. The low confidence block runs one time per
+session and agent. The counter lives in `<state>/verifica_conf/`. The reason
+asks for the corrected COMPLETE answer. The retry passes, because the counter
+is fresh. The counter expires after 600 seconds: a low-confidence answer that
+arrives later in the same session blocks again.
+
+The script evaluates each answer one time. A sha1 key of session, agent and
+text in `<state>/verifica_dedupe/` skips a repeat within 120 seconds. The
+repeat writes no audit line.
+
 The script is fail-open: an error returns `{}`. The runtime ends a loop after
 8 consecutive blocks. Audit lines go to
 `~/.config/opencode/stats/gate_events.jsonl` (`source: vscode-verifica-gate`).
 
+### Routing guard (`UserPromptSubmit` and `PreToolUse`)
+
+The prompt event classifies the prompt and saves the result in
+`<state>/routing/<session_id>.json`. The context names the category and the
+agent.
+
+| Category | Agents that may run |
+|---|---|
+| `PDF` | `pdf-reader` |
+| `OEGK` | `oegk-health` |
+| `GRAPHIFY` | `graphify-helper` |
+| `VSCODE_EXT` | `vscode-ext`, `vscode-ext-planner` |
+| `CODER` | `coder`, `coder-planner` |
+| `SKILL_UPDATE` | `skill-updater` |
+| `BOOK` | `book-to-skill-agent` |
+| `TRADE` | `trade` |
+
+The classifier gives priority in this order: `PDF_COMPRESS` (exempt),
+`SKILL_UPDATE`, `BOOK`, `PDF`, `OEGK`, `GRAPHIFY`, `VSCODE_EXT`, `CODER`,
+`TRADE`. A prompt that asks to compress a PDF is exempt and has no category.
+
+The tool event reads the saved category. It also classifies
+`tool_input.prompt`. The allowed set is the allowed set of the prompt category
+UNION the allowed set of the subtask category. This union keeps chains such as
+`trade` -> `coder` working. The call passes when the category is empty, when
+the agent is not a known specialist, or when the agent is in that union.
+Otherwise the hook denies the call. The reason names the correct agent and the
+matched text. One user request gets at most 2 denials: the third call and all
+later calls of the same request pass. A new prompt resets the cap. The counter
+lives in `<state>/routing/<session_id>.denials`. The saved category expires
+after 600 seconds. The prompt event and the tool event dedupe their own
+execution, so a repeat of one event adds one line and one denial at most.
+
+### Agent guard (`PreToolUse`, `trade` and `coder`)
+
+`trade.agent.md` and `coder.agent.md` carry their own `hooks:` block in the
+frontmatter:
+
+```yaml
+hooks:
+  PreToolUse:
+    - type: command
+      command: "/usr/bin/python3 \"/home/user/.copilot/hooks/agent_guard.py\" --agent=coder"
+      timeout: 10
+```
+
+The guard checks `execute`, `bash`, `shell` and `runInTerminal`. It denies a
+`sudo pip`, a `pip install` or a `python -m pip install` that names no
+virtualenv. The reason gives the virtualenv:
+`~/.local/share/opencode/trading-mcp-venv` for `trade`, `/tmp/opencode/.venv`
+or a project virtualenv for `coder`. A command with `/bin/pip`, `/bin/activate`,
+`VIRTUAL_ENV`, `/venv/` or `trading-mcp-venv` passes. With `--no-hooks` the
+installer writes no `hooks:` block.
+
+### Bootstrap (`SubagentStart`)
+
+The command lists the gated agents and the repository root:
+`agent_bootstrap.py --agents=<subagents> --repo=<root>`. The hook adds three
+parts to the context: the response contract, one snippet for the agent and the
+path of a saved plan. The text is capped at 1500 characters.
+
+A snippet gives the rules of one agent. `coder` gets the virtualenv rule.
+`trade` gets the ledger and the journal rule. `pdf-reader` gets `pdftotext`
+before OCR. `graphify-helper` gets `graphify query`. `oegk-health` gets exact
+EUR amounts. `coder-planner` and `vscode-ext-planner` write the plan to
+`<session-state>/<session_id>/plan-<slug>.md`.
+
+For `coder`, the hook searches `<session-state>/<session_id>/plan-*.md`. The
+folder is `COPILOT_SESSION_STATE_DIR`, or `~/.copilot/session-state`. When a
+plan exists, the context adds `Piano: <path>. Leggilo prima di agire.`
+
+The hook injects one time per subagent invocation (`agent_id`) in 60 seconds,
+not one time per session and agent. Two parallel subagents of the same type
+each get the contract. Duplicate registrations of one start share the same
+`agent_id`, so the second event gets no text. The marker lives in
+`<state>/bootstrap/`.
+
+### Handoff digest (`PostToolUse`)
+
+The hook acts only when the tool is an agent spawn: `agent`, `Agent`,
+`runSubagent`, `task` or `Task`. It reads `tool_response` and extracts the
+confidenza, the first 100 characters of non_verificato, the escalation and the
+`## DELEGA` line. It adds one line of at most 400 characters.
+
+Dedupe uses `tool_use_id`, with a marker in `<state>/digest/`.
+
 ### graphify reminder (`SessionStart`)
 
 When the session folder (or a parent) contains `graphify-out/graph.json`, the
-hook adds the `graphify query` reminder to the context once per session.
-`sessionStart` is the documented event for `additionalContext`. (A
-`preToolUse` command hook has no documented `additionalContext`, and a crash
-there denies the tool call.)
+hook adds the `graphify query` reminder to the context once per session. The
+marker lives in `<state>/graphify/`.
+
+### Manifest drift
+
+`install-vscode.py` writes `<hooks>/.manifest.json`. The file holds the sha256
+of every installed hook file. The graphify reminder checks the manifest at
+every `SessionStart`. On a mismatch or a missing file, it adds one line:
+`opencode-skills: gli hook installati differiscono dal manifest. Rerun ./install.sh.`
+The drift line appears even when the workspace has no `graphify-out`.
+`--verify` compares the installed manifest with the current sources.
 
 `chat.useHooks` controls the Local harness only. To stop a hook in the Copilot
 harness, delete its JSON file or set `"disableAllHooks": true` in it.
@@ -192,6 +329,7 @@ because the harness shows an error for each server that cannot start:
 | `headroom` | `~/.local/share/opencode/headroom-venv` | `./setup-headroom.sh` (part of `./install.sh`) |
 | `trading` | `~/.local/share/opencode/trading-mcp-venv` | `./setup-trading-mcp.sh` (part of `./install.sh`) |
 | `rea` | the `rea` checkout next to this repository (or `REA_REPO`) | `./install.sh --with-rea` |
+| | The installer finds the checkout through `REA_REPO`, then the folder `rea` next to this clone, then `~/.local/share/opencode/rea`. | |
 | `browse` | `~/.local/bin/browse` | `curl -fsSL https://opencode.ai/browse/install \| bash` ([browse](https://github.com/anomalyco/browse)) |
 
 The trading venv is an editable install of `mcp/` in this clone. After you move
@@ -206,6 +344,68 @@ the clone, `./install.sh` reinstalls it from the new folder.
 The servers of `config/opencode.json` are managed entries. Each run updates
 them, and it removes a managed entry that is disabled or has no runtime.
 Other servers in the same file stay unchanged.
+
+### Migration from the legacy VS Code files
+
+VS Code marks an MCP server as "Migration available" when the server is in a
+legacy location. VS Code asks to move:
+
+- the servers of `.vscode/mcp.json` to the workspace root `.mcp.json`;
+- the user servers of `~/.config/Code/User/mcp.json` (and each profile) to
+  `~/.copilot/mcp-config.json`.
+
+The installer performs this migration for the servers that
+`config/opencode.json` owns. A managed name leaves the legacy file after the
+installer writes the destination entry. A managed name without a runtime also
+leaves the legacy file, and the log shows its setup step. Entries that the
+workflow does not manage stay in the legacy file.
+
+The user target also migrates a workspace when you give `--workspace`:
+
+```bash
+python3 install-vscode.py --target user --workspace /path/to/ws
+```
+
+Use `--no-migrate-mcp` to keep the legacy files unchanged. With
+`--mcp-format vscode`, the installer keeps `.vscode/mcp.json` on purpose and
+does not migrate it. VS Code can ask you to enable a server again after the
+migration, because a disabled state is stored per location.
+
+### Snapshots of the Copilot CLI agent host
+
+VS Code copies the customizations of a workspace into a static plugin folder
+for each Copilot CLI agent-host session:
+
+```
+~/.config/Code/agentPlugins/vscode-synced-customization-agent-host-*/*/.mcp.json
+```
+
+That copy keeps the values of the moment of the sync. An extension can
+contribute an HTTP MCP server on an ephemeral localhost port with a per-session
+token. Pylance does this (`pylance mcp server`,
+`http://localhost:<port>/stream`). The port changes when the extension host
+restarts, so a frozen copy fails:
+
+```
+failed to initialize MCP client: transport failure during send initialize
+request: Client error: request failed: error sending request for url
+(http://localhost:38961/stream)
+```
+
+The port changes each window start. The script removes that frozen entry from
+every snapshot; VS Code builds the entry again for each new session, so Pylance
+keeps its tools in VS Code itself:
+
+```bash
+scripts/vscode-mcp-clean.py              # remove the frozen entries
+scripts/vscode-mcp-clean.py --dry-run    # print the plan only
+scripts/vscode-mcp-clean.py --verify     # exit 1 while an entry remains
+scripts/vscode-mcp-clean.py --server NAME  # also remove another server name
+```
+
+Run it while VS Code is closed. A snapshot that VS Code rewrites during a
+session gets a fresh port, so a later run is safe. `install-vscode.py --verify`
+reports the snapshots that still hold the frozen entry.
 
 ## Automatic sync
 
@@ -253,12 +453,14 @@ Rerun `./install.sh`. The installer:
 - replaces its old hook files with the `version: 1` files;
 - keeps every file that it did not generate.
 
-Remove the links of the old "per-item symlink" layout (a workspace `.github/`
-that links into `~/.copilot`): that layout loads everything two times.
-`sync-vscode.sh` refuses a workspace write while such links exist.
+The workflow uses the native `~/.copilot` location. It does not create a
+`.github` symlink to `~/.copilot`, and it does not need that link: such a link
+loads every customization two times.
 
-The VS Code **Migrations** panel is not necessary: the commands are skills
-already, and the user layer already uses `~/.copilot/mcp-config.json`.
+The installer clears the MCP part of the VS Code **Migrations** panel (see
+[Migration from the legacy VS Code files](#migration-from-the-legacy-vscode-files)).
+The remaining migration groups need no action: the commands are skills
+already, and the user layer uses `~/.copilot/mcp-config.json`.
 
 ## Verify
 
@@ -268,7 +470,8 @@ python3 install-vscode.py --verify --target user
 
 The check compares every generated file byte for byte with the current
 sources, and it lists the MCP servers whose runtime is absent. It also reports
-how many times the gate ran from VS Code (`gate_events.jsonl`).
+a managed server that is still in a legacy VS Code MCP file, and how many times
+the gate ran from VS Code (`gate_events.jsonl`).
 
 In-chat checks, in a new Copilot session:
 
@@ -277,7 +480,7 @@ In-chat checks, in a new Copilot session:
 | Skills | type `/` | 53 skills + `/read-chunk`, `/routing-stats`, `/token-stats` |
 | Agents | agent picker | `router`, `trade`, `coder`, `coder-planner`, `vscode-ext`, `vscode-ext-planner`, `graphify-helper`, `pdf-reader`, `skill-updater`, `book-to-skill-agent`, `oegk-health` |
 | MCP | MCP view | `headroom`, `trading`, `rea`, `browse` (each after its setup script) |
-| Hooks | Customizations → Hooks | `verifica-gate.json`, `graphify-reminder.json`, no load error |
+| Hooks | Customizations → Hooks | 5 hook configurations, no load error |
 
 ## Tests
 
@@ -285,7 +488,9 @@ In-chat checks, in a new Copilot session:
 python3 -m pytest -q vscode/          # needs pytest and pyyaml
 ```
 
-`hooks/test_verifica_gate.py` covers the gate with Local and Copilot payloads.
+`hooks/test_verifica_gate.py` covers the gate, the 120 s dedupe and the
+confidence threshold. `hooks/test_agent_hooks.py` covers bootstrap, digest,
+routing, the agent guard and the manifest drift.
 `tests/test_install_vscode.py` runs the installer with a temporary `HOME` and
 checks the generated layer, the safe overwrite rules and the portable sources.
 

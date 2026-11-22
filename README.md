@@ -218,7 +218,13 @@ python3 install-vscode.py --target user            # done by ./install.sh
 python3 install-vscode.py --verify --target user   # exit 1 = drift
 python3 install-vscode.py --target user --dry-run -v
 python3 install-vscode.py --workspace /path/to/ws  # one workspace instead
+python3 install-vscode.py --target user --workspace /path/to/ws  # also migrate its legacy .vscode/mcp.json
 ```
+
+The installer migrates the MCP servers that `config/opencode.json` owns from the
+legacy VS Code files (`.vscode/mcp.json` and the user `mcp.json`) to
+`~/.copilot/mcp-config.json` and the workspace root `.mcp.json`. Use
+`--no-migrate-mcp` to keep the legacy files unchanged.
 
 | opencode | VS Code (user scope) |
 |----------|---------|
@@ -356,6 +362,8 @@ Exit code is `0` when the target is conform. Exit code is `1` on any FAIL.
 | MCP servers fail (`exec: ... not found`) | Run `./setup-headroom.sh` and/or `./setup-trading-mcp.sh` |
 | `rea` MCP fails / `dist` missing / `npm` errors | Run `./setup-rea-mcp.sh` (clone + `npm ci` + `npm run build` + `--check`); verify `node --version` >= 22 |
 | MCP `rea` serves old code | It rebuilds on `HEAD`/dirty change; check `~/.cache/rea-mcp/build.log`, or force with `REA_MCP_SKIP_BUILD=0` (set `=1` to serve the existing `dist` without rebuilding) |
+| `rea` log says `Direct dependency installation is stale` | The checkout moved ahead of its `node_modules`; run `npm ci` in the `rea` folder, then start the server again |
+| `pylance mcp server` fails with `transport failure ... http://localhost:<port>/stream` | VS Code froze an old Pylance port in an agent-host snapshot; run `scripts/vscode-mcp-clean.py` (close VS Code first) |
 | bladebro MCP fails (`Could not launch Chrome`) | Run `./setup-bladebro.sh` (or ensure Chrome/Chromium is installed) |
 | Submodule folders empty | `./install.sh` (it runs `git submodule update --init --recursive`) |
 | `alphavantage-mcp.sh: command not found` | Ensure `~/.local/bin` is in `$PATH` |

@@ -14,9 +14,11 @@
 #                each scope is a native Copilot source, so two copies load
 #                every agent, skill and hook two times.
 #   --workspace  Workspace root that owns .github/ and .mcp.json
-#                (only for --target workspace|both).
+#                (workspace|both), or whose legacy .vscode/mcp.json the user
+#                target migrates to the root .mcp.json.
 #   --check      Run the installer verification only; no writes.
 #   --quiet      Print nothing unless the run fails.
+#   --no-migrate-mcp  Keep the legacy VS Code MCP files unchanged.
 
 set -euo pipefail
 
@@ -31,6 +33,7 @@ target="user"
 workspace="${VSCODE_WORKSPACE:-}"
 check=0
 quiet=0
+migrate_mcp=1
 # Keep the specialist subagents in the agent picker. This matches the
 # installer default; EXPOSE_SUBAGENTS=0 writes `user-invocable: false` and
 # leaves `router` as the only visible agent.
@@ -47,9 +50,11 @@ Usage:
 
   --target     Which scope to regenerate (default: user). Use one scope only.
   --workspace  Workspace root that owns .github/ and .mcp.json
-               (only for --target workspace|both).
+               (workspace|both), or whose legacy .vscode/mcp.json the user
+               target migrates to the root .mcp.json.
   --check      Run the installer verification only; no writes.
   --quiet      Print nothing unless the run fails.
+  --no-migrate-mcp  Keep the legacy VS Code MCP files unchanged.
   --expose-subagents     List the specialist subagents in the agent picker
                          (default; EXPOSE_SUBAGENTS=0 restores router-only).
   --no-expose-subagents  Show only the primary agents in the picker.
@@ -64,6 +69,7 @@ while [[ $# -gt 0 ]]; do
         --workspace=*)     workspace="${1#*=}"; shift ;;
         --check)           check=1; shift ;;
         --quiet)           quiet=1; shift ;;
+        --no-migrate-mcp)  migrate_mcp=0; shift ;;
         --expose-subagents)    expose_subagents=1; shift ;;
         --no-expose-subagents) expose_subagents=0; shift ;;
         -h|--help)         usage; exit 0 ;;
@@ -81,25 +87,12 @@ if [[ "$target" != "user" && -z "$workspace" ]]; then
     exit 2
 fi
 
-# A workspace .github linked to ~/.copilot is the same folder as the user
-# layer: a workspace write would put workspace paths into the user layer.
-if [[ "$target" != "user" ]]; then
-    linked=()
-    if [[ -L "$workspace/.github" ]]; then
-        linked+=(".github -> $(readlink -f "$workspace/.github")")
-    else
-        for rel in agents skills hooks instructions copilot-instructions.md; do
-            if [[ -L "$workspace/.github/$rel" ]]; then
-                linked+=(".github/$rel -> $(readlink -f "$workspace/.github/$rel")")
-            fi
-        done
-    fi
-    if (( ${#linked[@]} )); then
-        printf 'sync-vscode: the workspace layer is a link to another layer:\n' >&2
-        printf '  %s\n' "${linked[@]}" >&2
-        echo "sync-vscode: remove the links and keep one scope (--target user is recommended)" >&2
-        exit 2
-    fi
+# The supported layout is the native ~/.copilot folder. A workspace .github
+# symlink would make a workspace write land outside the workspace, so refuse it.
+if [[ "$target" != "user" && -L "$workspace/.github" ]]; then
+    printf 'sync-vscode: %s is a symlink (%s); a workspace write would land outside the workspace\n' \
+        "$workspace/.github" "$(readlink -f "$workspace/.github")" >&2
+    exit 2
 fi
 
 installer_args=(--target "$target")
@@ -111,9 +104,20 @@ if [[ "$expose_subagents" != "0" ]]; then
 else
     installer_args+=(--no-expose-subagents)
 fi
+if [[ "$migrate_mcp" == "0" ]]; then
+    installer_args+=(--no-migrate-mcp)
+fi
 
 if (( check )); then
     exec "$PYTHON" "$REPO_ROOT/install-vscode.py" --verify "${installer_args[@]}"
+fi
+
+# Remove frozen extension MCP entries (Pylance) from the VS Code agent-host
+# snapshots. A frozen localhost port fails after the extension restarts. This
+# runs on every invocation, because a snapshot goes stale on each VS Code
+# restart, not only when a workflow source changes.
+if [[ -x "$REPO_ROOT/scripts/vscode-mcp-clean.py" ]]; then
+    "$REPO_ROOT/scripts/vscode-mcp-clean.py" >/dev/null 2>&1 || true
 fi
 
 mkdir -p "$STATE_DIR"

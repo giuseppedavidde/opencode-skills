@@ -119,6 +119,15 @@ Code, tool output, tickers, paths, and quoted document text are exempt.
 Load a skill by reading `{{SKILLS_DIR}}/<name>/SKILL.md` or by typing
 `/<skill-name>` in chat.
 
+## Headless browser
+
+- Use the `browse` MCP server for interactive pages: clicks, forms, live state.
+- Use `google-chrome` for headless work: DOM dumps, screenshots, PDFs, CDP.
+- `google-chrome` is a wrapper in `~/.local/bin`. It runs Chrome for Testing
+  149 from the Playwright cache. It falls back to `brave --headless=new`.
+- Never install Chrome from the AUR. The wrapper is enough.
+- Full rules: `~/.copilot/instructions/browser.instructions.md`.
+
 ## Token discipline
 
 - Do not re-paste large tool outputs, logs, or JSON into reasoning or prompts.

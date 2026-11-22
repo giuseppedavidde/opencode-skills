@@ -8,13 +8,16 @@ are blocked, and the block reason asks for the COMPLETE answer again.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
 
 HOOK = Path(__file__).resolve().parent / "verifica_gate.py"
+LOW_CONFIDENCE_TTL_SECONDS = 600
 
 FOOTER = (
     "## VERIFICA\n"
@@ -41,7 +44,7 @@ def _run(tmp_path: Path, messages: list[dict]) -> dict:
         capture_output=True,
         text=True,
         check=True,
-        env={"GATE_LOG_DIR": str(tmp_path), "PATH": "/usr/bin:/bin"},
+        env={"HOOK_STATE_DIR": str(tmp_path), "GATE_LOG_DIR": str(tmp_path), "PATH": "/usr/bin:/bin"},
     )
     return json.loads(result.stdout or "{}")
 
@@ -85,7 +88,7 @@ def test_stop_hook_active_fails_open(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         check=True,
-        env={"GATE_LOG_DIR": str(tmp_path), "PATH": "/usr/bin:/bin"},
+        env={"HOOK_STATE_DIR": str(tmp_path), "GATE_LOG_DIR": str(tmp_path), "PATH": "/usr/bin:/bin"},
     )
     assert json.loads(result.stdout or "{}") == {}
 
@@ -110,7 +113,7 @@ def _gate(tmp_path: Path, payload: dict, entries: list[dict], *args: str) -> dic
         capture_output=True,
         text=True,
         check=True,
-        env={"GATE_LOG_DIR": str(tmp_path), "PATH": "/usr/bin:/bin"},
+        env={"HOOK_STATE_DIR": str(tmp_path), "GATE_LOG_DIR": str(tmp_path), "PATH": "/usr/bin:/bin"},
     )
     return json.loads(result.stdout or "{}")
 
@@ -155,3 +158,89 @@ def test_agent_outside_the_gated_list_is_allowed(tmp_path: Path) -> None:
 def test_gated_agent_name_matches_in_any_spelling(tmp_path: Path) -> None:
     payload = _subagent_stop(agent_type="Coder_Planner", last_assistant_message="done")
     assert _gate(tmp_path, payload, [], "--agents=coder-planner").get("decision") == "block"
+
+
+# ── Dedupe and confidence gate ─────────────────────────────────────────────
+
+
+def _footer(confidence: int) -> str:
+    return (
+        "## VERIFICA\n"
+        f"- confidenza: {confidence}\n"
+        "- evidenza: pytest\n"
+        "- non_verificato: nulla\n"
+        "- escalation_consigliata: no"
+    )
+
+
+def _audit_lines(tmp_path: Path) -> int:
+    log = tmp_path / "gate_events.jsonl"
+    if not log.is_file():
+        return 0
+    return len([line for line in log.read_text(encoding="utf-8").splitlines() if line.strip()])
+
+
+def test_duplicate_stop_writes_one_audit_line(tmp_path: Path) -> None:
+    """The same answer is evaluated one time only; the repeat is a no-op."""
+    payload = _subagent_stop(session_id="s1", last_assistant_message="A" * 900 + "\n\n" + _footer(90))
+    entries = [_tagged("A" * 900 + "\n\n" + _footer(90), "a1")]
+    assert _gate(tmp_path, payload, entries) == {}
+    assert _gate(tmp_path, payload, entries) == {}
+    assert _audit_lines(tmp_path) == 1
+
+
+def test_low_confidence_blocks_one_time(tmp_path: Path) -> None:
+    """Confidenza below 60 asks for one corrected answer, then passes."""
+    low = "A" * 900 + "\n\n" + _footer(58)
+    first = _gate(
+        tmp_path,
+        _subagent_stop(session_id="s1", last_assistant_message=low),
+        [_tagged(low, "a1")],
+    )
+    assert first.get("decision") == "block"
+    assert "60" in first.get("reason", "")
+
+    second_text = "B" * 900 + "\n\n" + _footer(58)
+    second = _gate(
+        tmp_path,
+        _subagent_stop(session_id="s1", last_assistant_message=second_text),
+        [_tagged(second_text, "a1")],
+    )
+    assert second == {}
+
+
+def test_low_confidence_block_carries_the_event_name(tmp_path: Path) -> None:
+    """The block names its event, so the harness reads the hookSpecificOutput."""
+    low = "A" * 900 + "\n\n" + _footer(58)
+    decision = _gate(
+        tmp_path,
+        _subagent_stop(session_id="s1", last_assistant_message=low),
+        [_tagged(low, "a1")],
+    )
+    assert decision.get("decision") == "block"
+    assert (decision.get("hookSpecificOutput") or {}).get("hookEventName") == "SubagentStop"
+
+
+def test_high_confidence_is_allowed_and_logged(tmp_path: Path) -> None:
+    """Confidenza 90 passes and writes the ok case."""
+    text = "A" * 900 + "\n\n" + _footer(90)
+    assert _gate(tmp_path, _subagent_stop(session_id="s1", last_assistant_message=text), [_tagged(text, "a1")]) == {}
+    log = (tmp_path / "gate_events.jsonl").read_text(encoding="utf-8")
+    assert '"case": "ok"' in log
+
+
+def test_low_confidence_counter_expires_after_ttl(tmp_path: Path) -> None:
+    """An old counter is unused, so a later low-confidence answer blocks again."""
+    low = "A" * 900 + "\n\n" + _footer(58)
+    first = _gate(tmp_path, _subagent_stop(session_id="s1", last_assistant_message=low), [_tagged(low, "a1")])
+    assert first.get("decision") == "block"
+
+    counter = tmp_path / "verifica_conf" / "s1__trade"
+    assert counter.is_file()
+    old = time.time() - LOW_CONFIDENCE_TTL_SECONDS - 60
+    os.utime(counter, (old, old))
+
+    later = "B" * 900 + "\n\n" + _footer(58)
+    second = _gate(tmp_path, _subagent_stop(session_id="s1", last_assistant_message=later), [_tagged(later, "a1")])
+    assert second.get("decision") == "block"
+    assert "60" in second.get("reason", "")

@@ -12,8 +12,13 @@ the VS Code-native equivalents:
     command/<name>.md                 <skills>/<name>/SKILL.md   (generated, slash-only)
     config/AGENTS.md                  copilot-instructions.md    (generated)
     config/opencode.json → mcp        ~/.copilot/mcp-config.json or .mcp.json
+    legacy .vscode/mcp.json and VS Code user mcp.json → migrated to those files
     plugins/verifica-gate             <hooks>/verifica-gate.json (SubagentStop)
     plugins/graphify                  <hooks>/graphify-reminder.json (SessionStart)
+    —                                 <hooks>/agent-bootstrap.json (SubagentStart)
+    —                                 <hooks>/handoff-digest.json (PostToolUse)
+    —                                 <hooks>/routing-guard.json (UserPromptSubmit, PreToolUse)
+    —                                 <hooks>/.manifest.json (sha256 of every hook file)
 
 Usage:
     python3 install-vscode.py --target user            # recommended: all workspaces
@@ -34,6 +39,8 @@ Files that this script did not generate are never overwritten without
 from __future__ import annotations
 
 import argparse
+import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -123,6 +130,7 @@ class Options:
     verify: bool = False
     expose_subagents: bool = True
     mcp_format: str = "portable"
+    migrate_mcp: bool = True
     actions: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     backup_root: Path | None = None
@@ -646,6 +654,8 @@ def build_agent(
     skills_dir: str,
     available: list[str],
     expose_subagents: bool = True,
+    hooks_root: Path | None = None,
+    enable_hooks: bool = True,
 ) -> str | None:
     """Convert one opencode agent file to VS Code `.agent.md` content."""
     try:
@@ -708,6 +718,13 @@ def build_agent(
         lines.append(f"agents: {json.dumps(subagents, ensure_ascii=False)}")
         hint = "Describe the task; the router delegates to " + ", ".join(subagents) + "."
         lines.append(f"argument-hint: {json.dumps(hint, ensure_ascii=False)}")
+    if enable_hooks and hooks_root is not None and name in {"trade", "coder"}:
+        command = f'{hook_python()} "{hooks_root / "agent_guard.py"}" --agent={name}'
+        lines.append("hooks:")
+        lines.append("  PreToolUse:")
+        lines.append("    - type: command")
+        lines.append(f"      command: {json.dumps(command, ensure_ascii=False)}")
+        lines.append("      timeout: 10")
     lines.append("---")
     lines.append("")
 
@@ -741,9 +758,18 @@ def subagent_names() -> list[str]:
 def install_agents(agents_root: Path, skills_dir: str, options: Options) -> None:
     """Generate VS Code custom agents from the opencode agent files."""
     available = agent_names()
+    hooks_root = agents_root.parent / "hooks"
     for source in sorted(AGENTS_SRC.glob("*.md")):
         name = agent_name_for(source.stem)
-        content = build_agent(source, name, skills_dir, available, options.expose_subagents)
+        content = build_agent(
+            source,
+            name,
+            skills_dir,
+            available,
+            options.expose_subagents,
+            hooks_root=hooks_root,
+            enable_hooks=not options.no_hooks,
+        )
         if content is None:
             options.log(f"SKIP agent: {source.name} (missing description)")
             continue
@@ -985,14 +1011,25 @@ def server_runtime_path(server: dict) -> Path | None:
 
 
 def rea_checkout() -> Path:
-    """Return the rea checkout that config/bin/rea-mcp.sh serves (the same rules as the script)."""
+    """Return the rea checkout that config/bin/rea-mcp.sh serves.
+
+    `REA_REPO` wins. Then the script falls back to the folder `rea` next to the
+    repository, found through the anchor link, and then to
+    `~/.local/share/opencode/rea`. The installer also tests the sibling folder
+    of this clone, because the anchor link can be missing while the checkout
+    is present.
+    """
     configured = os.environ.get("REA_REPO")
     if configured:
         return Path(configured).expanduser()
+    candidates: list[Path] = []
     anchor = Path.home() / ".config" / "opencode" / "opencode-skills"
     if anchor.exists():
-        return anchor.resolve().parent / "rea"
-    return Path.home() / ".local" / "share" / "opencode" / "rea"
+        candidates.append(anchor.resolve().parent / "rea")
+    candidates.append(REPO_ROOT.parent / "rea")
+    candidates.append(Path.home() / ".local" / "share" / "opencode" / "rea")
+    existing = next((path for path in candidates if path.is_dir()), None)
+    return existing if existing is not None else candidates[-1]
 
 
 def runtime_requirements(name: str, server: dict) -> list[Path]:
@@ -1064,25 +1101,131 @@ def mcp_plan() -> McpPlan:
     return plan
 
 
+VSCODE_USER_PRODUCTS = ("Code", "Code - Insiders", "Code - OSS", "VSCodium")
+MCP_SERVER_KEYS = ("servers", "mcpServers")
+
+
+def vscode_user_mcp_files() -> list[Path]:
+    """Return the VS Code user MCP files: stable, Insiders, OSS, server, and profiles."""
+    override = os.environ.get("VSCODE_USER_DIR")
+    if override:
+        user_dirs = [Path(override).expanduser()]
+    else:
+        config_home = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+        user_dirs = [config_home / product / "User" for product in VSCODE_USER_PRODUCTS]
+        user_dirs.append(Path.home() / ".vscode-server" / "data" / "User")
+    files: list[Path] = []
+    for user_dir in user_dirs:
+        candidates = [user_dir / "mcp.json"]
+        profiles = user_dir / "profiles"
+        if profiles.is_dir():
+            candidates.extend(sorted(profiles.glob("*/mcp.json")))
+        files.extend(path for path in candidates if path.is_file())
+    return files
+
+
+def migrate_mcp_servers(
+    sources: Iterable[Path],
+    destination: Path,
+    destination_key: str,
+    plan: McpPlan,
+    options: Options,
+) -> None:
+    """Remove the workflow-managed servers from legacy VS Code MCP files.
+
+    VS Code asks the user to move `.vscode/mcp.json` servers to the workspace
+    root `.mcp.json` and user servers to `mcp-config.json` in the Copilot home.
+    This function performs that move for the servers of config/opencode.json:
+    every managed name leaves the legacy file. The destination entry stays as
+    `install_mcp` wrote it. A managed server that the destination does not hold
+    is removed too, because the installer owns that name and the plan explains
+    why the server is not configured. Entries of the user stay unchanged.
+    """
+    if not options.migrate_mcp:
+        return
+    managed = {**plan.disabled, **plan.missing, **plan.servers}
+    if not managed:
+        return
+    destination_servers: dict = {}
+    if destination.is_file():
+        try:
+            target = load_json_file(destination)
+        except Exception as exc:
+            options.warn(
+                f"mcp migration: cannot parse {destination} ({exc}); legacy files are kept"
+            )
+            return
+        current = target.get(destination_key)
+        if isinstance(current, dict):
+            destination_servers = current
+    left_out = plan.left_out()
+    for source in sources:
+        if not source.is_file() or source.resolve() == destination.resolve():
+            continue
+        try:
+            data = load_json_file(source)
+        except Exception as exc:
+            options.warn(f"mcp migration: cannot parse {source} ({exc}); kept")
+            continue
+        changed = False
+        for key in MCP_SERVER_KEYS:
+            entries = data.get(key)
+            if not isinstance(entries, dict):
+                continue
+            for name in sorted(set(entries) & set(managed)):
+                del entries[name]
+                changed = True
+                if name in destination_servers or name in plan.servers:
+                    options.log(f"MIGRATE mcp server {name}: {source} -> {destination}")
+                else:
+                    reason = left_out.get(name, "not configured by install-vscode.py")
+                    options.log(f"REMOVE legacy mcp server {name} from {source} ({reason})")
+            if not entries:
+                del data[key]
+        if changed:
+            write_json(source, data, options, f"mcp migration: {source}", owned=True)
+
+
+def migrate_workspace_mcp(workspace: Path, options: Options, plan: McpPlan) -> None:
+    """Move the deprecated `.vscode/mcp.json` servers to the root `.mcp.json`.
+
+    The user target also calls this function, so a workspace `.mcp.json` that
+    already exists keeps its managed servers in sync with
+    config/opencode.json. A workspace without an MCP file is not touched.
+    """
+    if not options.migrate_mcp or options.mcp_format == "vscode":
+        return
+    destination = workspace / ".mcp.json"
+    legacy = workspace / ".vscode" / "mcp.json"
+    if destination.is_file():
+        install_mcp(destination, "mcpServers", options, plan)
+    elif plan.servers and legacy.is_file():
+        install_mcp(destination, "mcpServers", options, plan)
+    if legacy.is_file():
+        migrate_mcp_servers([legacy], destination, "mcpServers", plan, options)
+
+
 def install_mcp_workspace(workspace: Path, options: Options) -> None:
-    """Write MCP servers in the requested VS Code format(s)."""
+    """Write MCP servers in the requested VS Code format(s), then migrate the legacy file."""
     if options.no_mcp:
         options.log("SKIP mcp: disabled by --no-mcp")
         return
+    plan = mcp_plan()
     if options.mcp_format in ("vscode", "both"):
-        install_mcp(workspace / ".vscode" / "mcp.json", "servers", options)
+        install_mcp(workspace / ".vscode" / "mcp.json", "servers", options, plan)
     if options.mcp_format in ("portable", "both"):
-        install_mcp(workspace / ".mcp.json", "mcpServers", options)
+        install_mcp(workspace / ".mcp.json", "mcpServers", options, plan)
+    migrate_workspace_mcp(workspace, options, plan)
 
 
-def install_mcp(path: Path, key: str, options: Options) -> None:
+def install_mcp(path: Path, key: str, options: Options, plan: McpPlan | None = None) -> None:
     """Write or merge MCP server definitions.
 
     The servers of config/opencode.json are managed entries and follow that
     file and this machine: a disabled server, or a server without its runtime,
     is removed. Other servers in the target file stay unchanged.
     """
-    plan = mcp_plan()
+    plan = plan or mcp_plan()
     for name, reason in sorted(plan.disabled.items()):
         options.log(f"SKIP mcp {name}: {reason}")
     for name, reason in sorted(plan.missing.items()):
@@ -1112,7 +1255,14 @@ def install_mcp(path: Path, key: str, options: Options) -> None:
     write_json(path, existing, options, "mcp", owned=True)
 
 
-HOOK_SCRIPTS = ("verifica_gate.py", "graphify_reminder.py")
+HOOK_SCRIPTS = (
+    "verifica_gate.py",
+    "graphify_reminder.py",
+    "agent_bootstrap.py",
+    "handoff_digest.py",
+    "routing_guard.py",
+    "agent_guard.py",
+)
 
 # Text that files of older installer versions contain (they have no marker).
 LEGACY_SIGNATURES = (
@@ -1171,6 +1321,9 @@ def hook_configs(hooks_root: Path, cwd: Path) -> dict[str, dict]:
     agents = ",".join(subagent_names())
     gate = f'{python} "{hooks_root / "verifica_gate.py"}" --agents={agents}'
     graphify = f'{python} "{hooks_root / "graphify_reminder.py"}"'
+    bootstrap = f'{python} "{hooks_root / "agent_bootstrap.py"}" --agents={agents} --repo={REPO_ROOT}'
+    digest = f'{python} "{hooks_root / "handoff_digest.py"}"'
+    routing = f'{python} "{hooks_root / "routing_guard.py"}"'
     return {
         "verifica-gate.json": {
             "version": 1,
@@ -1180,7 +1333,52 @@ def hook_configs(hooks_root: Path, cwd: Path) -> dict[str, dict]:
             "version": 1,
             "hooks": {"SessionStart": [{"type": "command", "command": graphify, "cwd": str(cwd), "timeout": 10}]},
         },
+        "agent-bootstrap.json": {
+            "version": 1,
+            "hooks": {
+                "SubagentStart": [
+                    {"type": "command", "command": bootstrap, "cwd": str(cwd), "timeout": 10}
+                ]
+            },
+        },
+        "handoff-digest.json": {
+            "version": 1,
+            "hooks": {
+                "PostToolUse": [{"type": "command", "command": digest, "cwd": str(cwd), "timeout": 10}]
+            },
+        },
+        "routing-guard.json": {
+            "version": 1,
+            "hooks": {
+                "UserPromptSubmit": [
+                    {
+                        "type": "command",
+                        "command": f"{routing} --event=prompt",
+                        "cwd": str(cwd),
+                        "timeout": 10,
+                    }
+                ],
+                "PreToolUse": [
+                    {
+                        "type": "command",
+                        "command": f"{routing} --event=tool",
+                        "cwd": str(cwd),
+                        "timeout": 10,
+                    }
+                ],
+            },
+        },
     }
+
+
+def build_hook_manifest(_hooks_root: Path) -> dict:
+    """Return the deterministic manifest of the installed hook sources."""
+    hooks: dict[str, str] = {}
+    for filename in HOOK_SCRIPTS:
+        source = VSCODE_SRC / "hooks" / filename
+        if source.is_file():
+            hooks[filename] = hashlib.sha256(source.read_bytes()).hexdigest()
+    return {"version": 1, "repo": str(REPO_ROOT), "hooks": hooks}
 
 
 def hook_config_owned(path: Path) -> bool:
@@ -1217,6 +1415,8 @@ def install_hooks(hooks_root: Path, cwd: Path, options: Options) -> None:
         path = hooks_root / filename
         owned = hook_config_owned(path) if path.exists() else True
         write_json(path, data, options, "hook config", owned=owned)
+
+    write_json(hooks_root / ".manifest.json", build_hook_manifest(hooks_root), options, "hook manifest", owned=True)
 
 
 def workspace_replacements(workspace: Path, options: Options) -> dict[str, str]:
@@ -1270,6 +1470,17 @@ def install_python_instructions(path: Path, replacements: dict[str, str], option
     write_text(path, content, options, "python instructions", owned)
 
 
+def install_browser_instructions(path: Path, replacements: dict[str, str], options: Options) -> None:
+    """Write the file-scoped browser instructions."""
+    template = VSCODE_SRC / "instructions" / "browser.instructions.md"
+    if not template.is_file():
+        options.warn(f"browser instructions template missing: {template}")
+        return
+    content = render_template(template, replacements)
+    owned = owned_for_update(path, content, options)
+    write_text(path, content, options, "browser instructions", owned)
+
+
 def user_prompt_folders() -> list[Path]:
     """Return the VS Code profile prompt folders that older versions wrote to."""
     home = Path.home()
@@ -1278,6 +1489,30 @@ def user_prompt_folders() -> list[Path]:
     if configured:
         folders.insert(0, Path(configured).expanduser())
     return folders
+
+
+def copilot_layer_link(workspace: Path) -> Path | None:
+    """Return a `.github` entry that is a link into ~/.copilot.
+
+    VS Code reads `~/.copilot` natively, so such a link loads every
+    customization two times. The installer never writes through it: a
+    workspace write would land in the user layer.
+    """
+    copilot = (Path.home() / ".copilot").resolve()
+    github = workspace / ".github"
+    entries = [github] if github.is_symlink() else [
+        github / name for name in ("agents", "skills", "hooks", "instructions", "copilot-instructions.md")
+    ]
+    for entry in entries:
+        try:
+            if not entry.is_symlink():
+                continue
+            target = entry.resolve()
+        except OSError:
+            continue
+        if target == copilot or copilot in target.parents:
+            return entry
+    return None
 
 
 def install_workspace(options: Options) -> None:
@@ -1289,6 +1524,13 @@ def install_workspace(options: Options) -> None:
         raise SystemExit(f"workspace does not exist: {workspace}")
 
     print(f"\nWorkspace target: {workspace}")
+    linked = copilot_layer_link(workspace)
+    if linked is not None:
+        options.warn(
+            f"{linked} links into ~/.copilot: VS Code loads the user layer two times, so the "
+            f"workspace layer is skipped; remove the link with: rm {linked}"
+        )
+        return
     github = workspace / ".github"
     install_skills(github / "skills", options)
     install_command_skills(github / "skills", options)
@@ -1299,6 +1541,9 @@ def install_workspace(options: Options) -> None:
     install_instructions(github / "copilot-instructions.md", replacements, options)
     install_python_instructions(
         github / "instructions" / "python.instructions.md", replacements, options
+    )
+    install_browser_instructions(
+        github / "instructions" / "browser.instructions.md", replacements, options
     )
 
     install_mcp_workspace(workspace, options)
@@ -1342,28 +1587,6 @@ def user_layer_present() -> bool:
     )
 
 
-def legacy_workspace_links() -> list[Path]:
-    """Return workspace `.github` entries that link into ~/.copilot (old per-item layout).
-
-    Such a link makes the Copilot harness load the user layer a second time.
-    The folders that contain the repository are the usual workspace roots.
-    """
-    copilot = (Path.home() / ".copilot").resolve()
-    found: list[Path] = []
-    for root in {REPO_ROOT.parent, REPO_ROOT.parent.parent}:
-        github = root / ".github"
-        entries = [github] if github.is_symlink() else [
-            github / name for name in ("agents", "skills", "hooks", "instructions", "copilot-instructions.md")
-        ]
-        for entry in entries:
-            try:
-                if entry.is_symlink() and (entry.resolve() == copilot or copilot in entry.resolve().parents):
-                    found.append(entry)
-            except OSError:
-                continue
-    return sorted(found)
-
-
 def install_user(options: Options) -> None:
     """Install the VS Code layer at user scope (~/.copilot)."""
     home = Path.home()
@@ -1381,28 +1604,45 @@ def install_user(options: Options) -> None:
     install_python_instructions(
         copilot / "instructions" / "python.instructions.md", replacements, options
     )
+    install_browser_instructions(
+        copilot / "instructions" / "browser.instructions.md", replacements, options
+    )
 
     if not options.no_mcp:
-        install_mcp(copilot / "mcp-config.json", "mcpServers", options)
+        plan = mcp_plan()
+        destination = copilot / "mcp-config.json"
+        install_mcp(destination, "mcpServers", options, plan)
+        migrate_mcp_servers(vscode_user_mcp_files(), destination, "mcpServers", plan, options)
+        if options.workspace is not None and options.migrate_mcp:
+            workspace = options.workspace.expanduser().resolve()
+            if workspace.is_dir():
+                migrate_workspace_mcp(workspace, options, plan)
     install_hooks(copilot / "hooks", Path.home(), options)
-
-    for link in legacy_workspace_links():
-        options.warn(
-            f"{link} links into ~/.copilot (old per-item layout): the user layer loads two "
-            f"times; remove the link with: rm {link}"
-        )
 
 
 # ── Verification ─────────────────────────────────────────────────────────────
 
 
-def expected_agent_files(skills_dir: str, expose_subagents: bool = True) -> dict[str, str]:
+def expected_agent_files(
+    skills_dir: str,
+    expose_subagents: bool = True,
+    hooks_root: Path | None = None,
+    enable_hooks: bool = True,
+) -> dict[str, str]:
     """Return {filename: content} for the agents that should exist."""
     available = agent_names()
     expected: dict[str, str] = {}
     for source in sorted(AGENTS_SRC.glob("*.md")):
         name = agent_name_for(source.stem)
-        content = build_agent(source, name, skills_dir, available, expose_subagents)
+        content = build_agent(
+            source,
+            name,
+            skills_dir,
+            available,
+            expose_subagents,
+            hooks_root=hooks_root,
+            enable_hooks=enable_hooks,
+        )
         if content is not None:
             expected[f"{name}.agent.md"] = content
     return expected
@@ -1482,9 +1722,15 @@ def verify_skills(root: Path, problems: list[str], notes: list[str]) -> None:
     notes.append(f"skills: {linked}/{len(sources)} linked to opencode-skills")
 
 
-def verify_mcp(path: Path, key: str, problems: list[str], notes: list[str]) -> None:
+def verify_mcp(
+    path: Path,
+    key: str,
+    problems: list[str],
+    notes: list[str],
+    plan: McpPlan | None = None,
+) -> None:
     """Check that the VS Code MCP config mirrors config/opencode.json on this machine."""
-    plan = mcp_plan()
+    plan = plan or mcp_plan()
     for name, reason in sorted(plan.missing.items()):
         notes.append(f"mcp {name}: left out, {reason}")
     notes.extend(plan.warnings)
@@ -1518,33 +1764,91 @@ def verify_mcp(path: Path, key: str, problems: list[str], notes: list[str]) -> N
         notes.append(f"mcp: {len(plan.servers)} servers configured ({', '.join(sorted(plan.servers))})")
 
 
-def verify_mcp_workspace(workspace: Path, problems: list[str], notes: list[str]) -> None:
-    """Check whichever MCP format the workspace actually uses."""
-    candidates = [
-        (workspace / ".vscode" / "mcp.json", "servers", ".vscode/mcp.json"),
-        (workspace / ".mcp.json", "mcpServers", ".mcp.json"),
-    ]
-    present = [item for item in candidates if item[0].is_file()]
-    if not present:
-        if mcp_plan().servers:
-            problems.append(
-                "mcp: no MCP config found (.vscode/mcp.json or .mcp.json); "
-                "run the installer without --no-mcp"
-            )
-        else:
-            notes.append("mcp: no server is ready, so no MCP file is necessary")
+def verify_mcp_workspace(
+    workspace: Path,
+    problems: list[str],
+    notes: list[str],
+    plan: McpPlan | None = None,
+    mcp_format: str = "portable",
+) -> None:
+    """Check the MCP file that the workspace format uses."""
+    plan = plan or mcp_plan()
+    files = {
+        "vscode": (workspace / ".vscode" / "mcp.json", "servers", ".vscode/mcp.json"),
+        "portable": (workspace / ".mcp.json", "mcpServers", ".mcp.json"),
+    }
+    primary, secondary = (
+        (files["vscode"], files["portable"])
+        if mcp_format == "vscode"
+        else (files["portable"], files["vscode"])
+    )
+    if primary[0].is_file():
+        verify_mcp(primary[0], primary[1], problems, notes, plan)
+    elif plan.servers:
+        problems.append(
+            f"mcp: missing {primary[2]}; run the installer without --no-mcp"
+        )
+    else:
+        notes.append("mcp: no server is ready, so no MCP file is necessary")
+    if not secondary[0].is_file():
         return
-    for path, key, label in present:
-        verify_mcp(path, key, problems, notes)
-    if len(present) == 2:
+    if mcp_format == "both":
+        verify_mcp(secondary[0], secondary[1], problems, notes, plan)
+        return
+    try:
+        data = load_json_file(secondary[0])
+    except Exception:
+        data = {}
+    has_entries = any(isinstance(data.get(key), dict) and data[key] for key in MCP_SERVER_KEYS)
+    if has_entries:
         notes.append(
-            "mcp: both .vscode/mcp.json and .mcp.json exist; keep one to avoid "
-            "duplicate servers (rerun with --mcp-format vscode|portable)"
+            f"mcp: {secondary[2]} also exists; {primary[2]} is the file for "
+            f"--mcp-format {mcp_format}"
         )
 
 
-def verify_hooks(root: Path, cwd: Path, problems: list[str], notes: list[str]) -> None:
-    """Check the hook scripts and their configuration."""
+def verify_legacy_mcp(
+    sources: Iterable[Path],
+    plan: McpPlan,
+    problems: list[str],
+    notes: list[str],
+) -> None:
+    """Report the workflow-managed servers that remain in legacy VS Code files."""
+    managed = set(plan.servers) | set(plan.left_out())
+    stale: list[str] = []
+    checked: list[Path] = []
+    for source in sources:
+        if not source.is_file():
+            continue
+        checked.append(source)
+        try:
+            data = load_json_file(source)
+        except Exception as exc:
+            problems.append(f"mcp: cannot parse legacy {source} ({exc})")
+            continue
+        for key in MCP_SERVER_KEYS:
+            entries = data.get(key)
+            if isinstance(entries, dict):
+                stale.extend(f"{name} in {source}" for name in sorted(set(entries) & managed))
+    if stale:
+        problems.append(
+            "mcp: legacy copies remain (" + ", ".join(stale) + "); VS Code asks to migrate "
+            "them; rerun the installer"
+        )
+    elif checked:
+        notes.append(
+            "mcp: no managed server remains in "
+            + ", ".join(str(source) for source in checked)
+        )
+
+
+def verify_hooks(
+    root: Path, cwd: Path, problems: list[str], notes: list[str], options: Options
+) -> None:
+    """Check the hook scripts, their configuration and their manifest."""
+    if options.no_hooks:
+        notes.append("hooks: skipped by --no-hooks")
+        return
     installed = 0
     for filename in HOOK_SCRIPTS:
         source = VSCODE_SRC / "hooks" / filename
@@ -1570,6 +1874,18 @@ def verify_hooks(root: Path, cwd: Path, problems: list[str], notes: list[str]) -
             continue
         if config != expected:
             problems.append(f"hook: out of date {config_path} (rerun the installer)")
+    manifest_path = root / ".manifest.json"
+    expected_manifest = build_hook_manifest(root)
+    if not manifest_path.is_file():
+        problems.append(f"hook: missing manifest {manifest_path}")
+    else:
+        try:
+            installed_manifest = load_json_file(manifest_path)
+        except Exception as exc:
+            problems.append(f"hook: cannot parse {manifest_path} ({exc})")
+        else:
+            if installed_manifest != expected_manifest:
+                problems.append(f"hook: manifest out of date {manifest_path} (rerun the installer)")
     notes.append(f"hooks: {installed}/{len(HOOK_SCRIPTS)} scripts installed")
 
 
@@ -1602,6 +1918,45 @@ def stray_duplicates(workspace: Path) -> list[Path]:
     return found
 
 
+def snapshot_cleaner_module():
+    """Load scripts/vscode-mcp-clean.py, or None when the helper is absent."""
+    path = REPO_ROOT / "scripts" / "vscode-mcp-clean.py"
+    if not path.is_file():
+        return None
+    try:
+        spec = importlib.util.spec_from_file_location("vscode_mcp_clean", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    except (OSError, ImportError, AttributeError):
+        return None
+    return module
+
+
+def stale_snapshot_notes(notes: list[str]) -> None:
+    """Report the VS Code agent-host snapshots that keep a stale extension MCP server.
+
+    VS Code freezes an extension HTTP MCP server (the Pylance one) into
+    `agentPlugins/vscode-synced-customization-agent-host-*/*/.mcp.json`. The
+    frozen port and token stop working after the extension restarts, and the
+    agent host reports a transport failure.
+    """
+    module = snapshot_cleaner_module()
+    if module is None:
+        return
+    names = set(module.DEFAULT_SERVERS)
+    stale = [
+        path
+        for path in module.snapshot_files()
+        if module.remove_stale(path, names, True)
+    ]
+    if not stale:
+        return
+    notes.append(
+        f"mcp: {len(stale)} VS Code agent-host snapshot(s) keep a stale extension server "
+        "(`pylance mcp server`); run scripts/vscode-mcp-clean.py"
+    )
+
+
 def runtime_evidence(notes: list[str]) -> None:
     """Report on-disk proof that the VS Code verifica gate actually executed."""
     gate = Path.home() / ".config" / "opencode" / "stats" / "gate_events.jsonl"
@@ -1630,7 +1985,12 @@ def verify_workspace(options: Options) -> tuple[list[str], list[str]]:
     verify_skills(github / "skills", problems, notes)
     verify_command_skills(github / "skills", problems, notes)
 
-    agents = expected_agent_files(".github/skills", options.expose_subagents)
+    agents = expected_agent_files(
+        ".github/skills",
+        options.expose_subagents,
+        hooks_root=github / "hooks",
+        enable_hooks=not options.no_hooks,
+    )
     for filename, content in agents.items():
         compare_text(github / "agents" / filename, content, "agent", problems)
     notes.append(f"agents: {len(agents)} expected")
@@ -1648,8 +2008,18 @@ def verify_workspace(options: Options) -> tuple[list[str], list[str]]:
         "python instructions",
         problems,
     )
-    verify_mcp_workspace(workspace, problems, notes)
-    verify_hooks(github / "hooks", workspace, problems, notes)
+    compare_text(
+        github / "instructions" / "browser.instructions.md",
+        render_template(VSCODE_SRC / "instructions" / "browser.instructions.md", replacements),
+        "browser instructions",
+        problems,
+    )
+    if not options.no_mcp:
+        plan = mcp_plan()
+        verify_mcp_workspace(workspace, problems, notes, plan, options.mcp_format)
+        if options.migrate_mcp and options.mcp_format != "vscode":
+            verify_legacy_mcp([workspace / ".vscode" / "mcp.json"], plan, problems, notes)
+    verify_hooks(github / "hooks", workspace, problems, notes, options)
 
     settings_path = workspace / ".vscode" / "settings.json"
     if settings_path.is_file():
@@ -1675,6 +2045,12 @@ def verify_workspace(options: Options) -> tuple[list[str], list[str]]:
             "duplicate: ~/.copilot also holds the opencode-skills agents; keep one scope, "
             "or every agent, skill and hook loads two times"
         )
+    linked = copilot_layer_link(workspace)
+    if linked is not None:
+        problems.append(
+            f"duplicate: {linked} links into ~/.copilot, so every customization loads two "
+            f"times; remove it with: rm {linked}"
+        )
 
     strays = stray_duplicates(workspace)
     for stray in strays:
@@ -1698,7 +2074,12 @@ def verify_user(options: Options) -> tuple[list[str], list[str]]:
     verify_skills(copilot / "skills", problems, notes)
     verify_command_skills(copilot / "skills", problems, notes)
 
-    agents = expected_agent_files("~/.copilot/skills", options.expose_subagents)
+    agents = expected_agent_files(
+        "~/.copilot/skills",
+        options.expose_subagents,
+        hooks_root=copilot / "hooks",
+        enable_hooks=not options.no_hooks,
+    )
     for filename, content in agents.items():
         compare_text(copilot / "agents" / filename, content, "agent", problems)
     notes.append(f"agents: {len(agents)} expected")
@@ -1717,10 +2098,17 @@ def verify_user(options: Options) -> tuple[list[str], list[str]]:
         problems,
     )
     if not options.no_mcp:
-        verify_mcp(copilot / "mcp-config.json", "mcpServers", problems, notes)
-    verify_hooks(copilot / "hooks", Path.home(), problems, notes)
-    for link in legacy_workspace_links():
-        notes.append(f"duplicate: {link} links into ~/.copilot; remove it (rm {link})")
+        plan = mcp_plan()
+        verify_mcp(copilot / "mcp-config.json", "mcpServers", problems, notes, plan)
+        if options.migrate_mcp:
+            verify_legacy_mcp(vscode_user_mcp_files(), plan, problems, notes)
+            if options.workspace is not None:
+                workspace = options.workspace.expanduser().resolve()
+                if workspace.is_dir():
+                    verify_legacy_mcp(
+                        [workspace / ".vscode" / "mcp.json"], plan, problems, notes
+                    )
+    verify_hooks(copilot / "hooks", Path.home(), problems, notes, options)
     return problems, notes
 
 
@@ -1743,6 +2131,8 @@ def run_verify(options: Options) -> int:
         problems += found
         notes += found_notes
 
+    if not options.no_mcp:
+        stale_snapshot_notes(notes)
     runtime_evidence(notes)
 
     print("\nChecks:")
@@ -1795,7 +2185,10 @@ def parse_args(argv: list[str] | None = None) -> Options:
         "--workspace",
         type=Path,
         default=os.environ.get("VSCODE_WORKSPACE"),
-        help="Workspace folder for the workspace target (default: $VSCODE_WORKSPACE)",
+        help=(
+            "Workspace folder for the workspace target (default: $VSCODE_WORKSPACE); "
+            "with --target user it is only used to migrate that workspace's legacy MCP file"
+        ),
     )
     parser.add_argument(
         "--force",
@@ -1805,6 +2198,14 @@ def parse_args(argv: list[str] | None = None) -> Options:
     parser.add_argument("--dry-run", action="store_true", help="Print actions without writing")
     parser.add_argument("--no-hooks", action="store_true", help="Skip VS Code hook generation")
     parser.add_argument("--no-mcp", action="store_true", help="Skip MCP server generation")
+    parser.add_argument(
+        "--no-migrate-mcp",
+        action="store_true",
+        help=(
+            "Keep the workflow-managed servers in the legacy VS Code MCP files "
+            "(.vscode/mcp.json and the user mcp.json)"
+        ),
+    )
     parser.add_argument("-v", "--verbose", action="store_true", help="Print every action")
     parser.add_argument(
         "--mcp-format",
@@ -1839,6 +2240,7 @@ def parse_args(argv: list[str] | None = None) -> Options:
         dry_run=args.dry_run,
         no_hooks=args.no_hooks,
         no_mcp=args.no_mcp,
+        migrate_mcp=not args.no_migrate_mcp,
         verbose=args.verbose,
         verify=args.verify,
         expose_subagents=args.expose_subagents,
