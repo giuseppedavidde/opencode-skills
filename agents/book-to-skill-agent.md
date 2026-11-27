@@ -82,7 +82,7 @@ mkdir -p "$SKILLS_HOME/<SLUG>/chapters"
 Trova la struttura capitoli nel full_text.txt (cerca "CHAPTER N" headings).
 Dividi in dispari (Agent A) e pari (Agent B).
 
-**IMPORTANTE**: Lancia 2 task in PARALLELLO usando `subagent_type="explore"` ma nel prompt specifica ESPLICITAMENTE: "Usa deepseek-v4.1-flash per generare i contenuti."
+**IMPORTANTE**: Lancia 2 task in PARALLELLO usando `subagent_type="explore"`. Non indicare un modello nel prompt: il runtime sceglie il modello del subagent. Il subagent eredita le regole di questa sezione.
 
 Sostituisci `$SKILLS_HOME` con il percorso assoluto risolto in Phase 0 prima di inviare i prompt.
 
@@ -100,7 +100,7 @@ Genera: capitoli + glossary.md
 Formato capitolo (800-1200 token): # Chapter N, ## Core Idea, ## Frameworks Introduced, ## Key Concepts, ## Anti-patterns, ## Key Takeaways
 Glossary: ~1500 token, ALFABETICO, tutti i termini CHIAVE dell'INTERO libro.
 
-CRITICAL: Questo task usa il tuo modello (deepseek-v4.1-flash, economico). Non serve un modello più grande per questo lavoro.
+CRITICAL: Non indicare un modello. Il runtime sceglie il modello del subagent.
 
 STILE: scrivi in ASD-STE100. Massimo 20 parole per frase. Voce attiva. Tempi semplici. Un'idea per frase. Un termine per concetto.
 
@@ -120,7 +120,7 @@ Genera: capitoli + patterns.md (~2000 token, When/How/Trade-offs) + cheatsheet.m
 
 NON creare glossary.md (lo fa Agent A).
 
-CRITICAL: Questo task usa il tuo modello (deepseek-v4.1-flash, economico). Non serve un modello più grande per questo lavoro.
+CRITICAL: Non indicare un modello. Il runtime sceglie il modello del subagent.
 
 STILE: scrivi in ASD-STE100. Massimo 20 parole per frase. Voce attiva. Tempi semplici. Un'idea per frase. Un termine per concetto.
 
@@ -138,7 +138,7 @@ Riepiloga: slug, N capitoli, N file, tempo totale.
 
 ## Regole
 1. Usa SEMPRE subagenti in parallelo per la generazione capitoli (mai sequenziale).
-2. deepseek-v4.1-flash è SUFFICIENTE per tutto — non serve un modello più grande per generare capitoli.
+2. Non indicare un modello nei prompt dei subagent: il runtime sceglie il modello.
 3. Se l'utente passa più libri, processali in batch con `--batch` mode.
 4. Slug auto-generato dal nome file: lowercase, solo [a-z0-9-].
 5. Headroom compression sui tool output grandi (>800 char).

@@ -3,14 +3,14 @@
 ## Multi-Agent Architecture
 This OpenCode instance uses automatic model routing to save tokens:
 - **Router (agent router)**: deepseek-v4.1-flash — receives all requests, classifies, delegates
-- **@trade**: gemini-4-argon — trading, options, market analysis. Delega i task di codice e script personalizzati a @coder
+- **@trade**: gemini-4-argon (high reasoning, 1M context) — trading, options, market analysis. Delega i task di codice e script personalizzati a @coder
 - **@coder**: deepseek-v4.1-flash — esecutore; per i task complessi segue il piano atomico di @coder_planner — complex coding, refactoring, multi-file changes
-- **@coder_planner**: gemini-4-argon — definisce la lista di azioni atomiche per @coder (solo per task complessi: ≥2 file o >20 righe)
+- **@coder_planner**: gemini-4-argon (high reasoning, 1M context) — definisce la lista di azioni atomiche per @coder (solo per task complessi: ≥2 file o >20 righe)
 - **@graphify_helper**: deepseek-v4.1-flash — smart graphify orchestrator, builds/updates/queries knowledge graphs
 - **@skill_updater**: deepseek-v4.1-flash — updates skills that depend on -src submodules (graphify, book-to-skill, quant-mind, karpathy)
 - **@explore**: deepseek-v4.1-flash — code search
 - **@vscode_ext**: deepseek-v4.1-flash — builds VS Code extensions, guided by @vscode_ext_planner
-- **@vscode_ext_planner**: glm-5.3 — atomic plan for VS Code extension work
+- **@vscode_ext_planner**: gemini-4-argon (high reasoning, 1M context) — atomic plan for VS Code extension work
 - **@pdf_reader**: deepseek-v4.1-flash — estrazione e analisi di PDF/contratti/fatture/polizze via pdftotext + OCR (fallback tesseract)
 - **@oegk_health**: deepseek-v4.1-flash — copertura ÖGK e costi a carico del paziente per esami del sangue e visite specialistiche in Austria (Pauschbeträge, Wahlarzt 80%, Rezeptgebühr, Selbstbehalt)
 

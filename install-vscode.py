@@ -86,9 +86,7 @@ AGENT_NAMES = {
 }
 
 # VS Code accepts low, medium, high, xhigh, max. The suffix in the opencode
-# model id (e.g. `deepseek-v4.1-flash#low`) wins; then this override; then the
-# default `high`.
-REASONING_EFFORT = {"coder-planner": "max", "vscode-ext-planner": "max"}
+# model id (e.g. `deepseek-v4.1-flash#low`) wins; else the default `high`.
 DEFAULT_REASONING_EFFORT = "high"
 
 # Trading MCP tool names that appear as opencode permission keys.
@@ -321,41 +319,12 @@ def model_for(raw_model: str) -> str | None:
     return model
 
 
-def fallback_model_id(entry: str) -> str:
-    """Map a models.json fallback to a VS Code model id.
-
-    A bare id is an OpenCode Go API id and gets the provider prefix. An entry
-    with a slash or a qualifier, such as `GPT-6 Luna (copilot)`, stays unchanged.
-    """
-    entry = entry.strip()
-    if not entry or "/" in entry or "(" in entry:
-        return entry
-    return f"{provider_prefix()}/{entry}"
-
-
-def models_for(raw_model: str) -> list[str]:
-    """Return the ordered model list: the model of the agent, then its fallbacks.
-
-    The runtime uses the first available model. Without fallbacks, an agent
-    whose provider is unavailable silently inherits the session model.
-    """
-    primary = model_for(raw_model)
-    mapping = load_model_map()
-    bare = strip_quotes(raw_model).split("#", 1)[0].strip().rpartition("/")[2]
-    fallbacks = (mapping.get("fallbacks") or {}).get(bare) or mapping.get("default_fallback") or []
-    models: list[str] = []
-    for item in [primary, *(fallback_model_id(entry) for entry in fallbacks if isinstance(entry, str))]:
-        if isinstance(item, str) and item and item not in models:
-            models.append(item)
-    return models
-
-
-def reasoning_effort_for(name: str, raw_model: str) -> str:
-    """Return the VS Code `reasoning-effort` level for one agent."""
+def reasoning_effort_for(raw_model: str) -> str:
+    """Return the VS Code `reasoning-effort` level: the `#level` suffix, else `high`."""
     _, separator, suffix = strip_quotes(raw_model).partition("#")
     if separator and suffix.strip():
         return suffix.strip()
-    return REASONING_EFFORT.get(name, DEFAULT_REASONING_EFFORT)
+    return DEFAULT_REASONING_EFFORT
 
 
 def skill_directories() -> list[Path]:
@@ -700,13 +669,13 @@ def build_agent(
         body = body.replace(f'subagent_type="{opencode_name}"', f'subagent_type="{copilot_name}"')
 
     mode = strip_quotes(scalars.get("mode", "subagent"))
-    models = models_for(scalars.get("model", ""))
-    reasoning_effort = reasoning_effort_for(name, scalars.get("model", ""))
+    model = model_for(scalars.get("model", ""))
+    reasoning_effort = reasoning_effort_for(scalars.get("model", ""))
     tools = tools_for(permission, name)
 
     lines = ["---", f"description: {json.dumps(description, ensure_ascii=False)}"]
-    if models:
-        lines.append(f"model: {json.dumps(models, ensure_ascii=False)}")
+    if model:
+        lines.append(f"model: {json.dumps(model, ensure_ascii=False)}")
     lines.append(f"reasoning-effort: {reasoning_effort}")
     lines.append(f"tools: {json.dumps(tools, ensure_ascii=False)}")
     invocable = mode == "primary" or expose_subagents

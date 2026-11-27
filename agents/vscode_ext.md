@@ -1,5 +1,5 @@
 ---
-description: VS Code extension builder — implements, tests, and packages VS Code extensions. Uses deepseek-v4.1-flash guided by glm-5.3 atomic planner.
+description: VS Code extension builder — implements, tests, and packages VS Code extensions. Uses deepseek-v4.1-flash guided by the Gemini 4 Argon atomic planner (vscode_ext_planner).
 mode: subagent
 model: opencode-go/deepseek-v4.1-flash
 hidden: false

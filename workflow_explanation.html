@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>opencode-skills — Workflow Explanation</title>
+<style>
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#0b1220;--bg2:#0e1626;--panel:#121b2d;--panel2:#17223a;
+  --line:#233149;--line2:#31456a;--text:#e6edf7;--muted:#a0b0c8;--accent:#60a5fa;
+  --ok:#34d399;--warn:#fbbf24;--bad:#fb7185;
+  --c-router:#60a5fa;--c-trade:#fbbf24;--c-coder:#4ade80;--c-graph:#a78bfa;
+  --c-doc:#2dd4bf;--c-health:#fb7185;--c-maint:#a8b8d0;--c-book:#c4b5fd;
+  --c-vscode:#38bdf8;--c-plugin:#93c5fd;--c-user:#cbd5e1;--c-skill:#5eead4;
+  --r:10px;
+}
+html[data-theme="light"]{
+  --bg:#f6f8fb;--bg2:#eef2f8;--panel:#ffffff;--panel2:#f1f5fb;
+  --line:#d9e1ec;--line2:#bcc9da;--text:#0e1726;--muted:#4a5a70;--accent:#1d4ed8;
+  --ok:#15803d;--warn:#b45309;--bad:#be123c;
+  --c-router:#1d4ed8;--c-trade:#b45309;--c-coder:#15803d;--c-graph:#6d28d9;
+  --c-doc:#0f766e;--c-health:#be123c;--c-maint:#475569;--c-book:#5b21b6;
+  --c-vscode:#0369a1;--c-plugin:#4338ca;--c-user:#334155;--c-skill:#115e59;
+}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;font-size:16px;line-height:1.6}
+[hidden]{display:none!important}
+a{color:var(--accent)}
+h2{font-size:1.55rem;line-height:1.25;margin:0 0 .5rem}
+h3{font-size:1.05rem;margin:1.6rem 0 .5rem}
+h4{font-size:.95rem;margin:0 0 .35rem}
+p{margin:.5rem 0}
+code,.mono,.pill,.counter,.decision{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
+code{background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:.85em;overflow-wrap:anywhere}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.plain,.tight{margin:.4rem 0;padding-left:1.2rem}
+.tight li{margin:.15rem 0}
+.hint{color:var(--muted);font-size:.92rem}
+
+/* top bar */
+.topbar{position:fixed;inset:0 0 auto 0;height:58px;display:flex;align-items:center;gap:10px;padding:0 14px;background:var(--bg2);border-bottom:1px solid var(--line);z-index:60}
+.brand{display:flex;flex-direction:column;line-height:1.15;min-width:0}
+.brand b{font-size:.95rem;white-space:nowrap}
+.brand span{font-size:.72rem;color:var(--muted);white-space:nowrap}
+.filter-wrap{margin-left:auto;display:flex;align-items:center;gap:8px;flex:1;max-width:420px}
+#filter{width:100%;min-width:0;background:var(--panel);border:1px solid var(--line2);color:var(--text);border-radius:8px;padding:8px 10px;font-size:.9rem}
+#filter::placeholder{color:var(--muted)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--accent);color:#08101f;border:1px solid transparent;border-radius:8px;padding:7px 12px;font-size:.86rem;font-weight:600;cursor:pointer;text-decoration:none}
+html[data-theme="light"] .btn:not(.ghost){color:#fff}
+.btn.ghost{background:transparent;color:var(--text);border-color:var(--line2)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.icon-btn{display:inline-flex;align-items:center;justify-content:center;background:var(--panel);border:1px solid var(--line2);color:var(--text);border-radius:8px;width:38px;height:38px;font-size:1rem;cursor:pointer;flex:none}
+#theme-btn{width:auto;min-width:38px;padding:0 12px;font-size:.8rem;font-weight:600;white-space:nowrap}
+@media (max-width:760px){#theme-btn{font-size:.74rem;padding:0 9px}}
+
+/* sidebar */
+.sidebar{position:fixed;top:58px;bottom:0;left:0;width:266px;overflow-y:auto;background:var(--bg2);border-right:1px solid var(--line);padding:14px 10px 44px;z-index:50}
+.sidebar-title{font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);padding:4px 10px 8px}
+#nav-list{list-style:none;margin:0;padding:0}
+#nav-list li{margin:2px 0}
+.navlink{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;color:var(--text);text-decoration:none;font-size:.9rem;border:1px solid transparent}
+.navlink:hover{background:var(--panel2);border-color:var(--line)}
+.navlink .n{flex:none;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font:600 .72rem/1 ui-monospace,monospace;color:var(--muted);border:1px solid var(--line2);border-radius:6px}
+.navlink[aria-current="page"]{background:var(--panel2);border-color:var(--accent)}
+.navlink[aria-current="page"] .n{color:var(--accent);border-color:var(--accent)}
+.navlink[aria-current="page"] .t{font-weight:600}
+.scrim{position:fixed;inset:58px 0 0 0;background:rgba(2,6,16,.6);z-index:45}
+
+/* main */
+.main{margin-left:266px;padding:84px 26px 90px}
+.view{display:none;max-width:1120px}
+.view.active{display:block}
+.lead{font-size:1.02rem;color:var(--muted);max-width:78ch}
+.src{margin-top:2.2rem;padding-top:.7rem;border-top:1px dashed var(--line);color:var(--muted);font-size:.76rem;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.navfoot{display:flex;justify-content:space-between;gap:10px;margin-top:1.4rem}
+.navfoot .btn{max-width:48%;text-align:left}
+.grid{display:grid;gap:14px;margin:1rem 0}
+.cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px}
+.card h3{margin-top:0}
+.card p:last-child{margin-bottom:0}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--panel)}
+.table{width:100%;border-collapse:collapse;font-size:.86rem;min-width:560px}
+.table th,.table td{text-align:left;vertical-align:top;padding:9px 11px;border-bottom:1px solid var(--line)}
+.table thead th{background:var(--panel2);font-size:.76rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.table tbody tr:last-child td{border-bottom:0}
+#roster .table td:first-child,#roster .table th:first-child{white-space:nowrap}
+#roster .table td:nth-child(3),#roster .table th:nth-child(3){white-space:nowrap}
+
+/* ladder */
+.ladder{list-style:none;padding:0;margin:1rem 0}
+.ladder li{display:flex;gap:12px;padding:12px 14px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);margin-bottom:8px}
+.ladder li>div{min-width:0}
+.ladder p{margin:.25rem 0 0;font-size:.87rem;color:var(--muted)}
+.pnum{flex:none;display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:26px;padding:0 6px;border-radius:6px;font:700 .78rem/1 ui-monospace,monospace;color:var(--ac,var(--c-user));border:1px solid var(--ac,var(--c-user))}
+.t-pdf{--ac:var(--c-doc)}.t-health{--ac:var(--c-health)}.t-trade{--ac:var(--c-trade)}.t-graph{--ac:var(--c-graph)}
+.t-code{--ac:var(--c-coder)}.t-vsc{--ac:var(--c-vscode)}.t-maint{--ac:var(--c-maint)}.t-book{--ac:var(--c-book)}.t-plain{--ac:var(--c-user)}
+
+/* callouts */
+.note{border-left:3px solid var(--accent);background:var(--panel);padding:11px 14px;border-radius:0 8px 8px 0;margin:1rem 0}
+.note strong{display:block;margin-bottom:.15rem}
+.note p{margin:.15rem 0;font-size:.9rem}
+
+/* stepper */
+.stepper{list-style:none;margin:1rem 0;padding:0 0 0 8px;border-left:2px solid var(--line2)}
+.stepper li{position:relative;padding:0 0 16px 22px}
+.stepper li::before{content:"";position:absolute;left:-7px;top:6px;width:12px;height:12px;border-radius:50%;background:var(--bg);border:2px solid var(--accent)}
+.stepper b{display:block;font-size:.95rem}
+.stepper p{margin:.15rem 0 0;font-size:.86rem;color:var(--muted)}
+
+/* badges */
+.badge{display:inline-block;align-self:flex-start;font:600 .68rem/1.5 ui-monospace,monospace;text-transform:uppercase;letter-spacing:.05em;padding:2px 8px;border-radius:999px;color:var(--ac,var(--text));border:1px solid var(--ac,var(--line2));white-space:nowrap}
+.a-router{--ac:var(--c-router)}.a-trade{--ac:var(--c-trade)}.a-coder{--ac:var(--c-coder)}
+.a-graph{--ac:var(--c-graph)}.a-doc{--ac:var(--c-doc)}.a-health{--ac:var(--c-health)}
+.a-maint{--ac:var(--c-maint)}.a-book{--ac:var(--c-book)}.a-vscode{--ac:var(--c-vscode)}
+.a-plugin{--ac:var(--c-plugin)}.a-user{--ac:var(--c-user)}.a-skill{--ac:var(--c-skill)}
+.badge.ok{--ac:var(--ok)}.badge.mid{--ac:var(--warn)}.badge.warn{--ac:#fb923c}.badge.bad{--ac:var(--bad)}
+html[data-theme="light"] .badge.warn{--ac:#c2410c}
+
+/* scenario explorer */
+.sc-shell{display:grid;grid-template-columns:320px minmax(0,1fr);gap:14px;align-items:start;margin-top:1rem}
+.sc-list-col{min-width:0}
+.sc-group{margin:.8rem 0 .45rem;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.sc-card{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;margin-bottom:8px;cursor:pointer;color:var(--text);font:inherit}
+.sc-card:hover{border-color:var(--line2);background:var(--panel2)}
+.sc-card.active{border-color:var(--accent)}
+.sc-card .sc-title{display:block;font-weight:600;font-size:.9rem}
+.sc-card .sc-q{display:block;font-size:.8rem;color:var(--muted);margin-top:2px}
+.sc-card .sc-meta{display:flex;gap:8px;align-items:center;margin-top:6px;font-size:.72rem;color:var(--muted);flex-wrap:wrap}
+.pill{font-size:.68rem;padding:1px 7px;border:1px solid var(--line2);border-radius:999px;color:var(--muted)}
+.nomatch{color:var(--muted);font-size:.88rem}
+.sc-detail{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px;min-height:260px}
+.detail-head .kicker{margin:0;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.detail-head h3{margin:.2rem 0 .8rem}
+.bubble{margin:0 0 10px;padding:11px 14px;background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--c-user);border-radius:0 10px 10px 0;font-size:.95rem}
+.bubble .who{display:block;font:600 .68rem/1.6 ui-monospace,monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 12px}
+.chips-label{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-right:2px}
+.chip{display:inline-flex;align-items:baseline;gap:6px;border:1px solid var(--line2);border-radius:999px;padding:2px 9px;font-size:.76rem;background:var(--panel2)}
+.chip b{font-family:ui-monospace,monospace;font-weight:600}
+.chip i{font-style:normal;color:var(--muted);font-size:.7rem}
+.chip.prio{border-color:var(--c-router)}
+.chip.prio b{color:var(--c-router)}
+.pb-controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 14px;padding-bottom:12px;border-bottom:1px dashed var(--line)}
+.counter{font-size:.8rem;color:var(--muted);margin-left:auto}
+.timeline{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--line2)}
+.timeline .step{position:relative;display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;padding:0 0 14px 10px;animation:fade .18s ease-out}
+.timeline .step::before{content:"";position:absolute;left:-19px;top:7px;width:11px;height:11px;border-radius:50%;background:var(--bg);border:2px solid var(--ac,var(--line2))}
+.step-body{flex:1 1 260px;min-width:0}
+.step-action{margin:0;font-size:.92rem;font-weight:600}
+.step-detail{margin:.15rem 0 0;font-size:.85rem;color:var(--muted)}
+.decision{margin:.3rem 0 0;font-size:.76rem;color:var(--c-router);border-left:2px solid var(--c-router);padding-left:8px;overflow-wrap:anywhere}
+@keyframes fade{from{transform:translateY(-3px)}to{transform:none}}
+.outcome,.rejected{margin-top:14px;padding:11px 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel2)}
+.outcome{border-left:3px solid var(--ok)}
+.rejected{border-left:3px solid var(--c-trade)}
+.outcome p,.rejected p{margin:.1rem 0;font-size:.88rem}
+.locked{display:none}
+.reveal-hint{margin:14px 0 0;padding:10px 14px;border:1px dashed var(--line);border-radius:8px;color:var(--muted);font-size:.85rem}
+
+@media (max-width:1000px){.cols-3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){
+  body{font-size:15px}
+  .sidebar{transform:translateX(-100%);transition:transform .2s ease;width:280px}
+  .sidebar.open{transform:none}
+  .main{margin-left:0;padding:76px 14px 70px}
+  .cols-2,.cols-3{grid-template-columns:1fr}
+  .sc-shell{grid-template-columns:1fr}
+  .brand span{display:none}
+  .navfoot{flex-direction:column}
+  .navfoot .btn{max-width:100%}
+  .table{min-width:0;font-size:.8rem}
+  .table th,.table td{padding:7px 7px}
+  #roster .table th:nth-child(4),#roster .table td:nth-child(4){display:none}
+  .view{overflow-x:auto}
+  #roster .table thead{display:none}
+  #roster .table,#roster .table tbody,#roster .table tr,#roster .table td{display:block;width:auto}
+  #roster .table tr{padding:10px 4px;border-bottom:1px solid var(--line)}
+  #roster .table tr:last-child{border-bottom:0}
+  #roster .table td{border:0;padding:2px 0;white-space:normal}
+  #roster .table td:first-child{display:inline-block;margin-right:8px}
+  #roster .table td:nth-child(2){display:inline-block;color:var(--muted);font-size:.78rem}
+  #roster .table td:nth-child(3){margin:4px 0;font-size:.76rem;overflow-wrap:anywhere}
+  #roster .table td:nth-child(5){margin-top:4px}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+@media print{
+  .topbar,.sidebar,.navfoot,.scrim,.pb-controls,.sc-list-col{display:none!important}
+  body{background:#fff;color:#000;font-size:11pt}
+  .main{margin:0;padding:0}
+  .view{display:block!important;max-width:none;page-break-after:always}
+  .card,.table,.sc-detail,.note,.ladder li{border-color:#999;background:#fff;color:#000}
+  .src,.hint,.step-detail,.lead{color:#333}
+  a{color:#000;text-decoration:underline}
+  .badge,.pnum{color:#000;border-color:#000}
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <button class="icon-btn" id="menu-btn" type="button" aria-label="Open section menu" aria-controls="sidebar" aria-expanded="false">☰</button>
+  <div class="brand"><b>opencode-skills</b><span>workflow explanation</span></div>
+  <div class="filter-wrap">
+    <label for="filter" class="hint" style="position:absolute;left:-9999px">Filter sections and scenarios</label>
+    <input id="filter" type="search" placeholder="Filter sections and scenarios…  (/)" autocomplete="off" aria-label="Filter sections and scenarios">
+  </div>
+  <button class="icon-btn" id="theme-btn" type="button" aria-label="Switch theme" aria-pressed="false">Light theme</button>
+</header>
+
+<div class="scrim" id="scrim" hidden></div>
+
+<nav class="sidebar" id="sidebar" aria-label="Sections">
+  <div class="sidebar-title">Sections</div>
+  <ul id="nav-list"></ul>
+</nav>
+
+<main class="main" id="main">
+<noscript><div class="note"><strong>JavaScript is off</strong><p>Navigation and the scenario explorer need JavaScript. Static content is still readable.</p></div></noscript>
+
+<section class="view active" id="overview" data-title="Overview">
+  <h2>Overview</h2>
+  <p class="lead">One router reads every request. It classifies the request and delegates it to one specialist. The specialist returns an answer with a verification block. A gate checks that block before the router summarizes.</p>
+  <div class="grid cols-3">
+    <article class="card">
+      <h3>1 · Classify</h3>
+      <p>Router model: <code>opencode-go/deepseek-v4.1-flash#low</code>. It reads, decides and delegates. The <code>edit</code> and <code>write</code> tools are denied.</p>
+    </article>
+    <article class="card">
+      <h3>2 · Delegate</h3>
+      <p>10 specialist subagents, one built-in <code>explore</code> agent and the primary router. Each specialist has its own model and step budget.</p>
+    </article>
+    <article class="card">
+      <h3>3 · Verify</h3>
+      <p><code>verifica-gate</code> requires a <code>## VERIFICA</code> block. Below 85, the router adds a caveat, retries once, or asks you.</p>
+    </article>
+  </div>
+  <h3>Three surfaces</h3>
+  <ul class="plain">
+    <li><strong>opencode</strong> is the source of truth: <code>agents/</code>, <code>skills/</code>, <code>command/</code>, <code>plugins/</code>, <code>config/</code>.</li>
+    <li><strong>VS Code</strong> is generated by <code>install-vscode.py</code> into <code>~/.copilot/</code>.</li>
+    <li><strong>install.sh</strong> links the opencode layer and runs both installers. It is idempotent.</li>
+  </ul>
+  <h3>Suggested reading order</h3>
+  <ol class="plain">
+    <li><a href="#architecture">Architecture &amp; Layers</a> — where the files live.</li>
+    <li><a href="#routing">Routing Decision</a> — the priority ladder, rungs 0 to 9 plus 4b.</li>
+    <li><a href="#scenarios">Scenario Explorer</a> — start here when you only want the behavior.</li>
+  </ol>
+  <p class="src">README.md · config/AGENTS.md · agents/router.md</p>
+</section>
+
+<section class="view" id="architecture" data-title="Architecture &amp; Layers">
+  <h2>Architecture &amp; Layers</h2>
+  <p class="lead">opencode is the single source of truth. The VS Code layer is generated from it. Never edit the generated layer.</p>
+  <div class="grid cols-2">
+    <article class="card">
+      <h3>opencode layer</h3>
+      <p><code>~/.config/opencode/</code> receives symlinks:</p>
+      <ul class="plain tight">
+        <li><code>skills/</code>, <code>agents/*</code>, <code>command/*</code></li>
+        <li><code>AGENTS.md</code>, <code>opencode.json</code></li>
+        <li><code>bin/*</code>, <code>scripts/*</code>, <code>routing-eval/</code></li>
+        <li>anchor: <code>opencode-skills</code> → repository</li>
+      </ul>
+    </article>
+    <article class="card">
+      <h3>VS Code layer (user scope)</h3>
+      <p><code>~/.copilot/</code> is generated by <code>install-vscode.py</code>.</p>
+      <p class="hint">Use ONE scope only (user OR workspace). Two scopes load everything twice.</p>
+    </article>
+  </div>
+  <h3>Mapping table</h3>
+  <div class="tw">
+    <table class="table">
+      <thead><tr><th>Source in the repo</th><th>Target</th><th>Kind</th></tr></thead>
+      <tbody>
+        <tr><td><code>skills/&lt;name&gt;/SKILL.md</code></td><td><code>~/.copilot/skills/&lt;name&gt;</code></td><td>symlink</td></tr>
+        <tr><td><code>agents/&lt;name&gt;.md</code></td><td><code>~/.copilot/agents/&lt;name&gt;.agent.md</code></td><td>converted copy</td></tr>
+        <tr><td><code>command/&lt;name&gt;.md</code></td><td><code>~/.copilot/skills/&lt;name&gt;/SKILL.md</code></td><td>slash-only skill</td></tr>
+        <tr><td><code>config/AGENTS.md</code></td><td><code>copilot-instructions.md</code></td><td>global instructions</td></tr>
+        <tr><td><code>config/opencode.json</code> → <code>mcp</code></td><td><code>mcp-config.json</code></td><td>MCP projection</td></tr>
+        <tr><td><code>plugins/verifica-gate</code></td><td><code>hooks/verifica-gate.json</code></td><td>SubagentStop hook</td></tr>
+        <tr><td><code>plugins/graphify</code></td><td><code>hooks/graphify-reminder.json</code></td><td>SessionStart hook</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note">
+    <strong>Generation rule</strong>
+    <p>Change a file in opencode, then rerun <code>install.sh</code>. The VS Code copy is output, not input.</p>
+  </div>
+  <p class="src">install.sh · install-vscode.py · config/AGENTS.md</p>
+</section>
+
+<section class="view" id="roster" data-title="Agent Roster">
+  <h2>Agent Roster</h2>
+  <p class="lead">Model ids are literal. The <code>#low</code> and <code>#high</code> reasoning suffix is part of the model string.</p>
+  <div class="tw">
+    <table class="table">
+      <thead><tr><th>Agent</th><th>Mode</th><th>Model</th><th>Steps</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td><code>router</code></td><td>primary</td><td><code>opencode-go/deepseek-v4.1-flash#low</code></td><td>—</td><td>Entry point: classify and delegate only. <code>edit</code> and <code>write</code> are denied.</td></tr>
+        <tr><td><code>trade</code></td><td>subagent</td><td><code>opencode-go/gemini-4-argon#high</code></td><td>100</td><td>Stocks, crypto, options, position repair, portfolio risk. Delegates custom scripts to <code>coder</code>.</td></tr>
+        <tr><td><code>coder</code></td><td>subagent</td><td><code>opencode-go/deepseek-v4.1-flash</code></td><td>—</td><td>Implements code. Follows the <code>coder_planner</code> atomic plan for complex tasks.</td></tr>
+        <tr><td><code>coder_planner</code></td><td>subagent</td><td><code>opencode-go/gemini-4-argon#high</code></td><td>15</td><td>Atomic step plan for <code>coder</code>. 1M context.</td></tr>
+        <tr><td><code>graphify_helper</code></td><td>subagent</td><td><code>opencode-go/deepseek-v4.1-flash</code></td><td>50</td><td>Build, update and query knowledge graphs.</td></tr>
+        <tr><td><code>skill_updater</code></td><td>subagent</td><td><code>opencode-go/deepseek-v4.1-flash</code></td><td>15</td><td>Update skills with a <code>-src</code> submodule and verified symlinks.</td></tr>
+        <tr><td><code>vscode_ext</code></td><td>subagent</td><td><code>opencode-go/deepseek-v4.1-flash</code></td><td>100</td><td>Implement, test and package VS Code extensions.</td></tr>
+        <tr><td><code>vscode_ext_planner</code></td><td>subagent</td><td><code>opencode-go/gemini-4-argon#high</code></td><td>20</td><td>Atomic plan for <code>vscode_ext</code>.</td></tr>
+        <tr><td><code>pdf_reader</code></td><td>subagent</td><td><code>opencode-go/deepseek-v4.1-flash</code></td><td>40</td><td>Extract and analyze PDFs, contracts, invoices, policies (pdftotext + OCR).</td></tr>
+        <tr><td><code>oegk_health</code></td><td>subagent</td><td><code>opencode-go/deepseek-v4.1-flash</code></td><td>40</td><td>Austrian ÖGK coverage and patient cost.</td></tr>
+        <tr><td><code>book-to-skill-agent</code></td><td>subagent</td><td><code>opencode-go/deepseek-v4.1-flash</code></td><td>80</td><td>Generate skills from books. Parallel chapter generation.</td></tr>
+        <tr><td><code>explore</code></td><td>built-in</td><td><code>opencode-go/deepseek-v4.1-flash</code></td><td>—</td><td>Code search.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="src">agents/*.md · config/opencode.json</p>
+</section>
+
+<section class="view" id="routing" data-title="Routing Decision">
+  <h2>Routing Decision</h2>
+  <p class="lead">The ladder is ordered. The highest strong signal wins, even when lower-category keywords are also present. Priority 0 is the top rung.</p>
+  <ol class="ladder">
+    <li><span class="pnum t-pdf">0</span><div><strong>PDF / attached document → <code>pdf_reader</code></strong><p>Wins over everything. Three exceptions: "compress or optimize a PDF" uses the <code>pdf-compress</code> skill; "build a graph from a document" is rung 3; "generate a skill from a book" is rung 6.</p></div></li>
+    <li><span class="pnum t-health">1</span><div><strong>ÖGK / Austrian health insurance → <code>oegk_health</code></strong><p>ÖGK, Gesundheitskasse, Krankenkasse, Kassenleistung, Wahlarzt, Rezeptgebühr, Selbstbehalt, Blutbefund, Labor, Sonografie, MRT, CT, Röntgen, Facharzt, Zuweisung, "was zahlt die Kasse", "quanto pago". Loses to an attached PDF and to coding.</p></div></li>
+    <li><span class="pnum t-trade">2</span><div><strong>Explicit trading → <code>trade</code></strong><p>Tickers, options, call/put, strike, greeks, delta/gamma/theta/vega, expiry, DTE, roll, hedge, "analizza &lt;ticker&gt;", "strategia opzioni", market scan, VIX/DXY/Fed. Always delegate when the user asks to ANALYZE a ticker, position or option. Loses to a BUILD or MODIFY CODE intent: the action verb decides.</p></div></li>
+    <li><span class="pnum t-graph">3</span><div><strong>Explicit graphify → <code>graphify_helper</code></strong><p>graph, grafo, knowledge graph, "mappa del codice", build graph, path between, explain node, community detection, god nodes. Wins even when the text mentions code.</p></div></li>
+    <li><span class="pnum t-code">4</span><div><strong>Explicit coding → <code>coder</code></strong><p>implementa, refactor, modifica, debug, fix, tests, backtest, "nel mio codice", "nel file X", "nuovo script". Generic verbs (write, create, add) count only with a code-ish object: script, module, function, class, file, test, API, library, plugin, app, algorithm, or a code extension. Coding intent wins over ALL strong trading words.</p></div></li>
+    <li><span class="pnum t-vsc">4b</span><div><strong>VS Code extension → <code>vscode_ext</code></strong><p>vscode extension, estensione vscode, vsix, vsce, contributes, activationEvents, webview panel, TreeView, language server, publish extension. Wins over generic coding.</p></div></li>
+    <li><span class="pnum t-maint">5</span><div><strong>Explicit skill update → <code>skill_updater</code></strong><p>"aggiorna skill", "update skill", "sync skill", "submodule update", or a specific skill name plus an update verb.</p></div></li>
+    <li><span class="pnum t-book">6</span><div><strong>Explicit book-to-skill → <code>book-to-skill-agent</code></strong><p>"converti libro", "crea skill da libro", "skill da pdf/epub", "generate skill from book".</p></div></li>
+    <li><span class="pnum t-plain">7</span><div><strong>Generic trading keywords alone are not enough</strong><p>portfolio, price, scan, market, position, strategy, buy/sell, entry/exit, IV. The surrounding intent decides.</p></div></li>
+    <li><span class="pnum t-plain">8</span><div><strong>Web research → the router handles it</strong><p>"cerca su web", "web search", oil, gold or gas price. Exception: when the target is a ticker or an option, rung 2 applies.</p></div></li>
+    <li><span class="pnum t-plain">9</span><div><strong>Simple tasks → the router handles them</strong><p>Explain code, read a file, find a definition, chat, math, config checks. Short answer of 1–3 lines.</p></div></li>
+  </ol>
+  <div class="note">
+    <strong>Ambiguity rule</strong>
+    <p>When two strong categories conflict, the router asks ONE clarifying question BEFORE delegating. It never guesses with an expensive call.</p>
+  </div>
+  <div class="note">
+    <strong>Planning threshold</strong>
+    <p>Ask <code>coder_planner</code> when the task touches 2 or more files, or needs more than 20 lines of new logic.</p>
+  </div>
+  <div class="note">
+    <strong>Ticker look-alikes</strong>
+    <p>A project name that looks like a ticker is not a ticker. Example: <code>IBKR_Trading</code> alone does not trigger rung 2.</p>
+  </div>
+  <p class="src">agents/router.md · config/AGENTS.md</p>
+</section>
+
+<section class="view" id="lifecycle" data-title="Request Lifecycle">
+  <h2>Request Lifecycle</h2>
+  <p class="lead">End-to-end trace from the user message to the final summary.</p>
+  <ol class="stepper">
+    <li><b>User message reaches the router</b><p>Router model: <code>opencode-go/deepseek-v4.1-flash#low</code>.</p></li>
+    <li><b>The router scans signals top-down</b><p>First strong match on the priority ladder wins.</p></li>
+    <li><b>Two strong categories conflict</b><p>The router asks ONE clarifying question before any delegation.</p></li>
+    <li><b>The router checks independence</b><p>Independent objects of the same category allow up to 4 parallel Task calls in one message.</p></li>
+    <li><b>The router builds the subagent prompt</b><p>Goal, context and constraints. It includes the context-store hash path when content was compressed.</p></li>
+    <li><b>The subagent runs its own loop</b><p>Loads skills, calls MCP tools (<code>trading_*</code>, <code>headroom_*</code>), runs bash/read/edit, and may re-delegate. Example: <code>trade</code> → <code>coder</code>. In opencode only, depth 3.</p></li>
+    <li><b>The subagent returns the answer and <code>## VERIFICA</code></b><p>Both go in the same message: confidenza, evidenza, non_verificato, escalation_consigliata. Never footer-only.</p></li>
+    <li><b><code>verifica-gate</code> inspects the final message</b><p>Allow, allow plus log, or block. It also anchors confidence to real shell exit codes and prunes long task output.</p></li>
+    <li><b>The router applies the confidence thresholds</b><p>85 and above, 60–84, 40–59, or below 40. Each band has its own action.</p></li>
+    <li><b>The router summarizes in 1–3 lines</b><p>It adds one caveat sentence when confidence is 60–84.</p></li>
+  </ol>
+  <p class="src">agents/router.md · plugins/verifica-gate · config/AGENTS.md</p>
+</section>
+
+<section class="view" id="verification" data-title="Verification Gate">
+  <h2>Verification Gate</h2>
+  <p class="lead">Every subagent answer must carry a <code>## VERIFICA</code> block. The router turns the confidence value into an action.</p>
+  <div class="tw">
+    <table class="table">
+      <thead><tr><th>Confidence</th><th>Band</th><th>Router action</th></tr></thead>
+      <tbody>
+        <tr><td><code>&gt;= 85</code></td><td><span class="badge ok">high</span></td><td>Summarize normally.</td></tr>
+        <tr><td><code>60–84</code></td><td><span class="badge mid">medium</span></td><td>Summarize plus one caveat sentence: "Confidenza media: &lt;reason from non_verificato&gt;".</td></tr>
+        <tr><td><code>40–59</code></td><td><span class="badge warn">low</span></td><td>Re-delegate ONCE to the same subagent: "your previous answer had confidence X/100, reason: &lt;non_verificato&gt;, check and correct, then fill VERIFICA again". Then summarize with a caveat.</td></tr>
+        <tr><td><code>&lt; 40</code> or no block</td><td><span class="badge bad">unverified</span></td><td>ONE clarification question to the user: "I dati non sono verificati: vuoi che ri-deleghi a @coder …?". Yes → re-delegate to <code>coder</code>. No → summarize with a caveat.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3>Gate decisions on the final message</h3>
+  <ol class="plain">
+    <li>VERIFICA block present → <strong>allow</strong>.</li>
+    <li>Long message (600 characters or more) without a block → <strong>allow</strong> and log <code>missing_verifica_soft</code>.</li>
+    <li>Short message (fewer than 600 characters) without a block → <strong>block</strong> and ask for the COMPLETE answer.</li>
+    <li>Footer-only reply (fewer than 300 characters) after a long answer → <strong>allow</strong> and log <code>verifica_only_followup</code>.</li>
+  </ol>
+  <h3>Exit-code anchoring</h3>
+  <ul class="plain">
+    <li>Confidence is anchored to the real exit codes of shell commands.</li>
+    <li>Per task, the last outcome wins.</li>
+    <li>Inline snippets are never anchorable.</li>
+    <li>Very long task output is pruned before it reaches the model.</li>
+    <li>Audit trail: <code>~/.config/opencode/stats/gate_events.jsonl</code>. Write-only by design.</li>
+  </ul>
+  <p class="src">plugins/verifica-gate · config/AGENTS.md</p>
+</section>
+
+<section class="view" id="orchestration" data-title="Parallel Delegation &amp; Orchestration">
+  <h2>Parallel Delegation &amp; Orchestration</h2>
+  <p class="lead">Parallelism is limited and deliberate. Mixed categories never run as two parallel tasks.</p>
+  <div class="grid cols-2">
+    <article class="card">
+      <h3>Router limits</h3>
+      <ul class="plain tight">
+        <li>Maximum 4 parallel tasks per message.</li>
+        <li>Only truly independent objects.</li>
+        <li>Same category only.</li>
+        <li>Mixed categories go through the ambiguity question or the priority ladder.</li>
+      </ul>
+    </article>
+    <article class="card">
+      <h3>smart-dispatcher skill</h3>
+      <p>Turns natural language into four phases:</p>
+      <p><span class="badge a-router">CLASSIFY</span> → <span class="badge a-router">BUILD</span> → <span class="badge a-router">DISPATCH</span> → <span class="badge a-router">AGGREGATE</span></p>
+      <p class="hint">Example input: "scan di italy, germany e francia top 5".</p>
+    </article>
+    <article class="card">
+      <h3>subatomic-orchestrator skill</h3>
+      <ul class="plain tight">
+        <li><strong>DISCOVERY</strong>: read <code>orchestrator:</code> from frontmatter, or infer it.</li>
+        <li><strong>DECOMPOSITION</strong>: <code>split_by</code> ticker|market|file|chapter|query, then <code>chunk_size</code> and <code>parallel_batch</code>.</li>
+        <li><strong>DISPATCH</strong>: task tool for small chunks, <code>@agent</code> for large ones.</li>
+        <li><strong>AGGREGATION</strong>: rank|concat|json_merge|none, then sort, dedup, <code>top_n</code>.</li>
+      </ul>
+    </article>
+    <article class="card">
+      <h3>VS Code limitation</h3>
+      <p>A subagent cannot start another subagent in VS Code. The top-level agent runs each chain step by step.</p>
+      <p class="hint">In opencode, re-delegation is allowed to depth 3.</p>
+    </article>
+  </div>
+  <p class="src">agents/router.md · skills/smart-dispatcher · skills/subatomic-orchestrator · vscode/</p>
+</section>
+
+<section class="view" id="plugins" data-title="Plugins, MCP &amp; Token Economy">
+  <h2>Plugins, MCP &amp; Token Economy</h2>
+  <p class="lead">Five plugin folders load through the anchor link. Large tool output is compressed before it reaches the prompt.</p>
+  <div class="grid cols-2">
+    <article class="card">
+      <h3><code>auto-headroom</code></h3>
+      <ul class="plain tight">
+        <li>Intercepts tool output of 800 characters or more: <code>bash</code>, <code>read</code>, <code>grep</code>, <code>glob</code>, <code>webfetch</code>.</li>
+        <li>Skips <code>trading_*</code> payloads and targeted context-store retrieval.</li>
+        <li>Saves the raw text to <code>~/.config/opencode/context-store/&lt;hash&gt;.txt</code> plus <code>&lt;hash&gt;_index.json</code>.</li>
+        <li>Returns a compressed preview and the hash. Retrieve with <code>/read-chunk</code> or the headroom MCP.</li>
+        <li>Saves up to 90% of prompt tokens.</li>
+      </ul>
+    </article>
+    <article class="card">
+      <h3><code>graphify</code></h3>
+      <p>Injects a knowledge-graph reminder before shell calls when a graph exists.</p>
+    </article>
+    <article class="card">
+      <h3><code>routing-stats</code></h3>
+      <p>Records each subagent delegation and VERIFICA block as JSONL in <code>~/.config/opencode/stats/routing_events.jsonl</code>. Read it with <code>/routing-stats</code>.</p>
+    </article>
+    <article class="card">
+      <h3><code>tokens-per-second</code></h3>
+      <p>Subscribes to <code>session.step.started</code> and <code>session.step.ended</code>, measures duration in ms, appends JSONL stats.</p>
+    </article>
+    <article class="card">
+      <h3><code>verifica-gate</code></h3>
+      <p>Enforces VERIFICA, anchors confidence to exit codes and prunes task output. Audit: <code>~/.config/opencode/stats/gate_events.jsonl</code>.</p>
+    </article>
+  </div>
+  <h3>MCP servers in <code>config/opencode.json</code></h3>
+  <div class="tw">
+    <table class="table">
+      <thead><tr><th>Server</th><th>Command or source</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>headroom</code></td><td><code>~/.local/share/opencode/headroom-venv/bin/headroom mcp serve</code></td><td>Context compression tools.</td></tr>
+        <tr><td><code>trading</code></td><td><code>trading-mcp-venv/bin/trading-mcp --skills-dir … --tickers-dir …</code></td><td>Market data, options, signals.</td></tr>
+        <tr><td><code>rea</code></td><td>local rea repo wrapper</td><td>Reverse engineering.</td></tr>
+        <tr><td><code>servers</code></td><td>entry in <code>config/opencode.json</code></td><td>Generic project servers.</td></tr>
+        <tr><td><code>browse</code></td><td>optional</td><td>Web browsing.</td></tr>
+        <tr><td><code>bladebro</code></td><td>optional</td><td>Optional helper.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="src">config/opencode.json · plugins/* · setup-headroom.sh · setup-trading-mcp.sh</p>
+</section>
+
+<section class="view" id="install" data-title="Install &amp; VS Code Layer">
+  <h2>Install &amp; VS Code Layer</h2>
+  <p class="lead"><code>install.sh</code> is idempotent. Rerun it after <code>git pull</code> or after moving the repository.</p>
+  <h3>Stages</h3>
+  <ol class="plain">
+    <li>Submodules.</li>
+    <li>opencode symlinks.</li>
+    <li>MCP runtimes: <code>setup-headroom.sh</code>, <code>setup-trading-mcp.sh</code>.</li>
+    <li>VS Code layer: <code>install-vscode.py --target user</code>.</li>
+  </ol>
+  <h3>Flags</h3>
+  <div class="tw">
+    <table class="table">
+      <thead><tr><th>Flag</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td><code>--dry-run</code></td><td>Print the plan, change nothing.</td></tr>
+        <tr><td><code>--force</code></td><td>Backup first to <code>~/.cache/opencode-skills/backup/&lt;timestamp&gt;/</code>.</td></tr>
+        <tr><td><code>--no-mcp</code></td><td>Skip the MCP runtimes.</td></tr>
+        <tr><td><code>--no-vscode</code></td><td>Skip the generated VS Code layer.</td></tr>
+        <tr><td><code>--with-rea</code></td><td>Install the rea MCP as well.</td></tr>
+        <tr><td><code>--with-systemd</code></td><td>Install the user service units.</td></tr>
+        <tr><td><code>--yes</code></td><td>Accept prompts without asking.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note">
+    <strong>No machine paths</strong>
+    <p>Configuration uses <code>{env:HOME}</code> placeholders plus the anchor link. A moved repository keeps working after a rerun.</p>
+  </div>
+  <div class="note">
+    <strong>Secrets</strong>
+    <p><code>config/secrets.env.enc</code> is decrypted by <code>scripts/decrypt_secrets.sh</code>.</p>
+  </div>
+  <div class="note">
+    <strong>Writing directive</strong>
+    <p>ASD-STE100 applies to every agent: maximum 20 words per sentence in a procedure, 25 in a description, active voice, numbered vertical steps, exact numbers with units. The VERIFICA block follows the same rules. Conformance: <code>scripts/ste_conformance.py</code> with <code>--wiring</code>, <code>--self-test</code>, directory lint and <code>--strict</code>.</p>
+  </div>
+  <p class="src">install.sh · install-vscode.py · config/secrets.env.enc · scripts/ste_conformance.py</p>
+</section>
+
+<section class="view" id="scenarios" data-title="Scenario Explorer">
+  <h2>Scenario Explorer</h2>
+  <p class="lead">Pick a question. Step through the real path: signal, decision, delegation, verification, outcome. The "why not" note shows which plausible agent was rejected and why.</p>
+  <div class="sc-shell">
+    <div class="sc-list-col">
+      <div class="sc-list" id="sc-list"></div>
+      <p class="nomatch" id="sc-nomatch" hidden>No scenario matches the filter.</p>
+    </div>
+    <div class="sc-detail" id="sc-detail"></div>
+  </div>
+  <p class="src">agents/*.md · config/AGENTS.md · plugins/verifica-gate</p>
+</section>
+
+<section class="view" id="reference" data-title="Quick Reference / Glossary">
+  <h2>Quick Reference / Glossary</h2>
+  <p class="lead">Short definitions and the numbers used on this page.</p>
+  <div class="grid cols-3">
+    <article class="card"><h3>Counts</h3><ul class="plain tight">
+      <li>11 page sections</li>
+      <li>14 scenarios</li>
+      <li>12 roster rows (10 subagents, 1 primary, 1 built-in)</li>
+      <li>5 plugins</li>
+      <li>3 main MCP servers plus <code>servers</code></li>
+      <li>10 priority rungs, 0 to 9, plus rung 4b</li>
+    </ul></article>
+    <article class="card"><h3>Thresholds</h3><ul class="plain tight">
+      <li>85 and above: plain summary</li>
+      <li>60–84: caveat sentence</li>
+      <li>40–59: one re-delegation</li>
+      <li>below 40: ask the user</li>
+      <li>600 characters: long message</li>
+      <li>300 characters: footer-only reply</li>
+      <li>800 characters: headroom trigger</li>
+    </ul></article>
+    <article class="card"><h3>Path anchors</h3><ul class="plain tight">
+      <li><code>~/.config/opencode/</code></li>
+      <li><code>~/.copilot/</code></li>
+      <li><code>~/.config/opencode/context-store/</code></li>
+      <li><code>~/.config/opencode/stats/</code></li>
+      <li><code>~/.cache/opencode-skills/backup/</code></li>
+    </ul></article>
+  </div>
+  <h3>Glossary</h3>
+  <div class="tw">
+    <table class="table">
+      <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td>Router</td><td>Primary agent. Classifies the request and delegates. Cannot edit or write files.</td></tr>
+        <tr><td>Subagent</td><td>Specialist that executes one delegated task in its own context.</td></tr>
+        <tr><td>Priority ladder</td><td>Ordered list of signals. The highest strong signal wins.</td></tr>
+        <tr><td>Strong signal</td><td>An explicit category marker: an attached PDF, a ticker, "knowledge graph", a build verb with a code object.</td></tr>
+        <tr><td>Ambiguity rule</td><td>Two strong categories conflict → one clarifying question before delegation.</td></tr>
+        <tr><td>Atomic plan</td><td>Numbered, single-action steps with acceptance checks, produced by a planner agent.</td></tr>
+        <tr><td>VERIFICA</td><td>Required block: confidenza, evidenza, non_verificato, escalation_consigliata.</td></tr>
+        <tr><td>Confidenza</td><td>Self-assessed confidence, 0–100, anchored to real command exit codes.</td></tr>
+        <tr><td>Evidenza</td><td>The commands executed and their pass/fail result.</td></tr>
+        <tr><td>Non verificato</td><td>What could not be checked. It feeds the caveat sentence.</td></tr>
+        <tr><td>Escalation</td><td>Recommendation to involve a stronger model or a human when risk is high.</td></tr>
+        <tr><td>Gate</td><td><code>verifica-gate</code> plugin and hook that validates the final message.</td></tr>
+        <tr><td>Context-store hash</td><td>Identifier of a saved raw tool output, passed to the subagent in the prompt.</td></tr>
+        <tr><td>Anchor link</td><td>Stable symlink <code>opencode-skills</code> that points at the repository.</td></tr>
+        <tr><td>Slash skill</td><td>Command file exposed as a skill. Used only through <code>/name</code>.</td></tr>
+        <tr><td>LLM steps</td><td>Maximum internal loop count for a subagent, for example 100 for <code>trade</code>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="src">README.md · config/AGENTS.md · config/opencode.json · agents/*.md</p>
+</section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var SCENARIOS = [
+    {
+      id: "sc1", title: "Analyze two tickers", group: "Trading",
+      question: "Analyze AAPL and TSLA",
+      chips: [{ t: "AAPL", k: "ticker" }, { t: "TSLA", k: "ticker" }],
+      priority: "2", agent: "trade",
+      steps: [
+        { actor: "Router", action: 'Detect 2 tickers and the action verb "analyze"', detail: 'Rule 7 (generic trading keyword) is rejected: the ticker is explicit.', decision: "strong signal: tickers AAPL, TSLA -> priority 2 -> trade" },
+        { actor: "Router", action: "Objects are independent and share one category", detail: "Parallel delegation is allowed: maximum 4 Task calls per message." },
+        { actor: "Router", action: "Launch 2 Task calls in the same message", detail: 'subagent_type="trade", one per ticker, each with goal, horizon and risk constraints.' },
+        { actor: "Trade #1", action: "Load market-data-fetch, fetch quote and OHLC", detail: "Compute trend and levels with the trading_* MCP tools. Model gemini-4-argon#high." },
+        { actor: "Trade #2", action: "Same loop for TSLA", detail: "Independent context, separate Task call, same message." },
+        { actor: "Trade", action: "Render the interactive-trade-diagram when a position is proposed", detail: "Write the recommendation journal entry." },
+        { actor: "Trade", action: "Return the answer plus ## VERIFICA", detail: "confidenza, evidenza, non_verificato, escalation_consigliata." },
+        { actor: "Plugin", action: "verifica-gate sees the VERIFICA block", detail: "Block present -> allow. Confidence is anchored to the real exit codes." },
+        { actor: "Router", action: "Both confidences are 85 or higher", detail: "Merge into one comparison summary, 3 lines per ticker, no caveat." }
+      ],
+      outcome: "Comparative verdict and risk limits. The confidence gate applies per ticker.",
+      rejected: "\"Solve it yourself\": the router has low reasoning and no market tools."
+    },
+    {
+      id: "sc2", title: "Greeks module", group: "Coding",
+      question: "Implement a module that computes the option Greeks",
+      chips: [{ t: "implement", k: "build verb" }, { t: "Greeks", k: "trading word" }],
+      priority: "4", agent: "coder",
+      steps: [
+        { actor: "Router", action: 'Strong trading word "Greeks" conflicts with the build verb "implement"', detail: 'The action verb plus a code object ("module") makes the intent coding.', decision: "strong signal: implement + module -> priority 4 -> coder" },
+        { actor: "Router", action: "Estimate size: a new module, likely more than 20 lines", detail: "Threshold for planning: 2 or more files, or more than 20 lines of new logic." },
+        { actor: "Router", action: "Delegate to coder_planner", detail: "Model gemini-4-argon#high, 1M context. Ask for files, functions, tests and validation." },
+        { actor: "Planner", action: "Read the repository context and return a numbered atomic plan", detail: "The plan includes acceptance checks. No file writes." },
+        { actor: "Router", action: "Pass the request and the full plan to coder", detail: "Model deepseek-v4.1-flash. coder executes the plan step by step." },
+        { actor: "Coder", action: "Implement, then load python-pydantic and python-venv", detail: "Write tests and run pytest plus pylint inside the venv." },
+        { actor: "Coder", action: "Return the diff summary and ## VERIFICA", detail: "Confidence anchored to the pytest and pylint exit codes." },
+        { actor: "Router", action: "Confidence is 85 or higher", detail: "Report the files changed and the test result in a short summary." }
+      ],
+      outcome: "Working Greeks module with tests. Confidence is anchored to real exit codes.",
+      rejected: "@trade: the user asks to BUILD code, not to analyze a market."
+    },
+    {
+      id: "sc3", title: "Attached contract", group: "Documents",
+      question: "Read this contract.pdf and tell me the termination clauses  (a .pdf is attached)",
+      chips: [{ t: ".pdf", k: "attachment" }, { t: "read", k: "extract" }],
+      priority: "0", agent: "pdf_reader",
+      steps: [
+        { actor: "Router", action: "An attached PDF is the strongest signal", detail: "It wins over every other category, even when the text mentions trading or code.", decision: "attached .pdf -> priority 0 -> pdf_reader" },
+        { actor: "Router", action: "Delegate to pdf_reader, model deepseek-v4.1-flash", detail: "The prompt carries the file path and the exact question." },
+        { actor: "PDF Reader", action: "Extract text with pdftotext", detail: "Fall back to OCR when the page has no text layer." },
+        { actor: "PDF Reader", action: "Locate the termination section", detail: "Quote each clause with article number and page reference." },
+        { actor: "PDF Reader", action: "Flag missing pages or unreadable scans", detail: "These items go into non_verificato." },
+        { actor: "Router", action: "Confidence is 60-84", detail: "Summarize with one caveat sentence that names the unreadable section." }
+      ],
+      outcome: "Clause summary with citations and explicit gaps."
+    },
+    {
+      id: "sc4", title: "Compress a PDF", group: "Documents",
+      question: "Compress this 40 MB PDF",
+      chips: [{ t: "compress", k: "verb" }, { t: "PDF", k: "file" }],
+      priority: "skill", agent: "router + pdf-compress",
+      steps: [
+        { actor: "Router", action: "The verb is compress or optimize, not read or analyze", detail: "Compression is not pdf_reader work.", decision: "compress + PDF -> skill pdf-compress -> no delegation" },
+        { actor: "Router", action: "Load the pdf-compress skill directly", detail: "The router may run skills. It may not edit files." },
+        { actor: "Skill", action: "Run the compression script inside a venv", detail: "Keep the original file when the result is larger." },
+        { actor: "Router", action: "Report the before and after size in MB", detail: "Use exact numbers with units." }
+      ],
+      outcome: "Smaller PDF plus a size report. A failure needs no subagent.",
+      rejected: "@pdf_reader: extraction is not compression."
+    },
+    {
+      id: "sc5", title: "ÖGK MRI", group: "Health AT",
+      question: "How much do I pay for an MRI in Austria with ÖGK?",
+      chips: [{ t: "MRT / MRI", k: "exam" }, { t: "ÖGK", k: "insurer" }, { t: "quanto pago", k: "cost" }],
+      priority: "1", agent: "oegk_health",
+      steps: [
+        { actor: "Router", action: "Austrian health-insurance signal", detail: "It loses only to an attached PDF or to coding.", decision: "MRT + ÖGK + \"quanto pago\" -> priority 1 -> oegk_health" },
+        { actor: "Router", action: "Delegate to oegk_health", detail: "The prompt carries the exam name and the insurance status." },
+        { actor: "ÖGK", action: "Check the ÖGK catalogue", detail: "Kassenleistung versus Wahlarzt, Zuweisung requirement, Rezeptgebühr, Selbstbehalt." },
+        { actor: "ÖGK", action: "Compute the patient share", detail: "Example: 80% reimbursement for Wahlarzt, with exact EUR amounts." },
+        { actor: "ÖGK", action: "Return the answer plus ## VERIFICA", detail: "Cite the source pages in evidenza." },
+        { actor: "Router", action: "Summarize the amount and the condition that changes it", detail: "One short paragraph." }
+      ],
+      outcome: "Coverage verdict and expected out-of-pocket cost in EUR.",
+      rejected: "web research: the specialist agent holds the tariff rules."
+    },
+    {
+      id: "sc6", title: "Code map", group: "Graph",
+      question: "Build a knowledge graph of this repository",
+      chips: [{ t: "knowledge graph", k: "graph" }, { t: "repository", k: "code word" }],
+      priority: "3", agent: "graphify_helper",
+      steps: [
+        { actor: "Router", action: "Graph signal detected", detail: 'It wins even though the text says "repository" and "code".', decision: "knowledge graph -> priority 3 -> graphify_helper" },
+        { actor: "Router", action: "Delegate to graphify_helper", detail: "Pass the path and the goal." },
+        { actor: "Graphify", action: "Detect an existing graphify-out/", detail: "Use an incremental update instead of a full rebuild." },
+        { actor: "Graphify", action: "Run the pipeline", detail: "Parse, cluster with community detection, compute god nodes and surprising connections." },
+        { actor: "Graphify", action: "Answer with the main communities", detail: "List the entry-point files." },
+        { actor: "Router", action: "Confidence is 85 or higher", detail: "Return a 3-line summary and the path of graph.json." }
+      ],
+      outcome: "Queryable graph in graphify-out/. Later questions use graph queries, not grep."
+    },
+    {
+      id: "sc7", title: "Update a skill", group: "Maintenance",
+      question: "Update the graphify skill",
+      chips: [{ t: "update", k: "verb" }, { t: "graphify", k: "skill name" }],
+      priority: "5", agent: "skill_updater",
+      steps: [
+        { actor: "Router", action: "Update or sync plus a skill name", detail: "This is skill maintenance, not code modification.", decision: "update + skill name -> priority 5 -> skill_updater" },
+        { actor: "Router", action: "Delegate to skill_updater", detail: "Pass the skill name and the src+symlink pattern." },
+        { actor: "Skill Updater", action: "Run git fetch and pull in the -src submodule", detail: "Update the working tree and keep the symlinks valid." },
+        { actor: "Skill Updater", action: "Verify each symlink resolves", detail: "Check that the SKILL.md frontmatter is intact." },
+        { actor: "Router", action: "Report the new commit hash and the verification result", detail: "Short answer, one or two lines." }
+      ],
+      outcome: "Skill at the latest upstream commit, links verified."
+    },
+    {
+      id: "sc8", title: "Book to skill", group: "Authoring",
+      question: "Turn this book into a skill  (EPUB/PDF attached)",
+      chips: [{ t: "book", k: "source" }, { t: "skill", k: "target" }, { t: "attachment", k: "file" }],
+      priority: "6", agent: "book-to-skill-agent",
+      steps: [
+        { actor: "Router", action: "The goal is to AUTHOR a skill", detail: "Rule 6 wins over the attached-document rule 0.", decision: "book + skill + attachment -> priority 6 -> book-to-skill-agent" },
+        { actor: "Router", action: "Delegate to book-to-skill-agent", detail: "Steps 80. Pass the file and the target skill name." },
+        { actor: "Book-to-Skill", action: "Extract title and author, split into chapters", detail: "Generate the chapter summaries in parallel." },
+        { actor: "Book-to-Skill", action: "Assemble SKILL.md", detail: "Frameworks, mental models, principles, anti-patterns." },
+        { actor: "Book-to-Skill", action: "Validate the generated files", detail: "Report the skill path." },
+        { actor: "Router", action: "Report the created skill", detail: "Show how to load it: /<skill-name>." }
+      ],
+      outcome: "A new skill folder ready for ~/.copilot/skills or ~/.config/opencode/skills.",
+      rejected: "@pdf_reader: reading is a sub-step, not the goal."
+    },
+    {
+      id: "sc9", title: "VS Code extension", group: "Extension",
+      question: "Create a VS Code extension with a TreeView and a command",
+      chips: [{ t: "VS Code extension", k: "target" }, { t: "TreeView", k: "API" }],
+      priority: "4b", agent: "vscode_ext",
+      steps: [
+        { actor: "Router", action: "The target is a VS Code extension", detail: "It beats generic coding.", decision: "vscode extension + TreeView -> priority 4b -> vscode_ext" },
+        { actor: "Router", action: "The task spans several files", detail: "package.json, extension.ts, provider. Plan first." },
+        { actor: "Router", action: "Delegate to vscode_ext_planner", detail: "Ask for contributes, activationEvents, TreeDataProvider and command registration." },
+        { actor: "Planner", action: "Return the numbered plan with exact file names", detail: "Steps 20. No file writes." },
+        { actor: "Router", action: "Delegate to vscode_ext", detail: "Implement, test and package check. Steps 100." },
+        { actor: "VS Code Ext", action: "Run npx tsc --noEmit, npm test, npx @vscode/vsce ls", detail: "Never publish." },
+        { actor: "Router", action: "Report the build result", detail: "Include the .vsix path when packaging ran." }
+      ],
+      outcome: "Compilable extension. Publishing stays a manual user action."
+    },
+    {
+      id: "sc10", title: "Oil price", group: "Research",
+      question: "What is the oil price today?",
+      chips: [{ t: "oil", k: "commodity" }, { t: "today", k: "time" }],
+      priority: "8", agent: "router (no delegation)",
+      steps: [
+        { actor: "Router", action: "The target is a commodity, not a ticker", detail: "Web research stays in the router. No delegation.", decision: "commodity price -> priority 8 -> router handles" },
+        { actor: "Router", action: "Fetch the quote page with the web tool", detail: "Keep the source URL and the timestamp." },
+        { actor: "Router", action: "Answer in 1-3 lines", detail: "Price with unit (USD/bbl) and time." }
+      ],
+      outcome: "Short answer with provenance. A later \"TSLA\" request goes to @trade."
+    },
+    {
+      id: "sc11", title: "Code lookup", group: "Simple",
+      question: "Where is isPlainObject defined?",
+      chips: [{ t: "where is … defined", k: "lookup" }],
+      priority: "9", agent: "router (no delegation)",
+      steps: [
+        { actor: "Router", action: "Simple lookup", detail: "Run grep and read directly. No subagent.", decision: "\"where is … defined\" -> priority 9 -> router handles" },
+        { actor: "Router", action: "Return the file path and the line number", detail: "One line of answer." }
+      ],
+      outcome: "1-line answer. No VERIFICA needed: no delegation happened."
+    },
+    {
+      id: "sc12", title: "Position repair", group: "Trading",
+      question: "My NVDA 180 call expires in 9 days, what do I do?",
+      chips: [{ t: "NVDA", k: "ticker" }, { t: "call", k: "option" }, { t: "9 days", k: "DTE" }],
+      priority: "2", agent: "trade",
+      steps: [
+        { actor: "Router", action: "Ticker, option and a decision question", detail: "All three are explicit trading signals.", decision: "NVDA + call + DTE -> priority 2 -> trade" },
+        { actor: "Router", action: "Delegate to trade", detail: "Include strike, expiry and DTE in the prompt." },
+        { actor: "Trade", action: "Fetch the chain, the IV and the Greeks", detail: "Use the trading_* MCP tools." },
+        { actor: "Trade", action: "Load position-management-playbook and interactive-trade-diagram", detail: "Two skills in one run." },
+        { actor: "Trade", action: "Build the payoff diagram", detail: "Compute break-even and the R multiples. Propose roll and exit ladders." },
+        { actor: "Trade", action: "Return the plan plus ## VERIFICA", detail: "A confidence value for each market assumption." },
+        { actor: "Router", action: "Confidence is 40-59", detail: "Re-delegate ONCE with the stated gap, then summarize with a caveat." }
+      ],
+      outcome: "Decision plan with explicit risk in R and in % of equity.",
+      rejected: "@coder: no script is requested yet. If one is, trade asks coder."
+    },
+    {
+      id: "sc13", title: "Ambiguity", group: "Router behavior",
+      question: "Implement the options strategy graph",
+      chips: [{ t: "graph", k: "priority 3" }, { t: "implement", k: "priority 4" }, { t: "options", k: "priority 2 word" }],
+      priority: "conflict", agent: "router",
+      steps: [
+        { actor: "Router", action: "Priority 3 (graph) and priority 4 (implement) are both strong", detail: "Two strong categories conflict.", decision: "conflict: graph vs coding -> ask one question first" },
+        { actor: "Router", action: "Ask ONE question before delegating", detail: '"Do you want to build the graph code, or analyze an options strategy?"' },
+        { actor: "User", action: "Answers the question", detail: "The answer resolves the intent." },
+        { actor: "Router", action: "Resume the ladder with the clarified intent", detail: "Delegate once, to one agent." }
+      ],
+      outcome: "One extra question instead of an expensive wrong delegation."
+    },
+    {
+      id: "sc14", title: "Parallel market scan", group: "Orchestration",
+      question: "Scan Italy, Germany and France, top 5",
+      chips: [{ t: "scan", k: "market scan" }, { t: "3 markets", k: "objects" }],
+      priority: "skill", agent: "smart-dispatcher",
+      steps: [
+        { actor: "Router", action: "A trading scan request", detail: "Delegate to trade, or use smart-dispatcher when installed.", decision: "scan + 3 markets -> smart-dispatcher -> subatomic-orchestrator" },
+        { actor: "Dispatcher", action: "CLASSIFY", detail: "intent=market_scan, items=[italy,germany,france], top=5." },
+        { actor: "Dispatcher", action: "BUILD the orchestrator command", detail: "--skills market-accumulation-scanner --split-by market --top 5." },
+        { actor: "Orchestrator", action: "DISCOVERY then DECOMPOSITION", detail: "3 chunks, one per market." },
+        { actor: "Orchestrator", action: "DISPATCH 3 parallel agents", detail: "Same message. Each agent loads market-accumulation-scanner." },
+        { actor: "Orchestrator", action: "AGGREGATION", detail: "Merge rank, dedup, top 5 global." },
+        { actor: "Router", action: "Summarize the global top 5", detail: "Show the per-market source." }
+      ],
+      outcome: "One ranked list from 3 parallel scans."
+    }
+  ];
+
+  var reduced = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  var views = Array.prototype.slice.call(document.querySelectorAll(".view"));
+  var navList = document.getElementById("nav-list");
+  var filterInput = document.getElementById("filter");
+  var sidebar = document.getElementById("sidebar");
+  var scrim = document.getElementById("scrim");
+  var menuBtn = document.getElementById("menu-btn");
+  var themeBtn = document.getElementById("theme-btn");
+
+  var currentView = views.length ? views[0].id : "";
+  var currentSc = SCENARIOS.length ? SCENARIOS[0].id : "";
+  var pb = { shown: 1, timer: null };
+  var cards = [];
+
+  function esc(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function getSc(id) {
+    for (var i = 0; i < SCENARIOS.length; i++) {
+      if (SCENARIOS[i].id === id) { return SCENARIOS[i]; }
+    }
+    return SCENARIOS[0];
+  }
+
+  /* ---------- navigation ---------- */
+  function buildNav() {
+    views.forEach(function (v, i) {
+      var li = document.createElement("li");
+      var a = document.createElement("a");
+      a.className = "navlink";
+      a.href = "#" + v.id;
+      a.setAttribute("data-target", v.id);
+      a.innerHTML = '<span class="n">' + (i + 1) + '</span><span class="t">' + esc(v.getAttribute("data-title") || v.id) + "</span>";
+      a.addEventListener("click", function (e) {
+        e.preventDefault();
+        if (window.location.hash !== "#" + v.id) {
+          window.location.hash = v.id;
+        } else {
+          activate(v.id);
+        }
+      });
+      li.appendChild(a);
+      navList.appendChild(li);
+    });
+  }
+
+  function buildFooterNav() {
+    views.forEach(function (v, i) {
+      var foot = document.createElement("div");
+      foot.className = "navfoot";
+      var html = "";
+      if (i > 0) {
+        html += '<a class="btn ghost" href="#' + views[i - 1].id + '">← ' + esc(views[i - 1].getAttribute("data-title")) + "</a>";
+      } else {
+        html += "<span></span>";
+      }
+      if (i < views.length - 1) {
+        html += '<a class="btn" href="#' + views[i + 1].id + '">' + esc(views[i + 1].getAttribute("data-title")) + " →</a>";
+      }
+      foot.innerHTML = html;
+      v.appendChild(foot);
+    });
+  }
+
+  function closeSidebar() {
+    if (sidebar) { sidebar.classList.remove("open"); }
+    if (scrim) { scrim.hidden = true; }
+    if (menuBtn) { menuBtn.setAttribute("aria-expanded", "false"); }
+  }
+
+  function scrollTop0() {
+    try {
+      var se = document.scrollingElement || document.documentElement;
+      if (se) { se.scrollTop = 0; }
+      if (document.body) { document.body.scrollTop = 0; }
+    } catch (e) {}
+  }
+
+  function activate(id) {
+    var target = null;
+    views.forEach(function (v) { if (v.id === id) { target = v; } });
+    if (!target) { target = views[0]; }
+    if (!target) { return; }
+    currentView = target.id;
+    views.forEach(function (v) { v.classList.toggle("active", v === target); });
+    Array.prototype.forEach.call(navList.querySelectorAll(".navlink"), function (a) {
+      if (a.getAttribute("data-target") === currentView) {
+        a.setAttribute("aria-current", "page");
+      } else {
+        a.removeAttribute("aria-current");
+      }
+    });
+    closeSidebar();
+    scrollTop0();
+    window.setTimeout(scrollTop0, 0);
+  }
+
+  function fromHash() {
+    var h = (window.location.hash || "").replace(/^#/, "");
+    activate(h || (views[0] ? views[0].id : ""));
+  }
+
+  /* ---------- filter ---------- */
+  function applyFilter() {
+    if (!filterInput) { return; }
+    var q = (filterInput.value || "").trim().toLowerCase();
+    Array.prototype.forEach.call(navList.querySelectorAll(".navlink"), function (a) {
+      var hit = q === "" || (a.textContent || "").toLowerCase().indexOf(q) !== -1;
+      a.parentNode.hidden = !hit;
+    });
+    var visible = 0;
+    cards.forEach(function (c) {
+      var hit = q === "" || c.hay.indexOf(q) !== -1;
+      c.el.hidden = !hit;
+      if (hit) { visible += 1; }
+    });
+    Array.prototype.forEach.call(document.querySelectorAll(".sc-group-wrap"), function (w) {
+      var any = false;
+      Array.prototype.forEach.call(w.querySelectorAll(".sc-card"), function (c) {
+        if (!c.hidden) { any = true; }
+      });
+      w.hidden = !any;
+    });
+    var nm = document.getElementById("sc-nomatch");
+    if (nm) { nm.hidden = visible !== 0; }
+  }
+
+  /* ---------- scenario cards ---------- */
+  function prioLabel(p) {
+    return /^[0-9]/.test(String(p)) ? "P " + p : String(p);
+  }
+
+  function buildCards() {
+    var list = document.getElementById("sc-list");
+    if (!list) { return; }
+    var order = [];
+    var groups = {};
+    SCENARIOS.forEach(function (s) {
+      if (!groups[s.group]) { groups[s.group] = []; order.push(s.group); }
+      groups[s.group].push(s);
+    });
+    order.forEach(function (g) {
+      var wrap = document.createElement("div");
+      wrap.className = "sc-group-wrap";
+      var h = document.createElement("h3");
+      h.className = "sc-group";
+      h.textContent = g;
+      wrap.appendChild(h);
+      groups[g].forEach(function (s) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "sc-card";
+        b.setAttribute("data-sc", s.id);
+        b.setAttribute("aria-pressed", "false");
+        b.innerHTML =
+          '<span class="sc-title">' + esc(s.title) + "</span>" +
+          '<span class="sc-q">' + esc(s.question) + "</span>" +
+          '<span class="sc-meta"><span class="pill">' + esc(prioLabel(s.priority)) + "</span><span>" + esc(s.agent) + "</span></span>";
+        b.addEventListener("click", function () { selectScenario(s.id); });
+        wrap.appendChild(b);
+        cards.push({
+          el: b,
+          hay: (s.title + " " + s.question + " " + s.group + " " + s.agent + " " + s.priority + " " +
+            s.chips.map(function (c) { return c.t + " " + c.k; }).join(" ")).toLowerCase()
+        });
+      });
+      list.appendChild(wrap);
+    });
+  }
+
+  function selectScenario(id) {
+    currentSc = id;
+    stopTimer();
+    pb.shown = 1;
+    Array.prototype.forEach.call(document.querySelectorAll(".sc-card"), function (b) {
+      var on = b.getAttribute("data-sc") === id;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    renderDetail();
+  }
+
+  /* ---------- actor badge ---------- */
+  function actorKey(name) {
+    var x = String(name).toLowerCase();
+    if (x.indexOf("router") !== -1) { return "router"; }
+    if (x.indexOf("trade") !== -1) { return "trade"; }
+    if (x.indexOf("planner") !== -1) { return "coder"; }
+    if (x.indexOf("coder") !== -1) { return "coder"; }
+    if (x.indexOf("pdf") !== -1) { return "doc"; }
+    if (x.indexOf("ögk") !== -1) { return "health"; }
+    if (x.indexOf("graphify") !== -1) { return "graph"; }
+    if (x.indexOf("skill updater") !== -1) { return "maint"; }
+    if (x.indexOf("book") !== -1) { return "book"; }
+    if (x.indexOf("vs code") !== -1) { return "vscode"; }
+    if (x.indexOf("plugin") !== -1) { return "plugin"; }
+    if (x.indexOf("skill") !== -1) { return "skill"; }
+    if (x.indexOf("user") !== -1) { return "user"; }
+    if (x.indexOf("dispatch") !== -1) { return "plugin"; }
+    if (x.indexOf("orchestr") !== -1) { return "graph"; }
+    return "maint";
+  }
+
+  /* ---------- detail render ---------- */
+  function renderDetail() {
+    var host = document.getElementById("sc-detail");
+    if (!host) { return; }
+    var s = getSc(currentSc);
+    var chips = s.chips.map(function (c) {
+      return '<span class="chip"><b>' + esc(c.t) + "</b><i>" + esc(c.k) + "</i></span>";
+    }).join("");
+    var html = "";
+    html += '<div class="detail-head"><p class="kicker">' + esc(s.group) + " · priority " + esc(s.priority) + "</p><h3>" + esc(s.title) + "</h3></div>";
+    html += '<blockquote class="bubble"><span class="who">User</span>' + esc(s.question) + "</blockquote>";
+    html += '<div class="chips"><span class="chips-label">Signals</span>' + chips + '<span class="chip prio"><b>' + esc(prioLabel(s.priority)) + "</b><i>rung</i></span></div>";
+    html += '<div class="pb-controls" role="group" aria-label="Scenario playback">';
+    html += '<button type="button" class="btn" id="pb-next">Next step</button>';
+    html += '<button type="button" class="btn ghost" id="pb-play">Play</button>';
+    html += '<button type="button" class="btn ghost" id="pb-reset">Reset</button>';
+    html += '<button type="button" class="btn ghost" id="pb-copy">Copy trace</button>';
+    html += '<span class="counter" id="pb-count" aria-live="polite"></span>';
+    html += "</div>";
+    html += '<ol class="timeline" id="pb-steps"></ol>';
+    html += '<p class="reveal-hint" id="pb-hint">Finish the trace to reveal the outcome and the rejected-agent note.</p>';
+    html += '<div class="outcome locked" id="pb-outcome"><h4>Outcome</h4><p>' + esc(s.outcome) + "</p></div>";
+    if (s.rejected) {
+      html += '<div class="rejected locked" id="pb-rejected"><h4>Why not another agent</h4><p>' + esc(s.rejected) + "</p></div>";
+    }
+    host.innerHTML = html;
+    bindPlayback();
+    renderSteps();
+  }
+
+  function renderSteps() {
+    var s = getSc(currentSc);
+    var ol = document.getElementById("pb-steps");
+    if (!ol) { return; }
+    var n = s.steps.length;
+    if (pb.shown > n) { pb.shown = n; }
+    if (pb.shown < 1) { pb.shown = 1; }
+    var html = "";
+    for (var i = 0; i < pb.shown; i += 1) {
+      var st = s.steps[i];
+      html += '<li class="step">';
+      html += '<span class="badge a-' + actorKey(st.actor) + '">' + esc(st.actor) + "</span>";
+      html += '<div class="step-body"><p class="step-action">' + esc(st.action) + "</p>";
+      if (st.detail) { html += '<p class="step-detail">' + esc(st.detail) + "</p>"; }
+      if (st.decision) { html += '<p class="decision">' + esc(st.decision) + "</p>"; }
+      html += "</div></li>";
+    }
+    ol.innerHTML = html;
+    var counter = document.getElementById("pb-count");
+    if (counter) { counter.textContent = pb.shown + "/" + n; }
+    var next = document.getElementById("pb-next");
+    if (next) {
+      next.disabled = pb.shown >= n;
+      next.textContent = pb.shown >= n ? "Complete" : "Next step";
+    }
+    var done = pb.shown >= n;
+    ["pb-outcome", "pb-rejected"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) { el.classList.toggle("locked", !done); }
+    });
+    var hint = document.getElementById("pb-hint");
+    if (hint) { hint.classList.toggle("locked", done); }
+  }
+
+  function bindPlayback() {
+    var next = document.getElementById("pb-next");
+    var play = document.getElementById("pb-play");
+    var reset = document.getElementById("pb-reset");
+    var copy = document.getElementById("pb-copy");
+    if (next) { next.addEventListener("click", advance); }
+    if (play) {
+      if (reduced) {
+        play.disabled = true;
+        play.setAttribute("title", "Auto-play is off: reduced motion is enabled");
+      }
+      play.addEventListener("click", togglePlay);
+    }
+    if (reset) {
+      reset.addEventListener("click", function () {
+        stopTimer();
+        pb.shown = 1;
+        renderSteps();
+        renderPlayLabel();
+      });
+    }
+    if (copy) { copy.addEventListener("click", copyTrace); }
+    renderPlayLabel();
+  }
+
+  function advance() {
+    var n = getSc(currentSc).steps.length;
+    if (pb.shown < n) {
+      pb.shown += 1;
+      renderSteps();
+    }
+    if (pb.shown >= n) { stopTimer(); }
+  }
+
+  function togglePlay() {
+    if (reduced) { return; }
+    if (pb.timer) { stopTimer(); return; }
+    var n = getSc(currentSc).steps.length;
+    if (pb.shown >= n) {
+      pb.shown = 1;
+      renderSteps();
+    }
+    pb.timer = window.setInterval(function () {
+      advance();
+      if (pb.shown >= n) { stopTimer(); }
+    }, 900);
+    renderPlayLabel();
+  }
+
+  function stopTimer() {
+    if (pb.timer) {
+      window.clearInterval(pb.timer);
+      pb.timer = null;
+    }
+    renderPlayLabel();
+  }
+
+  function renderPlayLabel() {
+    var b = document.getElementById("pb-play");
+    if (!b) { return; }
+    b.textContent = pb.timer ? "Pause" : "Play";
+    b.setAttribute("aria-pressed", pb.timer ? "true" : "false");
+  }
+
+  /* ---------- copy ---------- */
+  function legacyCopy(text, done) {
+    try {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.top = "-1000px";
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      done(!!ok);
+    } catch (e) {
+      done(false);
+    }
+  }
+
+  function copyTrace() {
+    var s = getSc(currentSc);
+    var lines = [s.title, "Q: " + s.question, "Priority " + s.priority + " -> " + s.agent, ""];
+    for (var i = 0; i < pb.shown; i += 1) {
+      var st = s.steps[i];
+      var line = (i + 1) + ". [" + st.actor + "] " + st.action;
+      if (st.detail) { line += " — " + st.detail; }
+      if (st.decision) { line += " (" + st.decision + ")"; }
+      lines.push(line);
+    }
+    lines.push("", "Outcome: " + s.outcome);
+    if (s.rejected) { lines.push("Rejected: " + s.rejected); }
+    var text = lines.join("\n");
+    var done = function (ok) {
+      var b = document.getElementById("pb-copy");
+      if (!b) { return; }
+      b.textContent = ok ? "Copied" : "Copy failed";
+      window.setTimeout(function () { b.textContent = "Copy trace"; }, 1400);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, function () { legacyCopy(text, done); });
+    } else {
+      legacyCopy(text, done);
+    }
+  }
+
+  /* ---------- theme ---------- */
+  function setTheme(t) {
+    document.documentElement.setAttribute("data-theme", t);
+    if (themeBtn) {
+      themeBtn.textContent = t === "dark" ? "Light theme" : "Dark theme";
+      themeBtn.setAttribute("aria-pressed", t === "light" ? "true" : "false");
+      themeBtn.setAttribute("aria-label", t === "dark" ? "Switch to light theme" : "Switch to dark theme");
+    }
+    try { window.localStorage.setItem("wfx-theme", t); } catch (e) {}
+  }
+
+  function initTheme() {
+    var t = "dark";
+    try {
+      var saved = window.localStorage.getItem("wfx-theme");
+      if (saved === "light" || saved === "dark") { t = saved; }
+    } catch (e) {}
+    setTheme(t);
+  }
+
+  /* ---------- sidebar ---------- */
+  function toggleSidebar() {
+    if (!sidebar) { return; }
+    var open = !sidebar.classList.contains("open");
+    sidebar.classList.toggle("open", open);
+    if (scrim) { scrim.hidden = !open; }
+    if (menuBtn) { menuBtn.setAttribute("aria-expanded", open ? "true" : "false"); }
+  }
+
+  /* ---------- keyboard ---------- */
+  function onKey(e) {
+    var el = e.target || {};
+    var tag = (el.tagName || "").toUpperCase();
+    var typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable === true;
+    if (e.key === "/" && !typing) {
+      e.preventDefault();
+      if (filterInput) { filterInput.focus(); }
+      return;
+    }
+    if (typing) { return; }
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") { return; }
+    var idx = -1;
+    views.forEach(function (v, i) { if (v.id === currentView) { idx = i; } });
+    if (idx < 0) { return; }
+    var n = idx + (e.key === "ArrowRight" ? 1 : -1);
+    if (n >= 0 && n < views.length) {
+      e.preventDefault();
+      window.location.hash = views[n].id;
+    }
+  }
+
+  /* ---------- init ---------- */
+  initTheme();
+  buildNav();
+  buildFooterNav();
+  buildCards();
+  if (SCENARIOS.length) { selectScenario(SCENARIOS[0].id); }
+  applyFilter();
+  if (filterInput) { filterInput.addEventListener("input", applyFilter); }
+  if (themeBtn) {
+    themeBtn.addEventListener("click", function () {
+      var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      setTheme(next);
+    });
+  }
+  if (menuBtn) { menuBtn.addEventListener("click", toggleSidebar); }
+  if (scrim) { scrim.addEventListener("click", closeSidebar); }
+  document.addEventListener("keydown", onKey);
+  window.addEventListener("hashchange", fromHash);
+  window.addEventListener("load", scrollTop0);
+  fromHash();
+
+  window.__wfx = {
+    sections: views.map(function (v) { return v.id; }),
+    scenarios: SCENARIOS.map(function (s) { return s.id; }),
+    select: selectScenario
+  };
+}());
+</script>
+</body>
+</html>

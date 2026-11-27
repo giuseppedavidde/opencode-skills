@@ -1,7 +1,7 @@
 ---
 description: Trading specialist — analysis of stocks, crypto and options, position repair, portfolio risk. Decision support with data provenance, explicit risk limits and a recommendation journal. Delegates custom scripts to @coder.
 mode: subagent
-model: opencode-go/gemini-4-argon#medium
+model: opencode-go/gemini-4-argon#high
 hidden: false
 permission:
   trading_*: allow

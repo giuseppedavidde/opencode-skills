@@ -1,5 +1,5 @@
 ---
-description: Coding specialist — complex refactoring, multi-file changes, new features. Uses deepseek-v4.1-flash guided by the coder_planner atomic planner (complex tasks only). Opencode 1.1.5
+description: Coding specialist — complex refactoring, multi-file changes, new features. Uses deepseek-v4.1-flash guided by the Gemini 4 Argon atomic planner (coder_planner, complex tasks only).
 mode: subagent
 model: opencode-go/deepseek-v4.1-flash
 hidden: false

@@ -74,14 +74,9 @@ session the router can call any agent.
 
 ### Models
 
-`model` is an ordered list. The runtime uses the first available entry:
-
-1. The OpenCode Go model of the agent, `opencodego/<id>` (for example
-   `opencodego/deepseek-v4.1-flash`).
-2. The fallbacks for that model from [`models.json`](models.json). They are
-   OpenCode Go models too: `deepseek-v4.1-flash` → `mimo-v2.6-flash`,
-   `glm-5.3-flash`; `gemini-4-argon` → `gpt-6-luna`, `deepseek-v4-pro`;
-   `glm-5.3` → `deepseek-v4-pro`, `gpt-6-luna`.
+Each agent uses exactly one model: the model of its `agents/*.md` file,
+written as `opencodego/<id>` (for example `opencodego/gemini-4-argon`). The
+workflow declares no fallback models.
 
 The models come from the VS Code extension **OpenCode Go Provider for
 Copilot** (`OnesoftQwQ.opencode-go-copilot-provider`). Install it, then run
@@ -94,19 +89,24 @@ matches a BYOK model only by this exact id. A display name such as
 `DeepSeek V4.1 Flash 1017`, or `Name (opencodego)`, never matches. Without a
 match, the runtime uses the session model and shows no message.
 
-Edit [`models.json`](models.json), then rerun `./install.sh`:
-
-- Write a fallback as the bare id of the OpenCode Go API (`mimo-v2.6-flash`).
-  The installer adds `provider_prefix`.
-- Write `Name (copilot)` to add a Copilot model of your plan (for example
-  `GPT-6 Luna (copilot)`). The installer keeps it unchanged.
-- An extension with a different vendor id (for example `opencode-go`) needs a
-  different `provider_prefix`. `scripts/vscode-preselect.py` reads the same
-  value.
+[`models.json`](models.json) holds only `provider_prefix`. Edit it when the
+provider extension has a different vendor id (for example `opencode-go`), then
+rerun `./install.sh`. `scripts/vscode-preselect.py` reads the same value.
 
 `reasoning-effort`: the `#level` suffix of the opencode model wins
-(`opencode-go/deepseek-v4.1-flash#low` → `low`). Else `coder-planner` and
-`vscode-ext-planner` get `max`, and the other agents get `high`.
+(`opencode-go/gemini-4-argon#high` → `high`). An agent without a suffix gets
+`high`. Every agent declares its level explicitly, so no per-agent override
+remains.
+
+### Context size
+
+VS Code has no per-agent context key. The context window comes from the model.
+The OpenCode Go provider declares `limit.context`, and VS Code uses it as
+`maxInputTokens`. Gemini 4 Argon declares 1,048,576 tokens. The planner agents
+(`coder_planner`, `vscode_ext_planner`) and `trade` use
+`opencode-go/gemini-4-argon#high`, so they run with `reasoning-effort: high`
+(the highest level this model offers) and a 1M-token context window. Do not
+add a `context` key to an agent file: the Copilot schema ignores it.
 
 ### Tools
 

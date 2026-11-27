@@ -68,30 +68,21 @@ def home(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return root
 
 
-def test_agents_list_go_fallbacks_and_edit_tools(home: Path) -> None:
+def test_agents_use_only_their_own_model_and_edit_tools(home: Path) -> None:
     trade = frontmatter(home / ".copilot" / "agents" / "trade.agent.md")
-    assert trade["model"][0] == "opencodego/gemini-4-argon"
-    assert len(trade["model"]) > 1
-    assert all(entry.startswith("opencodego/") for entry in trade["model"])
+    assert trade["model"] == "opencodego/gemini-4-argon"
+    assert trade["reasoning-effort"] == "high"
     assert {"edit", "create", "apply_patch"} <= set(trade["tools"])
 
 
-def test_bare_fallbacks_get_the_provider_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_model_for_uses_the_provider_prefix_and_drops_the_effort(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sys, "dont_write_bytecode", True)
     spec = importlib.util.spec_from_file_location("install_vscode", INSTALLER)
     installer = importlib.util.module_from_spec(spec)
     monkeypatch.setitem(sys.modules, "install_vscode", installer)
     spec.loader.exec_module(installer)
-    mapping = {
-        "provider_prefix": "opencodego",
-        "fallbacks": {"glm-5.3": ["deepseek-v4-pro", "GPT-6 Luna (copilot)", "glm-5.3"]},
-    }
-    monkeypatch.setattr(installer, "load_model_map", lambda: mapping)
-    assert installer.models_for("opencode-go/glm-5.3#high") == [
-        "opencodego/glm-5.3",
-        "opencodego/deepseek-v4-pro",
-        "GPT-6 Luna (copilot)",
-    ]
+    monkeypatch.setattr(installer, "load_model_map", lambda: {"provider_prefix": "opencodego"})
+    assert installer.model_for("opencode-go/gemini-4-argon#high") == "opencodego/gemini-4-argon"
 
 
 def test_planner_gets_only_the_trading_tool_that_it_may_use(home: Path) -> None:

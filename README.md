@@ -95,10 +95,10 @@ file. A real file that is in the way stays in place; with `--force` it goes to
 2. API keys, only for the skills that use them (see "API keys & secrets").
 3. VS Code: install the extension **OpenCode Go Provider for Copilot**
    (`OnesoftQwQ.opencode-go-copilot-provider`) and run
-   `OpenCodeGo: Set OpenCode Go API Key`. The agents use the OpenCode Go models
-   `opencodego/<id>`, with the fallbacks of
-   [`vscode/models.json`](vscode/models.json) (model ids of the
-   [OpenCode Go API](https://opencode.ai/console/go#api)).
+   `OpenCodeGo: Set OpenCode Go API Key`. Each agent uses only its own
+   OpenCode Go model `opencodego/<id>`, declared in its `agents/*.md` file
+   (model ids of the [OpenCode Go API](https://opencode.ai/console/go#api)).
+   The workflow has no fallback models.
 4. Restart opencode. In VS Code, start a **new** chat session.
 
 ### 3. Headroom (token compression)
@@ -239,7 +239,7 @@ legacy VS Code files (`.vscode/mcp.json` and the user `mcp.json`) to
 > Use **one** scope. The user folder and a workspace `.github/` are both native
 > Copilot sources, so a second copy loads every agent, skill, and hook two times.
 
-See [`vscode/README.md`](vscode/README.md) for the model fallbacks, the
+See [`vscode/README.md`](vscode/README.md) for the agent models, the
 delegation rules (a subagent cannot start a subagent in VS Code), the hooks, and
 the limitations. Start a **new chat** after installing so VS Code discovers the
 new skills and agents.
